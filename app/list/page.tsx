@@ -96,242 +96,235 @@ export default function OrderList() {
     }
   }
 
-  // Premium UI Classes
-  const glassInput = "w-full px-3 py-1.5 bg-slate-950/40 border border-slate-800 rounded-lg text-slate-200 text-xs focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/20 transition-all placeholder:text-slate-600 font-medium"
-  const modalInputStyle = "w-full px-4 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-slate-200 text-sm focus:outline-none focus:border-orange-500/60 focus:ring-1 focus:ring-orange-500/20 transition-all font-medium"
+  // Clean Light Mode Inputs
+  const filterInput = "w-full px-2 py-1.5 bg-white border border-gray-300 rounded shadow-sm text-gray-700 text-[11px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-gray-400 font-medium"
+  const modalInputStyle = "w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-800 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-medium"
 
   return (
-    // 💡 FIXED: h-screen အစား h-full သို့ပြောင်းလဲပြီး padding ကို သင့်တော်သလို ညှိပေးထားပါတယ်
-    <div className="w-full h-full text-xs md:text-sm text-slate-300 antialiased selection:bg-orange-500/30 flex flex-col pb-2">
+    // Fullscreen Layout without outer margins
+    <div className="w-full h-full flex flex-col bg-white text-gray-800 font-sans antialiased overflow-hidden">
       
-      {/* Container Card */}
-      <div className="flex-1 flex flex-col bg-slate-900/20 backdrop-blur-xl rounded-2xl border border-slate-800/80 shadow-[0_24px_60px_rgba(0,0,0,0.7)] overflow-hidden">
-        
-        {/* Top Management Header Control Panel */}
-        <div className="p-4 md:p-5 bg-slate-900/40 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-shrink-0">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-              <h1 className="text-sm md:text-base font-black tracking-wider bg-gradient-to-r from-orange-400 via-amber-400 to-orange-500 bg-clip-text text-transparent uppercase">
-                {userBranch === 'MDY' ? 'MANDALAY' : userBranch === 'YGN' ? 'YANGON' : 'MAIN'} LOGISTICS HUB
-              </h1>
-            </div>
-            <p className="text-slate-500 text-[11px] font-medium mt-0.5">Real-time data synchronization and heavy order analyzer</p>
+      {/* Clean Header */}
+      <div className="px-4 py-3 bg-white border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-shrink-0">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
+            <h1 className="text-base font-bold text-gray-900 tracking-wide uppercase">
+              {userBranch === 'MDY' ? 'Mandalay' : userBranch === 'YGN' ? 'Yangon' : 'Main'} Office
+            </h1>
           </div>
-          
-          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            <Link href="/entry" className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-slate-950 font-bold px-4 py-2 rounded-xl shadow-[0_4px_20px_rgba(249,115,22,0.2)] hover:shadow-[0_4px_24px_rgba(249,115,22,0.3)] transition-all flex items-center gap-1.5 text-xs tracking-wide">
-              <span>➕</span> NEW ENTRY
-            </Link>
-            <button onClick={() => fetchData()} className="bg-slate-800/40 hover:bg-slate-800 border border-slate-700/60 text-slate-300 font-semibold px-3 py-2 rounded-xl transition-all text-xs flex items-center gap-1.5">
-              <span>🔄</span> REFRESH
-            </button>
-            <button onClick={() => { localStorage.clear(); router.push('/login'); }} className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 font-semibold px-3 py-2 rounded-xl transition-all text-xs flex items-center gap-1.5 sm:ml-2">
-              <span>🚪</span> LOGOUT
-            </button>
-          </div>
-        </div>
-
-        {/* 💻 FIXED: Table Scrollarea Height ကို Layout အသစ်နှင့် ကိုက်ညီအောင် ပြင်ဆင်ထားပါတယ် */}
-        <div className="overflow-x-auto overflow-y-auto flex-1 max-h-[calc(100vh-200px)] md:max-h-[calc(100vh-180px)] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-800 hover:[&::-webkit-scrollbar-thumb]:bg-slate-700">
-          <table className="w-full border-collapse table-auto text-left whitespace-nowrap">
-            <thead className="sticky top-0 bg-[#090e18] z-10 border-b border-slate-800 shadow-md">
-              <tr className="text-slate-400 font-bold uppercase tracking-wider text-[11px] bg-slate-950/40">
-                <th className="py-3 px-4 border-r border-slate-800/40 min-w-[110px] text-center">Action</th>
-                <th className="py-3 px-4 border-r border-slate-800/40 min-w-[130px]">Item ID</th>
-                <th className="py-3 px-4 border-r border-slate-800/40 min-w-[130px]">Rec. Date</th>
-                <th className="py-3 px-4 border-r border-slate-800/40 min-w-[160px]">Sender Name</th>
-                <th className="py-3 px-4 border-r border-slate-800/40 min-w-[85px] text-center">S.LOC</th>
-                <th className="py-3 px-4 border-r border-slate-800/40 min-w-[160px]">Receiver Name</th>
-                <th className="py-3 px-4 border-r border-slate-800/40 min-w-[140px]">Phone Number</th>
-                <th className="py-3 px-4 border-r border-slate-800/40 min-w-[85px] text-center">R.LOC</th>
-                <th className="py-3 px-4 border-r border-slate-800/40 min-w-[100px] text-center">Fee Type</th>
-                <th className="py-3 px-4 border-r border-slate-800/40 min-w-[110px] text-right">COD</th>
-                <th className="py-3 px-4 border-r border-slate-800/40 min-w-[110px] text-right">Deli Fee</th>
-                <th className="py-3 px-4 border-r border-slate-800/40 min-w-[120px] text-right bg-slate-950/20">Total Amount</th>
-                <th className="py-3 px-4 border-r border-slate-800/40 min-w-[130px] text-center">Status</th>
-                <th className="py-3 px-4 border-r border-slate-800/40 min-w-[140px]">Pickup Rider</th>
-                <th className="py-3 px-4 border-r border-slate-800/40 min-w-[140px]">Deliver Rider</th>
-                <th className="py-3 px-4 min-w-[130px]">Cash Added</th>
-              </tr>
-
-              {/* Advanced Filtering Row */}
-              <tr className="bg-[#0b1220] border-b border-slate-800/80">
-                <th className="p-2 border-r border-slate-800/40 text-center text-slate-600 text-xs">🔍</th>
-                <th className="p-1.5 border-r border-slate-800/40"><input className={glassInput} placeholder="ID..." onChange={e => handleFilterChange('item_id', e.target.value)} /></th>
-                <th className="p-1.5 border-r border-slate-800/40"><input className={glassInput} type="date" onChange={e => handleFilterChange('received_date', e.target.value)} /></th>
-                <th className="p-1.5 border-r border-slate-800/40"><input className={glassInput} placeholder="Sender..." onChange={e => handleFilterChange('sender_name', e.target.value)} /></th>
-                <th className="p-1.5 border-r border-slate-800/40"><input className={glassInput} placeholder="City" onChange={e => handleFilterChange('sender_loc', e.target.value)} /></th>
-                <th className="p-1.5 border-r border-slate-800/40"><input className={glassInput} placeholder="Receiver..." onChange={e => handleFilterChange('receiver_name', e.target.value)} /></th>
-                <th className="p-1.5 border-r border-slate-800/40"><input className={glassInput} placeholder="Phone..." onChange={e => handleFilterChange('receiver_phone', e.target.value)} /></th>
-                <th className="p-1.5 border-r border-slate-800/40"><input className={glassInput} placeholder="City" onChange={e => handleFilterChange('receiver_loc', e.target.value)} /></th>
-                <th className="p-1.5 border-r border-slate-800/40"><input className={glassInput} placeholder="Type" onChange={e => handleFilterChange('fee_type', e.target.value)} /></th>
-                <th className="p-1.5 border-r border-slate-800/40"></th>
-                <th className="p-1.5 border-r border-slate-800/40"></th>
-                <th className="p-1.5 border-r border-slate-800/40 bg-slate-950/10"></th>
-                <th className="p-1.5 border-r border-slate-800/40">
-                    <select className="w-full px-2 py-1 bg-slate-900 border border-slate-800 rounded-lg text-slate-300 text-xs focus:outline-none focus:border-orange-500/50 font-semibold" onChange={e => handleFilterChange('status', e.target.value)}>
-                        <option value="" className="bg-slate-950 text-slate-400">All Status</option>
-                        <option value="At Office" className="bg-slate-950 text-slate-300">At Office</option>
-                        <option value="Pending" className="bg-slate-950 text-slate-300">Pending</option>
-                        <option value="In-Transit" className="bg-slate-950 text-slate-300">In-Transit</option>
-                        <option value="Delivered" className="bg-slate-950 text-slate-300">Delivered</option>
-                    </select>
-                </th>
-                <th className="p-1.5 border-r border-slate-800/40"><input className={glassInput} placeholder="Rider..." onChange={e => handleFilterChange('pickup_rider', e.target.value)} /></th>
-                <th className="p-1.5 border-r border-slate-800/40"><input className={glassInput} placeholder="Rider..." onChange={e => handleFilterChange('deliver_rider', e.target.value)} /></th>
-                <th className="p-1.5"><input className={glassInput} type="date" onChange={e => handleFilterChange('cash_added_date', e.target.value)} /></th>
-              </tr>
-            </thead>
-
-            {/* Table Body */}
-            <tbody className="divide-y divide-slate-800/40 font-medium text-slate-300">
-              {loading ? (
-                <tr>
-                  <td colSpan={16} className="p-20 text-center font-bold text-slate-500 tracking-widest text-xs animate-pulse bg-slate-950/10">
-                    LOADING SECURE LOGISTICS SYSTEM BASE...
-                  </td>
-                </tr>
-              ) : filteredOrders.map((o) => (
-                <tr key={o.id} className="hover:bg-slate-800/30 transition-colors odd:bg-slate-900/10 even:bg-transparent group">
-                  <td className="py-2.5 px-4 border-r border-slate-800/40 text-center">
-                    <div className="flex gap-1.5 justify-center">
-                       <button onClick={() => setEditingOrder(o)} className="bg-orange-500/10 text-orange-400 px-2 py-0.5 rounded-md border border-orange-500/20 hover:bg-orange-500 hover:text-slate-950 transition-all font-bold text-[10px] tracking-wide">EDIT</button>
-                       <button onClick={() => { if(confirm("ဖျက်ရန် သေချာပါသလား?")) supabase.from('orders').delete().eq('id', o.id).then(() => fetchData()) }} className="bg-rose-500/10 text-rose-400 px-2 py-0.5 rounded-md border border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all font-bold text-[10px] tracking-wide">DEL</button>
-                    </div>
-                  </td>
-                  <td className="py-2.5 px-4 border-r border-slate-800/40 font-mono font-bold text-orange-400 group-hover:text-orange-300 transition-colors">{o.item_id}</td>
-                  <td className="py-2.5 px-4 border-r border-slate-800/40 text-slate-500 font-mono text-xs">{o.received_date}</td>
-                  <td className="py-2.5 px-4 border-r border-slate-800/40 font-semibold text-slate-200">{o.sender_name}</td>
-                  <td className="py-2.5 px-4 border-r border-slate-800/40 text-center text-slate-400 font-bold text-xs">{o.sender_loc}</td>
-                  <td className="py-2.5 px-4 border-r border-slate-800/40 font-semibold text-slate-200">{o.receiver_name}</td>
-                  <td className="py-2.5 px-4 border-r border-slate-800/40 text-slate-400 font-mono tracking-wide">{o.receiver_phone}</td>
-                  <td className="py-2.5 px-4 border-r border-slate-800/40 text-center font-extrabold text-amber-400 text-xs">{o.receiver_loc}</td>
-                  <td className="py-2.5 px-4 border-r border-slate-800/40 text-center">
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700/60 font-bold uppercase tracking-wider text-slate-400">{o.fee_type}</span>
-                  </td>
-                  <td className="py-2.5 px-4 border-r border-slate-800/40 text-right font-mono text-slate-200">{o.cod_amount?.toLocaleString()}</td>
-                  <td className="py-2.5 px-4 border-r border-slate-800/40 text-right font-mono text-rose-400/90">{o.deli_fee?.toLocaleString()}</td>
-                  <td className="py-2.5 px-4 border-r border-slate-800/40 text-right font-mono font-bold bg-slate-950/10 text-amber-400">{o.total_amount?.toLocaleString()}</td>
-                  
-                  {/* Premium Status Badges */}
-                  <td className="py-2.5 px-4 border-r border-slate-800/40 text-center">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider border uppercase ${
-                        o.status === 'Delivered' ? 'bg-emerald-500/5 text-emerald-400 border-emerald-500/20' : 
-                        o.status === 'Pending' ? 'bg-orange-500/5 text-orange-400 border-orange-500/20' : 
-                        o.status === 'In-Transit' ? 'bg-blue-500/5 text-blue-400 border-blue-500/20' : 'bg-slate-800/40 text-slate-400 border-slate-700/60'
-                    }`}>
-                      <span className={`w-1 h-1 rounded-full ${
-                        o.status === 'Delivered' ? 'bg-emerald-400' : 
-                        o.status === 'Pending' ? 'bg-orange-400' : 
-                        o.status === 'In-Transit' ? 'bg-blue-400' : 'bg-slate-400'
-                      }`} />
-                      {o.status}
-                    </span>
-                  </td>
-                  
-                  <td className="py-2.5 px-4 border-r border-slate-800/40 text-slate-500 text-xs font-normal">{o.pickup_rider?.name || '-'}</td>
-                  <td className="py-2.5 px-4 border-r border-slate-800/40 text-indigo-400 font-semibold text-xs">{o.deliver_rider?.name || '-'}</td>
-                  <td className="py-2.5 px-4 font-semibold text-emerald-500/90 font-mono text-xs">{o.cash_added_date || '-'}</td>
-                </tr>
-              ))}
-              
-              {!loading && filteredOrders.length === 0 && (
-                <tr>
-                  <td colSpan={16} className="p-16 text-center text-slate-500 text-xs tracking-wide font-semibold bg-slate-950/5">
-                    ရှာဖွေထားသော အချက်အလက် မှတ်တမ်းများ မရှိပါ။
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          <p className="text-gray-500 text-xs mt-0.5">Order Management System</p>
         </div>
         
-        {/* Table Bottom Aggregates Analytics Bar */}
-        <div className="p-3.5 bg-slate-950/40 border-t border-slate-800/80 flex flex-wrap gap-x-8 gap-y-2 text-xs font-semibold text-slate-500 flex-shrink-0">
-            <span className="flex items-center gap-1.5">📋 Total: <strong className="text-slate-200 font-mono font-bold text-xs md:text-sm">{filteredOrders.length}</strong> entries</span>
-            <div className="w-px h-4 bg-slate-800 hidden sm:block" />
-            <span className="flex items-center gap-1.5">💰 COD Sum: <strong className="text-orange-400 font-mono font-bold text-xs md:text-sm">{filteredOrders.reduce((s,o)=>s+(o.cod_amount||0),0).toLocaleString()}</strong> Ks</span>
-            <div className="w-px h-4 bg-slate-800 hidden sm:block" />
-            <span className="flex items-center gap-1.5">🚴 Deli Sum: <strong className="text-indigo-400 font-mono font-bold text-xs md:text-sm">{filteredOrders.reduce((s,o)=>s+(o.deli_fee||0),0).toLocaleString()}</strong> Ks</span>
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <Link href="/entry" className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg shadow-sm transition-all flex items-center gap-1.5 text-xs">
+            <span>+</span> New Entry
+          </Link>
+          <button onClick={() => fetchData()} className="bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 font-semibold px-3 py-2 rounded-lg shadow-sm transition-all text-xs flex items-center gap-1.5">
+            <span>↻</span> Refresh
+          </button>
+          <button onClick={() => { localStorage.clear(); router.push('/login'); }} className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-semibold px-3 py-2 rounded-lg shadow-sm transition-all text-xs flex items-center gap-1.5 sm:ml-2">
+            <span>Log Out</span>
+          </button>
         </div>
       </div>
 
-      {/* --- Premium Dark Glass Edit Modal --- */}
-      {editingOrder && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 transition-opacity">
-            <div className="bg-[#0b111e] border border-slate-800 rounded-2xl w-full max-w-4xl p-6 shadow-2xl overflow-y-auto max-h-[90vh] text-slate-300">
+      {/* Table Container - Stretched to fill space with optimized padding for 16 columns */}
+      <div className="flex-1 overflow-auto bg-gray-50/50">
+        <table className="w-full text-left whitespace-nowrap text-[11px] md:text-xs">
+          <thead className="sticky top-0 z-20">
+            {/* Main Headers */}
+            <tr className="bg-gray-100 text-gray-600 border-b border-gray-300 font-bold uppercase tracking-wider">
+              <th className="py-2.5 px-2 border-r border-gray-300/50 text-center w-[70px]">Action</th>
+              <th className="py-2.5 px-2 border-r border-gray-300/50">Item ID</th>
+              <th className="py-2.5 px-2 border-r border-gray-300/50">Date</th>
+              <th className="py-2.5 px-2 border-r border-gray-300/50">Sender</th>
+              <th className="py-2.5 px-2 border-r border-gray-300/50 text-center">S.Loc</th>
+              <th className="py-2.5 px-2 border-r border-gray-300/50">Receiver</th>
+              <th className="py-2.5 px-2 border-r border-gray-300/50">Phone</th>
+              <th className="py-2.5 px-2 border-r border-gray-300/50 text-center">R.Loc</th>
+              <th className="py-2.5 px-2 border-r border-gray-300/50 text-center">Type</th>
+              <th className="py-2.5 px-2 border-r border-gray-300/50 text-right">COD</th>
+              <th className="py-2.5 px-2 border-r border-gray-300/50 text-right">Deli Fee</th>
+              <th className="py-2.5 px-2 border-r border-gray-300/50 text-right bg-blue-50/50 text-blue-800">Total</th>
+              <th className="py-2.5 px-2 border-r border-gray-300/50 text-center">Status</th>
+              <th className="py-2.5 px-2 border-r border-gray-300/50">Pickup By</th>
+              <th className="py-2.5 px-2 border-r border-gray-300/50">Deliver By</th>
+              <th className="py-2.5 px-2">Cash Add</th>
+            </tr>
+
+            {/* Filter Inputs Row */}
+            <tr className="bg-gray-200/60 border-b border-gray-300 shadow-sm">
+              <th className="p-1.5 border-r border-gray-300/50 text-center text-gray-500">🔍</th>
+              <th className="p-1.5 border-r border-gray-300/50"><input className={filterInput} placeholder="ID..." onChange={e => handleFilterChange('item_id', e.target.value)} /></th>
+              <th className="p-1.5 border-r border-gray-300/50"><input className={filterInput} type="date" onChange={e => handleFilterChange('received_date', e.target.value)} /></th>
+              <th className="p-1.5 border-r border-gray-300/50"><input className={filterInput} placeholder="Name..." onChange={e => handleFilterChange('sender_name', e.target.value)} /></th>
+              <th className="p-1.5 border-r border-gray-300/50"><input className={filterInput} placeholder="City" onChange={e => handleFilterChange('sender_loc', e.target.value)} /></th>
+              <th className="p-1.5 border-r border-gray-300/50"><input className={filterInput} placeholder="Name..." onChange={e => handleFilterChange('receiver_name', e.target.value)} /></th>
+              <th className="p-1.5 border-r border-gray-300/50"><input className={filterInput} placeholder="09..." onChange={e => handleFilterChange('receiver_phone', e.target.value)} /></th>
+              <th className="p-1.5 border-r border-gray-300/50"><input className={filterInput} placeholder="City" onChange={e => handleFilterChange('receiver_loc', e.target.value)} /></th>
+              <th className="p-1.5 border-r border-gray-300/50"><input className={filterInput} placeholder="Type" onChange={e => handleFilterChange('fee_type', e.target.value)} /></th>
+              <th className="p-1.5 border-r border-gray-300/50"></th>
+              <th className="p-1.5 border-r border-gray-300/50"></th>
+              <th className="p-1.5 border-r border-gray-300/50 bg-blue-50/30"></th>
+              <th className="p-1.5 border-r border-gray-300/50">
+                  <select className={`${filterInput} bg-white cursor-pointer`} onChange={e => handleFilterChange('status', e.target.value)}>
+                      <option value="">All</option>
+                      <option value="At Office">At Office</option>
+                      <option value="Pending">Pending</option>
+                      <option value="In-Transit">In-Transit</option>
+                      <option value="Delivered">Delivered</option>
+                  </select>
+              </th>
+              <th className="p-1.5 border-r border-gray-300/50"><input className={filterInput} placeholder="Rider..." onChange={e => handleFilterChange('pickup_rider', e.target.value)} /></th>
+              <th className="p-1.5 border-r border-gray-300/50"><input className={filterInput} placeholder="Rider..." onChange={e => handleFilterChange('deliver_rider', e.target.value)} /></th>
+              <th className="p-1.5"><input className={filterInput} type="date" onChange={e => handleFilterChange('cash_added_date', e.target.value)} /></th>
+            </tr>
+          </thead>
+
+          <tbody className="divide-y divide-gray-200 bg-white">
+            {loading ? (
+              <tr>
+                <td colSpan={16} className="p-12 text-center font-medium text-gray-500">
+                  <div className="flex justify-center items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></span>
+                    Loading Records...
+                  </div>
+                </td>
+              </tr>
+            ) : filteredOrders.map((o) => (
+              <tr key={o.id} className="hover:bg-blue-50/50 transition-colors">
+                <td className="py-2 px-2 border-r border-gray-100 text-center">
+                  <div className="flex gap-1 justify-center">
+                      <button onClick={() => setEditingOrder(o)} className="text-blue-600 hover:bg-blue-100 px-1.5 py-1 rounded transition-colors font-medium text-[10px]">Edit</button>
+                      <button onClick={() => { if(confirm("ဖျက်ရန် သေချာပါသလား?")) supabase.from('orders').delete().eq('id', o.id).then(() => fetchData()) }} className="text-red-500 hover:bg-red-50 px-1.5 py-1 rounded transition-colors font-medium text-[10px]">Del</button>
+                  </div>
+                </td>
+                <td className="py-2 px-2 border-r border-gray-100 font-medium text-gray-900">{o.item_id}</td>
+                <td className="py-2 px-2 border-r border-gray-100 text-gray-500">{o.received_date}</td>
+                <td className="py-2 px-2 border-r border-gray-100 font-medium">{o.sender_name}</td>
+                <td className="py-2 px-2 border-r border-gray-100 text-center text-gray-600">{o.sender_loc}</td>
+                <td className="py-2 px-2 border-r border-gray-100 font-medium">{o.receiver_name}</td>
+                <td className="py-2 px-2 border-r border-gray-100 text-gray-600">{o.receiver_phone}</td>
+                <td className="py-2 px-2 border-r border-gray-100 text-center font-semibold text-gray-800">{o.receiver_loc}</td>
+                <td className="py-2 px-2 border-r border-gray-100 text-center">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 border border-gray-200 font-semibold text-gray-600">{o.fee_type}</span>
+                </td>
+                <td className="py-2 px-2 border-r border-gray-100 text-right font-medium">{o.cod_amount?.toLocaleString() || '-'}</td>
+                <td className="py-2 px-2 border-r border-gray-100 text-right font-medium text-gray-600">{o.deli_fee?.toLocaleString() || '-'}</td>
+                <td className="py-2 px-2 border-r border-gray-100 text-right font-bold text-blue-700 bg-blue-50/30">{o.total_amount?.toLocaleString() || '-'}</td>
                 
-                <div className="flex justify-between items-center border-b border-slate-800 pb-4 mb-5">
+                {/* Status Badges */}
+                <td className="py-2 px-2 border-r border-gray-100 text-center">
+                  <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      o.status === 'Delivered' ? 'bg-green-100 text-green-700' : 
+                      o.status === 'Pending' ? 'bg-orange-100 text-orange-700' : 
+                      o.status === 'In-Transit' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {o.status}
+                  </span>
+                </td>
+                
+                <td className="py-2 px-2 border-r border-gray-100 text-gray-600">{o.pickup_rider?.name || '-'}</td>
+                <td className="py-2 px-2 border-r border-gray-100 text-gray-600">{o.deliver_rider?.name || '-'}</td>
+                <td className="py-2 px-2 text-gray-600 font-medium">{o.cash_added_date || '-'}</td>
+              </tr>
+            ))}
+            
+            {!loading && filteredOrders.length === 0 && (
+              <tr>
+                <td colSpan={16} className="p-12 text-center text-gray-500 text-sm bg-gray-50/50">
+                  မှတ်တမ်းများ မရှိသေးပါ။
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      
+      {/* Footer Aggregates */}
+      <div className="px-4 py-3 bg-white border-t border-gray-200 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-gray-600 flex-shrink-0">
+          <span>Total Records: <strong className="text-gray-900 ml-1 text-sm">{filteredOrders.length}</strong></span>
+          <div className="w-px h-4 bg-gray-300 hidden sm:block" />
+          <span>Total COD: <strong className="text-gray-900 ml-1 text-sm">{filteredOrders.reduce((s,o)=>s+(o.cod_amount||0),0).toLocaleString()}</strong> Ks</span>
+          <div className="w-px h-4 bg-gray-300 hidden sm:block" />
+          <span>Total Deli Fee: <strong className="text-blue-700 ml-1 text-sm">{filteredOrders.reduce((s,o)=>s+(o.deli_fee||0),0).toLocaleString()}</strong> Ks</span>
+      </div>
+
+      {/* Clean Edit Modal */}
+      {editingOrder && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl w-full max-w-4xl p-6 shadow-2xl overflow-y-auto max-h-[90vh]">
+                
+                <div className="flex justify-between items-center border-b border-gray-200 pb-4 mb-5">
                     <div>
-                      <h2 className="text-sm md:text-base font-extrabold tracking-wide text-slate-100 uppercase flex items-center gap-2">
-                        <span className="w-1.5 h-3 bg-orange-500 rounded-full" /> EDIT RECORD: <span className="text-orange-400 font-mono">{editingOrder.item_id}</span>
+                      <h2 className="text-lg font-bold text-gray-900">
+                        Edit Order: <span className="text-blue-600">{editingOrder.item_id}</span>
                       </h2>
-                      <p className="text-[11px] text-slate-500 font-medium mt-0.5">Modify database values for current shipping item</p>
                     </div>
-                    <button onClick={() => setEditingOrder(null)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-all text-lg">&times;</button>
+                    <button onClick={() => setEditingOrder(null)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
                 </div>
                 
-                <form className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-semibold" onSubmit={handleUpdate}>
+                <form className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs" onSubmit={handleUpdate}>
                     <div>
-                      <label className="block text-slate-500 font-bold mb-1.5 tracking-wide uppercase text-[10px]">Item ID</label>
-                      <input disabled className="w-full px-4 py-2.5 bg-slate-900/40 border border-slate-800/40 text-slate-600 rounded-xl text-sm font-mono font-bold select-none cursor-not-allowed" value={editingOrder.item_id}/>
+                      <label className="block text-gray-600 font-semibold mb-1">Item ID</label>
+                      <input disabled className="w-full px-3 py-2 bg-gray-100 border border-gray-200 text-gray-500 rounded-lg text-sm font-medium cursor-not-allowed" value={editingOrder.item_id}/>
                     </div>
                     <div>
-                      <label className="block text-slate-400 font-bold mb-1.5 tracking-wide uppercase text-[10px]">Received Date</label>
+                      <label className="block text-gray-700 font-semibold mb-1">Received Date</label>
                       <input type="date" className={modalInputStyle} value={editingOrder.received_date} onChange={e => setEditingOrder({...editingOrder, received_date: e.target.value})}/>
                     </div>
                     <div>
-                      <label className="block text-slate-400 font-bold mb-1.5 tracking-wide uppercase text-[10px]">Order Status</label>
-                      <select className="w-full px-4 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-slate-200 text-sm font-bold focus:outline-none focus:border-orange-500/60" value={editingOrder.status} onChange={e => setEditingOrder({...editingOrder, status: e.target.value})}>
-                            <option value="At Office" className="bg-slate-950">At Office</option>
-                            <option value="Pending" className="bg-slate-950">Pending</option>
-                            <option value="In-Transit" className="bg-slate-950">In-Transit</option>
-                            <option value="Delivered" className="bg-slate-950">Delivered</option>
+                      <label className="block text-gray-700 font-semibold mb-1">Order Status</label>
+                      <select className={modalInputStyle} value={editingOrder.status} onChange={e => setEditingOrder({...editingOrder, status: e.target.value})}>
+                            <option value="At Office">At Office</option>
+                            <option value="Pending">Pending</option>
+                            <option value="In-Transit">In-Transit</option>
+                            <option value="Delivered">Delivered</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block text-slate-400 font-bold mb-1.5 tracking-wide uppercase text-[10px]">Sender Name</label>
+                      <label className="block text-gray-700 font-semibold mb-1">Sender Name</label>
                       <input className={modalInputStyle} value={editingOrder.sender_name} onChange={e => setEditingOrder({...editingOrder, sender_name: e.target.value})}/>
                     </div>
                     <div>
-                      <label className="block text-slate-400 font-bold mb-1.5 tracking-wide uppercase text-[10px]">Sender City / LOC</label>
+                      <label className="block text-gray-700 font-semibold mb-1">Sender City</label>
                       <input className={modalInputStyle} value={editingOrder.sender_loc} onChange={e => setEditingOrder({...editingOrder, sender_loc: e.target.value})}/>
                     </div>
                     <div>
-                      <label className="block text-slate-400 font-bold mb-1.5 tracking-wide uppercase text-[10px]">Receiver Name</label>
+                      <label className="block text-gray-700 font-semibold mb-1">Receiver Name</label>
                       <input className={modalInputStyle} value={editingOrder.receiver_name} onChange={e => setEditingOrder({...editingOrder, receiver_name: e.target.value})}/>
                     </div>
                     <div>
-                      <label className="block text-slate-400 font-bold mb-1.5 tracking-wide uppercase text-[10px]">Receiver Phone</label>
-                      <input className={`${modalInputStyle} font-mono`} value={editingOrder.receiver_phone} onChange={e => setEditingOrder({...editingOrder, receiver_phone: e.target.value})}/>
+                      <label className="block text-gray-700 font-semibold mb-1">Receiver Phone</label>
+                      <input className={modalInputStyle} value={editingOrder.receiver_phone} onChange={e => setEditingOrder({...editingOrder, receiver_phone: e.target.value})}/>
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-slate-400 font-bold mb-1.5 tracking-wide uppercase text-[10px]">Full Delivery Address</label>
+                      <label className="block text-gray-700 font-semibold mb-1">Full Delivery Address</label>
                       <input className={modalInputStyle} value={editingOrder.receiver_address || ''} onChange={e => setEditingOrder({...editingOrder, receiver_address: e.target.value})}/>
                     </div>
                     <div>
-                      <label className="block text-slate-400 font-bold mb-1.5 tracking-wide uppercase text-[10px]">COD Amount (Ks)</label>
-                      <input type="number" className={`${modalInputStyle} font-mono`} value={editingOrder.cod_amount} onChange={e => setEditingOrder({...editingOrder, cod_amount: Number(e.target.value)})}/>
+                      <label className="block text-gray-700 font-semibold mb-1">COD Amount (Ks)</label>
+                      <input type="number" className={modalInputStyle} value={editingOrder.cod_amount} onChange={e => setEditingOrder({...editingOrder, cod_amount: Number(e.target.value)})}/>
                     </div>
                     <div>
-                      <label className="block text-slate-400 font-bold mb-1.5 tracking-wide uppercase text-[10px]">Deli Fee (Ks)</label>
-                      <input type="number" className={`${modalInputStyle} font-mono`} value={editingOrder.deli_fee} onChange={e => setEditingOrder({...editingOrder, deli_fee: Number(e.target.value)})}/>
+                      <label className="block text-gray-700 font-semibold mb-1">Deli Fee (Ks)</label>
+                      <input type="number" className={modalInputStyle} value={editingOrder.deli_fee} onChange={e => setEditingOrder({...editingOrder, deli_fee: Number(e.target.value)})}/>
                     </div>
                     <div>
-                      <label className="block text-orange-400 font-bold mb-1.5 tracking-wide uppercase text-[10px]">Total Amount</label>
-                      <input type="number" className="w-full px-4 py-2.5 bg-orange-500/5 border border-orange-500/20 rounded-xl text-orange-400 text-sm font-mono font-bold focus:outline-none" value={editingOrder.total_amount} onChange={e => setEditingOrder({...editingOrder, total_amount: Number(e.target.value)})}/>
+                      <label className="block text-blue-700 font-semibold mb-1">Total Amount</label>
+                      <input type="number" className="w-full px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-sm font-bold focus:outline-none" value={editingOrder.total_amount} onChange={e => setEditingOrder({...editingOrder, total_amount: Number(e.target.value)})}/>
                     </div>
                     <div>
-                      <label className="block text-slate-400 font-bold mb-1.5 tracking-wide uppercase text-[10px]">Cash Added Date</label>
+                      <label className="block text-gray-700 font-semibold mb-1">Cash Added Date</label>
                       <input type="date" className={modalInputStyle} value={editingOrder.cash_added_date || ''} onChange={e => setEditingOrder({...editingOrder, cash_added_date: e.target.value})}/>
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-slate-400 font-bold mb-1.5 tracking-wide uppercase text-[10px]">Note / Remarks</label>
+                      <label className="block text-gray-700 font-semibold mb-1">Note / Remarks</label>
                       <input className={modalInputStyle} value={editingOrder.note || ''} onChange={e => setEditingOrder({...editingOrder, note: e.target.value})}/>
                     </div>
-                    <button type="submit" className="md:col-span-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-slate-950 font-bold py-3 rounded-xl shadow-[0_4px_20px_rgba(249,115,22,0.2)] mt-3 transition-all tracking-wider text-xs uppercase">
-                      SAVE CHANGES & UPDATE DATABASE
+                    <button type="submit" className="md:col-span-3 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow mt-3 transition-all text-sm">
+                      Save Changes
                     </button>
                 </form>
             </div>
