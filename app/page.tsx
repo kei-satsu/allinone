@@ -74,7 +74,7 @@ export default function Dashboard() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 pb-6 border-b border-slate-200/60">
             <div>
               <h1 className="text-3xl md:text-4xl font-extrabold tracking-wider bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 bg-clip-text text-transparent">
-                DELIVERY SYSTEM
+                ALL IN ONE EXPREESS DELIVERY
               </h1>
               {/* ဘယ်ရုံးခွဲက Login ဝင်ထားလဲဆိုတာကိုပဲ စာသားလေးနဲ့ အသိပေးထားပါတယ် */}
               <p className="text-slate-500 text-sm font-semibold mt-1">

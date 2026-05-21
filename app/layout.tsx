@@ -115,7 +115,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
               <span className="font-black text-[11px] tracking-widest bg-gradient-to-r from-orange-600 to-amber-500 bg-clip-text text-transparent uppercase font-mono">
-                {userBranch || 'MAIN'} NODE
+                {userBranch || 'MAIN'} BRANCH
               </span>
             </div>
           </div>
@@ -156,7 +156,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <div className="flex flex-col min-w-0">
                 <span className="text-[11px] font-black text-slate-800 tracking-wide truncate">Logged In Account</span>
                 <span className="text-[10px] font-bold text-slate-400 font-mono tracking-wider uppercase truncate">
-                  {userBranch === 'MDY' ? 'Mandalay' : userBranch === 'YGN' ? 'Yangon' : userBranch || 'Main'} Unit
+                  {userBranch === 'MDY' ? 'Mandalay' : userBranch === 'YGN' ? 'Yangon' : userBranch || 'Main'} Branch
                 </span>
               </div>
             </div>
