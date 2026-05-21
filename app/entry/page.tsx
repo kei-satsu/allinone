@@ -1,10 +1,11 @@
 "use client"
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 
 export default function EntryForm() {
   const router = useRouter()
+  const senderInputRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(false)
   const [riders, setRiders] = useState<any[]>([])
   const [originalCod, setOriginalCod] = useState<number>(0)
@@ -33,7 +34,7 @@ export default function EntryForm() {
     branch: '' 
   })
 
-  // 1. Login စစ်ဆေးခြင်းနှင့် Branch သတ်မှတ်ခြင်း
+  // 1. Initial Load, Auth Check & Auto Focus
   useEffect(() => {
     const storedBranch = localStorage.getItem('user_branch')
     if (!storedBranch) {
@@ -48,9 +49,12 @@ export default function EntryForm() {
       if (data) setRiders(data)
     }
     fetchRiders()
+    
+    // ပထမဦးဆုံး input ကွင်းပြင်ကို အလိုအလျောက် cursor ချပေးခြင်း
+    senderInputRef.current?.focus()
   }, [router])
 
-  // 2. စုစုပေါင်းငွေ အလိုလိုတွက်ချက်ခြင်း
+  // 2. စုစုပေါင်းငွေ အလိုလိုတွက်ချက်ခြင်း (မူလ Logic အတိုင်း ပြန်လည်ထားရှိထားပါသည်)
   useEffect(() => {
     let currentCOD = originalCod;
     const deli = Number(formData.deli_fee) || 0;
@@ -73,7 +77,7 @@ export default function EntryForm() {
     }))
   }, [originalCod, formData.deli_fee, formData.fee_type])
 
-  // 3. ဖုန်းနံပါတ် Formatter
+  // 3. Phone Formatter
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let s = e.target.value.replace(/-/g, '').replace(/\D/g, '')
     let formatted = s;
@@ -99,7 +103,7 @@ export default function EntryForm() {
         pickup_rider_id: formData.pickup_rider_id || null,
         deliver_rider_id: formData.deliver_rider_id || null,
         deliver_date: formData.deliver_date || null,
-        cash_added_date: formData.cash_added_date || null, // UI က ရွေးထားတဲ့ Date ကို ပို့ပေးမှာဖြစ်ပါတယ်
+        cash_added_date: formData.cash_added_date || null, 
     }
 
     const { data, error } = await supabase
@@ -121,251 +125,282 @@ export default function EntryForm() {
             cod_amount: 0, deli_fee: 0, fee_type: 'Deli', total_amount: 0, note: '', cash_added_date: '',
             pickup_rider_id: '', deliver_rider_id: '', status: 'At Office', deliver_date: ''
         }))
+        
+        // နောက်ထပ်စောင်ရိုက်ဖို့ Cursor ကို ပထမကွင်းပြင်ဆီ ချက်ချင်းပြန်ပို့ပေးခြင်း
+        setTimeout(() => senderInputRef.current?.focus(), 50)
     }
     setLoading(false)
   }
 
-  // Premium UI Design Classes 
-  const glassInput = "w-full px-4 py-2.5 bg-slate-950/50 border border-slate-800 rounded-xl text-slate-200 text-sm focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/20 transition-all placeholder:text-slate-600 font-medium"
-  const glassSelect = "w-full px-4 py-2.5 bg-slate-950/50 border border-slate-800 rounded-xl text-slate-200 text-sm focus:outline-none focus:border-orange-500/50 transition-all font-bold"
+  // Ultra-Compact Modern Light Input Styles
+  const modernInput = "w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-800 text-xs focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-all placeholder:text-slate-400 hover:border-slate-300"
+  const modernSelect = "w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-800 text-xs focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-all hover:border-slate-300 cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748B%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:0.55rem_auto] bg-[right_0.75rem_center] bg-no-repeat"
+  const labelStyle = "block text-slate-500 font-bold mb-1 uppercase text-[10px] tracking-wider"
 
   return (
-    <div className="w-full h-full text-xs md:text-sm text-slate-300 antialiased flex flex-col pb-2">
+    <div className="w-full h-screen bg-slate-50 text-xs text-slate-700 antialiased flex flex-col overflow-hidden">
       
-      <div className="flex-1 flex flex-col bg-slate-900/20 backdrop-blur-xl rounded-2xl border border-slate-800/80 shadow-[0_24px_60px_rgba(0,0,0,0.7)] overflow-hidden">
-        
-        {/* Top Control Header Panel */}
-        <div className="p-4 md:p-5 bg-slate-900/40 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-shrink-0">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-              <h1 className="text-sm md:text-base font-black tracking-wider bg-gradient-to-r from-orange-400 via-amber-400 to-orange-500 bg-clip-text text-transparent uppercase">
-                📝 NEW VOUCHER ENTRY
-              </h1>
-            </div>
-            <p className="text-slate-500 text-[11px] font-medium mt-0.5">Create secure database record for incoming packages</p>
+      {/* 1. Ultra-Compact Header Panel */}
+      <div className="px-4 py-2.5 md:px-6 bg-white border-b border-slate-200/80 flex justify-between items-center flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
           </div>
-          
-          <div className="bg-slate-950/50 border border-slate-800 px-4 py-2 rounded-xl flex items-center gap-2.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Office: </span>
-            <span className="text-xs font-black text-orange-400 tracking-wide">{userBranch === 'MDY' ? 'MANDALAY (MDY)' : 'YANGON (YGN)'}</span>
+          <div>
+            <h1 className="text-sm font-black tracking-wider text-slate-900 uppercase">
+              Voucher Entry
+            </h1>
+            <p className="hidden sm:block text-[10px] text-slate-400 font-medium">Logistics Database System</p>
           </div>
         </div>
+        
+        <div className="bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg flex items-center gap-2 shadow-sm">
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]" />
+          <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 hidden xs:inline">Node: </span>
+          <span className="text-[10px] font-extrabold text-slate-700 tracking-wider">
+            {userBranch === 'MDY' ? 'MANDALAY' : 'YANGON'}
+          </span>
+        </div>
+      </div>
 
-        <div className="overflow-y-auto flex-1 p-6 space-y-6 max-h-[calc(100vh-160px)] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-800 hover:[&::-webkit-scrollbar-thumb]:bg-slate-700">
-          <form onSubmit={handleSubmit} className="space-y-6">
+      {/* 2. Main Layout Container (Scroll Locked Container) */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 md:px-6">
+        <form onSubmit={handleSubmit} className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-4">
+            
+            {/* LEFT COLUMN: Core Logistics & Client Data (7/12 width) */}
+            <div className="lg:col-span-7 space-y-4">
               
-              {/* System ID & Date Section */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-950/30 p-4 rounded-xl border border-slate-800/60">
+              {/* Top Meta Controls Box */}
+              <div className="grid grid-cols-3 gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
                   <div>
-                      <label className="block text-slate-500 font-bold mb-1.5 tracking-wide uppercase text-[10px]">Item ID</label>
+                      <label className={labelStyle}>Item ID</label>
                       <input 
                           type="text" 
                           readOnly 
-                          placeholder="[ Auto-Generated ]" 
-                          className="w-full px-4 py-2.5 bg-slate-950/20 border border-dashed border-slate-800 text-orange-400/60 font-mono font-bold rounded-xl text-center text-sm cursor-not-allowed select-none" 
+                          placeholder="[ Auto ]" 
+                          className="w-full px-3 py-2 bg-slate-50 border border-dashed border-slate-200 text-slate-400 font-mono font-bold rounded-lg text-center text-xs cursor-not-allowed select-none" 
+                          tabIndex={-1}
                       />
                   </div>
                   <div>
-                      <label className="block text-slate-400 font-bold mb-1.5 tracking-wide uppercase text-[10px]">Arrival Date</label>
-                      <input type="date" value={formData.received_date} onChange={e => setFormData({...formData, received_date: e.target.value})} className={`${glassInput} font-mono`} required />
+                      <label className={labelStyle}>Arrival Date</label>
+                      <input type="date" value={formData.received_date} onChange={e => setFormData({...formData, received_date: e.target.value})} className={`${modernInput} font-mono`} required />
                   </div>
                   <div>
-                      <label className="block text-slate-400 font-bold mb-1.5 tracking-wide uppercase text-[10px]">Pick Up Rider</label>
-                      <select value={formData.pickup_rider_id} onChange={e => setFormData({...formData, pickup_rider_id: e.target.value})} className={glassSelect}>
-                          <option value="" className="bg-slate-950 text-slate-500">Select Rider...</option>
-                          {riders.map(r => <option key={r.id} value={r.id} className="bg-slate-950 text-slate-200">{r.name}</option>)}
+                      <label className={labelStyle}>Pick Up Rider</label>
+                      <select value={formData.pickup_rider_id} onChange={e => setFormData({...formData, pickup_rider_id: e.target.value})} className={modernSelect}>
+                          <option value="">Select rider...</option>
+                          {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                       </select>
                   </div>
               </div>
 
-              {/* Information Grid Section */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  
-                  {/* Left Side: Sender Box */}
-                  <div className="border border-slate-800/80 p-5 rounded-xl bg-slate-950/10 backdrop-blur-sm relative overflow-hidden group">
-                      <div className="absolute top-0 left-0 w-1 h-full bg-blue-500/50" />
-                      <h3 className="font-black text-blue-400 mb-4 uppercase tracking-wider text-xs flex items-center gap-2 border-b border-slate-800 pb-2">
-                        🔹 Sender Information
-                      </h3>
-                      <div className="space-y-4">
-                          <div>
-                              <label className="block text-slate-400 font-bold mb-1.5 uppercase text-[10px]">Sender Name *</label>
-                              <input type="text" value={formData.sender_name} onChange={e => setFormData({...formData, sender_name: e.target.value})} className={glassInput} required />
-                          </div>
-                          <div>
-                              <label className="block text-slate-400 font-bold mb-2 uppercase text-[10px]">Sender Office Location</label>
-                              <div className="flex space-x-6 bg-slate-950/40 p-2.5 rounded-xl border border-slate-800/50 w-fit">
-                                  <label className="flex items-center font-bold text-slate-300 cursor-pointer select-none text-xs">
-                                    <input type="radio" name="sloc" checked={formData.sender_loc === 'MDY'} onChange={() => setFormData({...formData, sender_loc: 'MDY'})} className="mr-2 w-4 h-4 accent-orange-500"/> MDY
-                                  </label>
-                                  <label className="flex items-center font-bold text-slate-300 cursor-pointer select-none text-xs">
-                                    <input type="radio" name="sloc" checked={formData.sender_loc === 'YGN'} onChange={() => setFormData({...formData, sender_loc: 'YGN'})} className="mr-2 w-4 h-4 accent-orange-500"/> YGN
-                                  </label>
-                              </div>
-                          </div>
-                      </div>
+              {/* Sender Card */}
+              <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm hover:border-blue-500/20 transition-colors">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="p-1 bg-blue-50 text-blue-600 rounded-md">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
+                    </div>
+                    <h3 className="font-bold text-slate-800 uppercase tracking-wider text-[10px]">Sender Details</h3>
                   </div>
-
-                  {/* Right Side: Receiver Box */}
-                  <div className="border border-slate-800/80 p-5 rounded-xl bg-slate-950/10 backdrop-blur-sm relative overflow-hidden group">
-                      <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500/50" />
-                      <h3 className="font-black text-emerald-400 mb-4 uppercase tracking-wider text-xs flex items-center gap-2 border-b border-slate-800 pb-2">
-                        🔸 Receiver Information
-                      </h3>
-                      <div className="grid grid-cols-2 gap-4 mb-4">
-                          <div>
-                              <label className="block text-slate-400 font-bold mb-1.5 uppercase text-[10px]">Receiver Name *</label>
-                              <input type="text" value={formData.receiver_name} onChange={e => setFormData({...formData, receiver_name: e.target.value})} className={glassInput} required />
-                          </div>
-                          <div>
-                              <label className="block text-slate-400 font-bold mb-1.5 uppercase text-[10px]">Phone Number *</label>
-                              <input type="text" value={formData.receiver_phone} onChange={handlePhoneChange} placeholder="09-xxx-xxx-xxx" className={`${glassInput} font-mono tracking-wide`} required />
-                          </div>
-                      </div>
-                      <div className="mb-4">
-                          <label className="block text-slate-400 font-bold mb-1.5 uppercase text-[10px]">Full Delivery Address</label>
-                          <textarea value={formData.receiver_address} onChange={e => setFormData({...formData, receiver_address: e.target.value})} className={`${glassInput} h-[42px] resize-none py-2`} rows={1} />
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                          <label className={labelStyle}>Sender Name <span className="text-rose-500">*</span></label>
+                          <input ref={senderInputRef} type="text" value={formData.sender_name} onChange={e => setFormData({...formData, sender_name: e.target.value})} className={modernInput} placeholder="Enter sender name" required />
                       </div>
                       <div>
-                          <label className="block text-slate-400 font-bold mb-1.5 uppercase text-[10px]">Destination City</label>
-                          <select value={formData.receiver_loc} onChange={e => setFormData({...formData, receiver_loc: e.target.value})} className={glassSelect}>
-                              <option value="MDY" className="bg-slate-950">Mandalay (MDY)</option>
-                              <option value="YGN" className="bg-slate-950">Yangon (YGN)</option>
-                              <option value="NPT" className="bg-slate-950">Nay Pyi Taw (NPT)</option>
+                          <label className={labelStyle}>Sender Office Location</label>
+                          <select value={formData.sender_loc} onChange={e => setFormData({...formData, sender_loc: e.target.value})} className={modernSelect}>
+                            <option value="MDY">MANDALAY</option>
+                            <option value="YGN">YANGON</option>
                           </select>
                       </div>
                   </div>
               </div>
 
-              {/* Pricing Financial Section */}
-              <div className="border border-amber-500/20 p-5 rounded-xl bg-gradient-to-b from-amber-500/[0.02] to-transparent shadow-inner">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {/* Receiver Card */}
+              <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm hover:border-emerald-500/20 transition-colors">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="p-1 bg-emerald-50 text-emerald-600 rounded-md">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+                    </div>
+                    <h3 className="font-bold text-slate-800 uppercase tracking-wider text-[10px]">Receiver Details</h3>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                       <div>
-                          <label className="block text-slate-400 font-bold mb-1.5 uppercase text-[10px]">COD Amount (Ks)</label>
-                          <input 
-                              type="number" 
-                              value={formData.cod_amount || ''} 
-                              onChange={e => {
-                                  const val = Number(e.target.value);
-                                  if (formData.fee_type === 'Bill') {
-                                      setOriginalCod(val + Number(formData.deli_fee));
-                                  } else {
-                                      setOriginalCod(val);
-                                  }
-                              }} 
-                              className={`${glassInput} font-mono text-orange-400 font-bold`} 
-                              placeholder="0" 
-                          />
+                          <label className={labelStyle}>Receiver Name <span className="text-rose-500">*</span></label>
+                          <input type="text" value={formData.receiver_name} onChange={e => setFormData({...formData, receiver_name: e.target.value})} className={modernInput} placeholder="Enter name" required />
+                      </div>
+                      <div>
+                          <label className={labelStyle}>Phone Number <span className="text-rose-500">*</span></label>
+                          <input type="text" value={formData.receiver_phone} onChange={handlePhoneChange} placeholder="09-xxx-xxx-xxx" className={`${modernInput} font-mono tracking-wide`} required />
+                      </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-2">
+                          <label className={labelStyle}>Full Delivery Address</label>
+                          <input type="text" value={formData.receiver_address} onChange={e => setFormData({...formData, receiver_address: e.target.value})} className={modernInput} placeholder="Enter detailed address..." />
+                      </div>
+                      <div>
+                          <label className={labelStyle}>Destination City</label>
+                          <select value={formData.receiver_loc} onChange={e => setFormData({...formData, receiver_loc: e.target.value})} className={modernSelect}>
+                              <option value="MDY">Mandalay (MDY)</option>
+                              <option value="YGN">Yangon (YGN)</option>
+                              <option value="NPT">Nay Pyi Taw (NPT)</option>
+                          </select>
+                      </div>
+                  </div>
+              </div>
+            </div>
+
+            {/* RIGHT COLUMN: Financials, Status Operations & Submit (5/12 width) */}
+            <div className="lg:col-span-5 space-y-4">
+              
+              {/* Financial Calculations Section */}
+              <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
+                  <h3 className="font-bold text-slate-800 mb-3 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                    <span className="text-amber-500">💰</span> Financial Accounts
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div>
+                          <label className={labelStyle}>COD Amount</label>
+                          <div className="relative">
+                            <input 
+                                type="number" 
+                                value={formData.cod_amount || ''} 
+                                onChange={e => {
+                                    // မူလ Logic အတိုင်း COD ထဲကို ရိုက်ထည့်လိုက်ရင် Bill Type ပေါ်မူတည်ပြီး originalCod ကို ချိန်ညှိပေးခြင်း
+                                    const val = Number(e.target.value);
+                                    if (formData.fee_type === 'Bill') {
+                                        setOriginalCod(val + Number(formData.deli_fee));
+                                    } else {
+                                        setOriginalCod(val);
+                                    }
+                                }} 
+                                className={`${modernInput} font-mono font-bold pl-6 text-slate-900`} 
+                                placeholder="0" 
+                            />
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-[10px]">K</span>
+                          </div>
                       </div>
                       
                       <div>
-                          <label className="block text-slate-400 font-bold mb-1.5 uppercase text-[10px]">Delivery Fee (Ks)</label>
-                          <input type="number" value={formData.deli_fee || ''} onChange={e => setFormData({...formData, deli_fee: Number(e.target.value)})} className={`${glassInput} font-mono text-rose-400 font-bold`} placeholder="0" />
+                          <label className={labelStyle}>Delivery Fee</label>
+                          <div className="relative">
+                            <input type="number" value={formData.deli_fee || ''} onChange={e => setFormData({...formData, deli_fee: Number(e.target.value)})} className={`${modernInput} font-mono text-orange-600 font-bold pl-6`} placeholder="0" />
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-[10px]">K</span>
+                          </div>
                       </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3 items-end">
                       <div>
-                          <label className="block text-slate-400 font-bold mb-1.5 uppercase text-[10px]">Fee Payment Type</label>
-                          <select value={formData.fee_type} onChange={e => setFormData({...formData, fee_type: e.target.value})} className={glassSelect}>
-                              <option value="Deli" className="bg-slate-950">Deli (+)</option>
-                              <option value="Kpay" className="bg-slate-950">Kpay (Prepaid)</option>
-                              <option value="Cash" className="bg-slate-950">Cash (Prepaid)</option>
-                              <option value="Bill" className="bg-slate-950">Bill (-)</option>
+                          <label className={labelStyle}>Payment Type</label>
+                          <select value={formData.fee_type} onChange={e => setFormData({...formData, fee_type: e.target.value})} className={modernSelect}>
+                              <option value="Deli">Deli (+)</option>
+                              <option value="Kpay">Kpay (Prepaid)</option>
+                              <option value="Cash">Cash (Prepaid)</option>
+                              <option value="Bill">Bill (-)</option>
                           </select>
                       </div>
+
                       <div>
-                          <label className="block text-amber-400 font-black mb-1.5 uppercase text-[10px] tracking-wider">Calculated Total</label>
-                          <div className="w-full bg-orange-500/10 border border-orange-500/20 text-orange-400 h-[40px] flex items-center justify-center rounded-xl font-mono font-black text-base shadow-inner">
-                              {formData.total_amount.toLocaleString()} <span className="text-[10px] ml-1 font-sans font-bold text-orange-500">Ks</span>
+                          <label className="block text-orange-600 font-black mb-1 uppercase text-[10px] tracking-wider">Total Final</label>
+                          <div className="w-full bg-slate-900 py-2 px-3 rounded-lg flex items-center justify-between shadow-sm">
+                              <span className="font-mono font-black text-sm text-orange-400">
+                                {formData.total_amount.toLocaleString()}
+                              </span>
+                              <span className="text-[10px] font-bold text-orange-400/80">Ks</span>
                           </div>
                       </div>
                   </div>
               </div>
 
-              {/* Delivery Management Status & Checkbox Options */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  
-                  {/* Status Inputs */}
-                  <div className="border border-slate-800 p-4 rounded-xl bg-slate-950/10 backdrop-blur-sm">
-                      <h3 className="font-bold text-slate-400 mb-3.5 uppercase tracking-wide text-[11px] border-b border-slate-800 pb-1.5">⚡ Delivery Dispatch</h3>
-                      <div className="mb-3">
-                          <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className={glassSelect}>
-                              <option value="At Office" className="bg-slate-950">At Office (ရောက်ရှိ)</option>
-                              <option value="In-Transit" className="bg-slate-950">In-Transit (လမ်းခရီး)</option>
-                              <option value="Delivered" className="bg-slate-950">Delivered (ပို့ပြီး)</option>
+              {/* Status & Actions Combined Panel */}
+              <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                      <div>
+                          <label className={labelStyle}>Dispatch Status</label>
+                          <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className={modernSelect}>
+                              <option value="At Office">📦 At Office</option>
+                              <option value="In-Transit">🚚 In-Transit</option>
+                              <option value="Delivered">✅ Delivered</option>
                           </select>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
-                          <input type="date" value={formData.deliver_date} onChange={e => setFormData({...formData, deliver_date: e.target.value})} className={`${glassInput} font-mono`} />
-                          <select value={formData.deliver_rider_id} onChange={e => setFormData({...formData, deliver_rider_id: e.target.value})} className={glassSelect}>
-                              <option value="" className="bg-slate-950 text-slate-500">Rider...</option>
-                              {riders.map(r => <option key={r.id} value={r.id} className="bg-slate-950">{r.name}</option>)}
+                      <div>
+                          <label className={labelStyle}>Deliver Date</label>
+                          <input type="date" value={formData.deliver_date} onChange={e => setFormData({...formData, deliver_date: e.target.value})} className={`${modernInput} font-mono`} />
+                      </div>
+                  </div>
+
+                  <div>
+                      <label className={labelStyle}>Delivery Rider</label>
+                      <select value={formData.deliver_rider_id} onChange={e => setFormData({...formData, deliver_rider_id: e.target.value})} className={modernSelect}>
+                          <option value="">Select delivery rider...</option>
+                          {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                      </select>
+                  </div>
+
+                  {/* System Utilities (Keyboard နဲ့ Tab ခုန်လို့ရအောင် Select boxes ပြောင်းထားပါသည်) */}
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div>
+                          <label className={labelStyle}>Return Utility</label>
+                          <select value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} className={modernSelect}>
+                            <option value="">Normal Delivery</option>
+                            <option value="RT">Return Item (RT)</option>
+                          </select>
+                      </div>
+                      <div>
+                          <label className={labelStyle}>Cash Event</label>
+                          <select value={formData.cash_added_date ? "yes" : "no"} onChange={e => setFormData({...formData, cash_added_date: e.target.value === "yes" ? today : ""})} className={modernSelect}>
+                            <option value="no">No Cash Added</option>
+                            <option value="yes">Cash Added Event</option>
                           </select>
                       </div>
                   </div>
 
-                  {/* 💡 FIXED: Cash Added Component with Dynamic Date Picker */}
-                  <div className="border border-slate-800 p-4 rounded-xl bg-slate-950/20 flex flex-col justify-center space-y-3">
-                      <label className={`flex items-center p-3 rounded-xl border cursor-pointer transition-all select-none font-bold text-xs ${
-                        formData.note === 'RT' 
-                          ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' 
-                          : 'bg-slate-950/40 text-slate-500 border-slate-800/80 hover:border-slate-700'
-                      }`}>
-                          <input type="checkbox" className="mr-3 w-5 h-5 rounded border-slate-800 bg-slate-950 text-rose-500 accent-rose-500" checked={formData.note === 'RT'} onChange={e => setFormData({...formData, note: e.target.checked ? 'RT' : ''})} />
-                          ⚠️ RETURN ITEM SYSTEM RECORD (RT)
-                      </label>
-                      
-                      <div className={`flex flex-col p-3 rounded-xl border transition-all ${
-                        formData.cash_added_date 
-                          ? 'bg-emerald-500/10 border-emerald-500/30' 
-                          : 'bg-slate-950/40 border-slate-800/80 hover:border-slate-800'
-                      }`}>
-                          <label className={`flex items-center cursor-pointer select-none font-bold text-xs ${
-                            formData.cash_added_date ? 'text-emerald-400' : 'text-slate-500'
-                          }`}>
-                              <input 
-                                type="checkbox" 
-                                className="mr-3 w-5 h-5 rounded border-slate-800 bg-slate-950 text-emerald-500 accent-emerald-500" 
-                                checked={!!formData.cash_added_date} 
-                                onChange={e => setFormData({...formData, cash_added_date: e.target.checked ? today : ''})} 
-                              />
-                              💵 CASH ADDED
-                          </label>
-                          
-                          {/* Checkbox ကို ထောက်လိုက်မှ ပွင့်လာမည့် Date field */}
-                          {formData.cash_added_date && (
-                            <div className="mt-3 pt-2.5 border-t border-emerald-500/20 animate-fadeIn">
-                              <label className="block text-emerald-500/70 font-bold mb-1.5 uppercase text-[10px] tracking-wider">Cash Added Date *</label>
-                              <input 
-                                type="date" 
-                                value={formData.cash_added_date} 
-                                onChange={e => setFormData({...formData, cash_added_date: e.target.value})} 
-                                className={`${glassInput} font-mono border-emerald-500/30 text-emerald-300 focus:border-emerald-500`}
-                                required
-                              />
-                            </div>
-                          )}
-                      </div>
-                  </div>
+                  {/* Expandable Cash Date Field */}
+                  {formData.cash_added_date && (
+                     <div className="bg-emerald-50/50 border border-emerald-100 rounded-lg p-2 animate-fadeIn">
+                        <label className="block text-emerald-700 font-bold mb-1 uppercase text-[9px] tracking-wider">Date Received</label>
+                        <input 
+                          type="date" 
+                          value={formData.cash_added_date} 
+                          onChange={e => setFormData({...formData, cash_added_date: e.target.value})} 
+                          className={`${modernInput} bg-white border-emerald-200 text-emerald-800 focus:border-emerald-500`}
+                          required
+                        />
+                     </div>
+                  )}
               </div>
 
-              {/* Action Trigger Button */}
-              <div className="pt-2">
+              {/* Action Trigger Save Button */}
+              <div className="pt-1">
                   <button 
                     type="submit" 
                     disabled={loading} 
-                    className={`w-full py-3.5 text-xs font-black rounded-xl tracking-widest uppercase transition-all shadow-[0_4px_20px_rgba(249,115,22,0.15)] ${
+                    className={`w-full py-3 text-xs font-black rounded-xl tracking-widest uppercase transition-all shadow-sm ${
                       loading 
-                        ? 'bg-slate-800 text-slate-500 cursor-not-allowed' 
-                        : 'bg-gradient-to-r from-orange-500 to-amber-500 text-slate-950 hover:from-orange-600 hover:to-amber-600 font-extrabold hover:shadow-[0_4px_24px_rgba(249,115,22,0.3)]'
+                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
+                        : 'bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:opacity-95 active:scale-[0.99]'
                     }`}
                   >
-                      {loading ? '⚡ SYNCHRONIZING WITH DATABASE...' : '💾 SAVE VOUCHER NOW'}
+                    <span className="flex items-center justify-center gap-2">
+                      {loading ? (
+                        <>
+                          <svg className="animate-spin h-4 w-4 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                          SAVING TO DB...
+                        </>
+                      ) : '💾 SAVE VOUCHER RECORD'}
+                    </span>
                   </button>
               </div>
-          </form>
-        </div>
-        
+
+            </div>
+        </form>
       </div>
     </div>
   )
