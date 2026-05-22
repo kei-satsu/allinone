@@ -4,11 +4,10 @@ import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
-// 1. Column Definition ထဲတွင် branch ကို ထည့်သွင်းထားပါသည်
 const COLUMN_DEFS = [
   { key: 'item_id', label: 'Item ID', defaultVisible: true },
   { key: 'received_date', label: 'Received Date', defaultVisible: true },
-  { key: 'branch', label: 'Branch', defaultVisible: true }, // ပေါ်လာအောင် ထည့်ပေးလိုက်ပါပြီ
+  { key: 'branch', label: 'Branch', defaultVisible: true }, 
   { key: 'sender_name', label: 'Sender', defaultVisible: true },
   { key: 'sender_loc', label: 'S. City', defaultVisible: true },
   { key: 'receiver_name', label: 'Receiver', defaultVisible: true },
@@ -22,6 +21,7 @@ const COLUMN_DEFS = [
   { key: 'status', label: 'Status', defaultVisible: true },
   { key: 'pickup_rider', label: 'Pickup By', defaultVisible: true },
   { key: 'deliver_rider', label: 'Deliver By', defaultVisible: true },
+  { key: 'deliver_date', label: 'Deliver Date', defaultVisible: false }, // အသစ်ထည့်ထားသည်
   { key: 'cash_added_date', label: 'Cash Add Date', defaultVisible: false },
   { key: 'note', label: 'Note', defaultVisible: false },
   { key: 'created_at', label: 'Created At', defaultVisible: false },
@@ -30,6 +30,7 @@ const COLUMN_DEFS = [
 export default function OrderList() {
   const router = useRouter()
   const [orders, setOrders] = useState<any[]>([])
+  const [riders, setRiders] = useState<any[]>([]) // Rider များသိမ်းရန် State သစ်
   const [loading, setLoading] = useState(true)
   const [editingOrder, setEditingOrder] = useState<any>(null)
   const [userBranch, setUserBranch] = useState<string>('')
@@ -68,6 +69,12 @@ export default function OrderList() {
     setLoading(false)
   }
 
+  // Fetch Riders Function
+  const fetchRiders = async () => {
+    const { data, error } = await supabase.from('riders').select('*')
+    if (data) setRiders(data)
+  }
+
   useEffect(() => {
     const storedBranch = localStorage.getItem('user_branch')
     if (!storedBranch) {
@@ -75,6 +82,7 @@ export default function OrderList() {
     } else {
       setUserBranch(storedBranch)
       fetchData(storedBranch)
+      fetchRiders() // Rider များကိုပါ တစ်ခါတည်း ဆွဲယူပါမည်
     }
   }, [router])
 
@@ -145,7 +153,6 @@ export default function OrderList() {
     }
   }
 
-  // 2. Cells Generator (Branch အတွက် Badge အလှဆင်ထားသော Logic ပါဝင်ပါသည်)
   const renderCell = (o: any, key: string) => {
     if (key === 'branch') return (
       <span className={`px-2 py-0.5 rounded border text-[10px] font-black tracking-wider ${
@@ -331,10 +338,10 @@ export default function OrderList() {
         </div>
       )}
 
-      {/* --- Edit Modal --- */}
+      {/* --- Edit Modal with Comprehensive Fields --- */}
       {editingOrder && (
         <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-2xl w-full max-w-4xl p-8 shadow-2xl overflow-y-auto max-h-[90vh] ring-1 ring-black/5">
+            <div className="bg-white rounded-2xl w-full max-w-5xl p-8 shadow-2xl overflow-y-auto max-h-[90vh] ring-1 ring-black/5">
                 
                 <div className="flex justify-between items-center pb-5 mb-6 border-b border-gray-100">
                     <div>
@@ -347,11 +354,12 @@ export default function OrderList() {
                 </div>
                 
                 <form className="grid grid-cols-1 md:grid-cols-4 gap-x-5 gap-y-5 text-sm" onSubmit={handleUpdate}>
+                    
+                    {/* Top Row: Meta Controls */}
                     <div>
                       <label className="block text-gray-500 font-bold text-xs mb-1.5 uppercase tracking-wider">Received Date</label>
                       <input type="date" className={modalInputStyle} value={editingOrder.received_date || ''} onChange={e => setEditingOrder({...editingOrder, received_date: e.target.value})}/>
                     </div>
-                    {/* Modal ထဲတွင်ပါ Branch ကို စစ်ဆေး/ပြင်ဆင်နိုင်ရန် ထည့်သွင်းထားပါသည် */}
                     <div>
                       <label className="block text-gray-500 font-bold text-xs mb-1.5 uppercase tracking-wider">Branch</label>
                       <select className={modalInputStyle} value={editingOrder.branch || ''} onChange={e => setEditingOrder({...editingOrder, branch: e.target.value})}>
@@ -369,10 +377,14 @@ export default function OrderList() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-gray-500 font-bold text-xs mb-1.5 uppercase tracking-wider">Fee Type</label>
-                      <input className={modalInputStyle} value={editingOrder.fee_type || ''} onChange={e => setEditingOrder({...editingOrder, fee_type: e.target.value})}/>
+                      <label className="block text-gray-500 font-bold text-xs mb-1.5 uppercase tracking-wider">Pick Up Rider</label>
+                      <select className={modalInputStyle} value={editingOrder.pickup_rider_id || ''} onChange={e => setEditingOrder({...editingOrder, pickup_rider_id: e.target.value})}>
+                          <option value="">Select pickup rider...</option>
+                          {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                      </select>
                     </div>
 
+                    {/* Sender Row */}
                     <div className="border-t border-gray-100 pt-5 md:col-span-4 grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
                         <label className="block text-gray-500 font-bold text-xs mb-1.5 uppercase tracking-wider">Sender Name</label>
@@ -380,10 +392,14 @@ export default function OrderList() {
                       </div>
                       <div>
                         <label className="block text-gray-500 font-bold text-xs mb-1.5 uppercase tracking-wider">Sender City</label>
-                        <input className={modalInputStyle} value={editingOrder.sender_loc || ''} onChange={e => setEditingOrder({...editingOrder, sender_loc: e.target.value})}/>
+                        <select className={modalInputStyle} value={editingOrder.sender_loc || ''} onChange={e => setEditingOrder({...editingOrder, sender_loc: e.target.value})}>
+                            <option value="MDY">MANDALAY</option>
+                            <option value="YGN">YANGON</option>
+                        </select>
                       </div>
                     </div>
 
+                    {/* Receiver Row */}
                     <div className="border-t border-gray-100 pt-5 md:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div>
                         <label className="block text-gray-500 font-bold text-xs mb-1.5 uppercase tracking-wider">Receiver Name</label>
@@ -394,8 +410,12 @@ export default function OrderList() {
                         <input className={modalInputStyle} value={editingOrder.receiver_phone || ''} onChange={e => setEditingOrder({...editingOrder, receiver_phone: e.target.value})}/>
                       </div>
                       <div>
-                        <label className="block text-gray-500 font-bold text-xs mb-1.5 uppercase tracking-wider">Receiver City</label>
-                        <input className={modalInputStyle} value={editingOrder.receiver_loc || ''} onChange={e => setEditingOrder({...editingOrder, receiver_loc: e.target.value})}/>
+                        <label className="block text-gray-500 font-bold text-xs mb-1.5 uppercase tracking-wider">Destination City</label>
+                        <select className={modalInputStyle} value={editingOrder.receiver_loc || ''} onChange={e => setEditingOrder({...editingOrder, receiver_loc: e.target.value})}>
+                            <option value="MDY">Mandalay (MDY)</option>
+                            <option value="YGN">Yangon (YGN)</option>
+                            <option value="NPT">Nay Pyi Taw (NPT)</option>
+                        </select>
                       </div>
                       <div className="md:col-span-3">
                         <label className="block text-gray-500 font-bold text-xs mb-1.5 uppercase tracking-wider">Full Delivery Address</label>
@@ -403,7 +423,17 @@ export default function OrderList() {
                       </div>
                     </div>
 
-                    <div className="border-t border-gray-100 pt-5 md:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-6 bg-gray-50/50 p-4 rounded-xl">
+                    {/* Financial Row */}
+                    <div className="border-t border-gray-100 pt-5 md:col-span-4 grid grid-cols-1 md:grid-cols-4 gap-6 bg-gray-50/50 p-4 rounded-xl">
+                      <div>
+                        <label className="block text-gray-500 font-bold text-xs mb-1.5 uppercase tracking-wider">Payment Type</label>
+                        <select className={modalInputStyle} value={editingOrder.fee_type || ''} onChange={e => setEditingOrder({...editingOrder, fee_type: e.target.value})}>
+                            <option value="Deli">Deli (+)</option>
+                            <option value="Kpay">Kpay (Prepaid)</option>
+                            <option value="Cash">Cash (Prepaid)</option>
+                            <option value="Bill">Bill (-)</option>
+                        </select>
+                      </div>
                       <div>
                         <label className="block text-gray-500 font-bold text-xs mb-1.5 uppercase tracking-wider">COD Amount</label>
                         <input type="number" className={modalInputStyle} value={editingOrder.cod_amount || 0} onChange={e => setEditingOrder({...editingOrder, cod_amount: Number(e.target.value)})}/>
@@ -418,17 +448,33 @@ export default function OrderList() {
                       </div>
                     </div>
 
-                    <div className="md:col-span-4 grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
+                    {/* Operational & Status Row */}
+                    <div className="md:col-span-4 grid grid-cols-1 md:grid-cols-4 gap-6 mt-2 border-t border-gray-100 pt-5">
+                      <div>
+                        <label className="block text-gray-500 font-bold text-xs mb-1.5 uppercase tracking-wider">Deliver Rider</label>
+                        <select className={modalInputStyle} value={editingOrder.deliver_rider_id || ''} onChange={e => setEditingOrder({...editingOrder, deliver_rider_id: e.target.value})}>
+                            <option value="">Select deliver rider...</option>
+                            {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-gray-500 font-bold text-xs mb-1.5 uppercase tracking-wider">Deliver Date</label>
+                        <input type="date" className={modalInputStyle} value={editingOrder.deliver_date || ''} onChange={e => setEditingOrder({...editingOrder, deliver_date: e.target.value})}/>
+                      </div>
                       <div>
                         <label className="block text-gray-500 font-bold text-xs mb-1.5 uppercase tracking-wider">Cash Added Date</label>
                         <input type="date" className={modalInputStyle} value={editingOrder.cash_added_date || ''} onChange={e => setEditingOrder({...editingOrder, cash_added_date: e.target.value})}/>
                       </div>
                       <div>
-                        <label className="block text-gray-500 font-bold text-xs mb-1.5 uppercase tracking-wider">Note / Remarks</label>
-                        <input className={modalInputStyle} value={editingOrder.note || ''} onChange={e => setEditingOrder({...editingOrder, note: e.target.value})}/>
+                        <label className="block text-gray-500 font-bold text-xs mb-1.5 uppercase tracking-wider">Note / Remarks (RT)</label>
+                        <select className={modalInputStyle} value={editingOrder.note || ''} onChange={e => setEditingOrder({...editingOrder, note: e.target.value})}>
+                            <option value="">Normal Delivery</option>
+                            <option value="RT">Return Item (RT)</option>
+                        </select>
                       </div>
                     </div>
 
+                    {/* Footer Actions */}
                     <div className="md:col-span-4 flex justify-end mt-4 pt-4 border-t border-gray-100">
                       <button type="button" onClick={() => setEditingOrder(null)} className="px-6 py-2.5 text-gray-500 font-bold hover:bg-gray-100 rounded-lg transition-colors mr-3">
                         Cancel
