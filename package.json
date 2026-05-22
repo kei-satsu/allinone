@@ -2,12 +2,12 @@
   "name": "delivery-system",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
-    "dev": "next dev",
+ "scripts": {
+    "dev": "next dev --turbo",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
-  },
+},
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",
     "@tailwindcss/oxide": "^4.3.0",

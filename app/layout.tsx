@@ -2,13 +2,15 @@
 import { useEffect, useState } from 'react'
 import './globals.css'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation' // useRouter ကိုပါ တွဲသုံးပါမယ်
+import { usePathname, useRouter } from 'next/navigation'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setSidebarOpen] = useState(false)
   const [userBranch, setUserBranch] = useState<string | null>(null)
   const pathname = usePathname()
-  const router = useRouter() // router သတ်မှတ်ခြင်း
+  const router = useRouter()
+
+  const isLoginPage = pathname === '/login'
 
   useEffect(() => {
     const storedBranch = localStorage.getItem('user_branch')
@@ -23,7 +25,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     setSidebarOpen(false)
   }, [pathname])
 
-  // Logout လုပ်ဆောင်ချက် Logic
   const handleLogout = () => {
     localStorage.removeItem('user_branch')
     localStorage.removeItem('isLoggedIn')
@@ -32,7 +33,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     router.refresh()
   }
 
-  // ခေတ်မီ SVG Icons များဖြင့် စနစ်တကျ ဖွဲ့စည်းထားသော Menu Items
   const menuItems = [
     { 
       name: 'Dashboard', 
@@ -81,124 +81,128 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     },
   ]
 
-  if (pathname === '/login') {
-    return (
-      <html lang="en">
-        <body className="bg-slate-900 text-slate-100 h-screen">{children}</body>
-      </html>
-    )
-  }
-
   return (
-    <html lang="en">
-      <body className="bg-slate-50 text-slate-800 flex h-screen overflow-hidden font-sans relative antialiased">
+    <html 
+      lang="en" 
+      className={`w-full h-full m-0 p-0 ${isLoginPage ? 'bg-slate-900' : 'bg-slate-50'}`}
+      style={{ colorScheme: isLoginPage ? 'dark' : 'light' }}
+    >
+      <body className={`w-full h-full m-0 p-0 font-sans antialiased overflow-hidden relative ${
+        isLoginPage ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800 flex flex-row'
+      }`}>
         
-        {/* Subtle Decorative Glows suitable for light theme */}
-        <div className="absolute top-[-10%] left-[-5%] w-[500px] h-[500px] bg-orange-500/[0.02] rounded-full blur-[120px] pointer-events-none z-0" />
-        <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] bg-blue-500/[0.02] rounded-full blur-[120px] pointer-events-none z-0" />
-
-        {/* --- Backdrop Overlay --- */}
-        {isSidebarOpen && (
-          <div 
-            className="fixed inset-0 bg-slate-900/20 backdrop-blur-xs z-30 transition-opacity duration-300"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-
-        {/* --- Premium White Glass Sidebar (Slide-out Drawer) --- */}
-        <aside className={`fixed top-0 left-0 h-screen w-64 bg-white/95 backdrop-blur-md border-r border-slate-200/80 text-slate-700 transition-transform duration-300 ease-in-out flex flex-col z-40 shadow-xl shadow-slate-200/40 ${
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}>
-          
-          {/* Header Identity */}
-          <div className="h-16 px-6 flex items-center justify-between border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-              <span className="font-black text-[11px] tracking-widest bg-gradient-to-r from-orange-600 to-amber-500 bg-clip-text text-transparent uppercase font-mono">
-                {userBranch || 'MAIN'} BRANCH
-              </span>
-            </div>
-          </div>
-
-          {/* Navigation Links Grid */}
-          <nav className="flex-1 mt-4 px-3 space-y-1 overflow-y-auto">
-            {menuItems.map((item) => {
-              const isActive = pathname === item.path
-              return (
-                <Link 
-                  key={item.path} 
-                  href={item.path} 
-                  className={`flex items-center p-2.5 rounded-xl transition-all duration-150 group ${
-                    isActive 
-                      ? 'bg-orange-50/80 text-orange-600 font-bold border-l-4 border-orange-500 shadow-xs' 
-                      : 'hover:bg-slate-50 text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  <span className={`transition-transform duration-150 ${isActive ? 'scale-105 text-orange-500' : 'text-slate-400 group-hover:text-slate-700 group-hover:scale-105'}`}>
-                    {item.icon}
-                  </span>
-                  <span className="font-bold text-xs tracking-wide ml-3">
-                    {item.name}
-                  </span>
-                </Link>
-              )
-            })}
-          </nav>
-
-          {/* --- အကောင့်အချက်အလက်ပြကွက်နှင့် Logout စနစ်သစ် --- */}
-          <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/60 backdrop-blur-xs">
-            <div className="flex items-center gap-3 p-1.5 mb-2 rounded-xl">
-              {/* Profile Avatar Badge */}
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-slate-700 to-slate-900 flex items-center justify-center text-white font-black text-xs shadow-sm shadow-slate-900/10">
-                {userBranch?.substring(0, 2) || 'OP'}
-              </div>
-              {/* Account text details */}
-              <div className="flex flex-col min-w-0">
-                <span className="text-[11px] font-black text-slate-800 tracking-wide truncate">Logged In Account</span>
-                <span className="text-[10px] font-bold text-slate-400 font-mono tracking-wider uppercase truncate">
-                  {userBranch === 'MDY' ? 'Mandalay' : userBranch === 'YGN' ? 'Yangon' : userBranch || 'Main'} Branch
-                </span>
-              </div>
-            </div>
-
-            {/* Logout Action Button */}
-            <button 
-              onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-2 bg-red-50 hover:bg-red-100/80 text-red-600 font-black text-[11px] py-2.5 px-3 rounded-xl transition-all duration-150 active:scale-[0.98] border border-red-200/40 uppercase tracking-wider"
-            >
-              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-              Sign Out Engine
-            </button>
-          </div>
-
-          {/* System Version Footnote */}
-          <div className="p-4 border-t border-slate-100 text-[9px] text-slate-400 font-bold font-mono text-center tracking-widest mb-20 uppercase">
-            Logistics Engine v1.0
-          </div>
-        </aside>
-
-        {/* --- Floating Sidebar Toggle Button (FAB) --- */}
-        <button 
-          onClick={() => setSidebarOpen(!isSidebarOpen)} 
-          className="fixed bottom-6 left-6 z-50 w-11 h-11 bg-gradient-to-r from-orange-500 to-amber-500 rounded-full flex items-center justify-center shadow-lg shadow-orange-500/20 hover:scale-105 active:scale-95 transition-all group border border-orange-400/20"
-        >
-          <span className="transition-transform duration-200 text-white font-medium">
-            {isSidebarOpen ? (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-            ) : (
-              <svg className="w-4 h-4 group-hover:rotate-6 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
-            )}
-          </span>
-        </button>
-
-        {/* --- Main Content Workspace --- */}
-        <div className="flex-1 flex flex-col overflow-hidden relative z-10 w-full h-screen">
-          <main className="flex-1 w-full h-full p-4 md:p-6 overflow-y-auto">
+        {isLoginPage ? (
+          /* --- Login Screen View --- */
+          <div className="w-full h-full overflow-y-auto">
             {children}
-          </main>
-        </div>
+          </div>
+        ) : (
+          /* --- Authenticated Dashboard Layout View --- */
+          <>
+            {/* Subtle Decorative Glows */}
+            <div className="absolute top-[-10%] left-[-5%] w-[500px] h-[500px] bg-orange-500/[0.02] rounded-full blur-[120px] pointer-events-none z-0" />
+            <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] bg-blue-500/[0.02] rounded-full blur-[120px] pointer-events-none z-0" />
+
+            {/* Backdrop Overlay */}
+            {isSidebarOpen && (
+              <div 
+                className="fixed inset-0 bg-slate-900/20 backdrop-blur-xs z-30 transition-opacity duration-300"
+                onClick={() => setSidebarOpen(false)}
+              />
+            )}
+
+            {/* Premium White Glass Sidebar */}
+            <aside className={`fixed top-0 left-0 h-full w-64 bg-white/95 backdrop-blur-md border-r border-slate-200/80 text-slate-700 transition-transform duration-300 ease-in-out flex flex-col z-40 shadow-xl shadow-slate-200/40 ${
+              isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+            }`}>
+              {/* Header Identity */}
+              <div className="h-16 px-6 flex items-center justify-between border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                  <span className="font-black text-[11px] tracking-widest bg-gradient-to-r from-orange-600 to-amber-500 bg-clip-text text-transparent uppercase font-mono">
+                    {userBranch || 'MAIN'} BRANCH
+                  </span>
+                </div>
+              </div>
+
+              {/* Navigation Links Grid */}
+              <nav className="flex-1 mt-4 px-3 space-y-1 overflow-y-auto">
+                {menuItems.map((item) => {
+                  const isActive = pathname === item.path
+                  return (
+                    <Link 
+                      key={item.path} 
+                      href={item.path} 
+                      className={`flex items-center p-2.5 rounded-xl transition-all duration-150 group ${
+                        isActive 
+                          ? 'bg-orange-50/80 text-orange-600 font-bold border-l-4 border-orange-500 shadow-xs' 
+                          : 'hover:bg-slate-50 text-slate-500 hover:text-slate-900'
+                      }`}
+                    >
+                      <span className={`transition-transform duration-150 ${isActive ? 'scale-105 text-orange-500' : 'text-slate-400 group-hover:text-slate-700 group-hover:scale-105'}`}>
+                        {item.icon}
+                      </span>
+                      <span className="font-bold text-xs tracking-wide ml-3">
+                        {item.name}
+                      </span>
+                    </Link>
+                  )
+                })}
+              </nav>
+
+              {/* Account details & Logout */}
+              <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/60 backdrop-blur-xs">
+                <div className="flex items-center gap-3 p-1.5 mb-2 rounded-xl">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-slate-700 to-slate-900 flex items-center justify-center text-white font-black text-xs shadow-sm shadow-slate-900/10">
+                    {userBranch?.substring(0, 2) || 'OP'}
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[11px] font-black text-slate-800 tracking-wide truncate">Logged In Account</span>
+                    <span className="text-[10px] font-bold text-slate-400 font-mono tracking-wider uppercase truncate">
+                      {userBranch === 'MDY' ? 'Mandalay' : userBranch === 'YGN' ? 'Yangon' : userBranch || 'Main'} Branch
+                    </span>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={handleLogout}
+                  className="w-full flex items-center justify-center gap-2 bg-red-50 hover:bg-red-100/80 text-red-600 font-black text-[11px] py-2.5 px-3 rounded-xl transition-all duration-150 active:scale-[0.98] border border-red-200/40 uppercase tracking-wider"
+                >
+                  <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Sign Out Engine
+                </button>
+              </div>
+
+              {/* System Version Footnote */}
+              <div className="p-4 border-t border-slate-100 text-[9px] text-slate-400 font-bold font-mono text-center tracking-widest mb-20 uppercase">
+                Logistics Engine v1.0
+              </div>
+            </aside>
+
+            {/* Floating Sidebar Toggle Button (FAB) */}
+            <button 
+              onClick={() => setSidebarOpen(!isSidebarOpen)} 
+              className="fixed bottom-6 left-6 z-50 w-11 h-11 bg-gradient-to-r from-orange-500 to-amber-500 rounded-full flex items-center justify-center shadow-lg shadow-orange-500/20 hover:scale-105 active:scale-95 transition-all group border border-orange-400/20"
+            >
+              <span className="transition-transform duration-200 text-white font-medium">
+                {isSidebarOpen ? (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                ) : (
+                  <svg className="w-4 h-4 group-hover:rotate-6 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                )}
+              </span>
+            </button>
+
+            {/* --- Main Content Workspace --- */}
+            <div className="flex-1 flex flex-col overflow-hidden relative z-10 w-full h-full bg-slate-50">
+              <main className="flex-1 w-full h-full p-4 md:p-6 overflow-y-auto">
+                {children}
+              </main>
+            </div>
+          </>
+        )}
 
       </body>
     </html>

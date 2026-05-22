@@ -50,11 +50,10 @@ export default function EntryForm() {
     }
     fetchRiders()
     
-    // ပထမဦးဆုံး input ကွင်းပြင်ကို အလိုအလျောက် cursor ချပေးခြင်း
     senderInputRef.current?.focus()
   }, [router])
 
-  // 2. စုစုပေါင်းငွေ အလိုလိုတွက်ချက်ခြင်း (မူလ Logic အတိုင်း ပြန်လည်ထားရှိထားပါသည်)
+  // 2. စုစုပေါင်းငွေ အလိုလိုတွက်ချက်ခြင်း
   useEffect(() => {
     let currentCOD = originalCod;
     const deli = Number(formData.deli_fee) || 0;
@@ -117,7 +116,6 @@ export default function EntryForm() {
         const generatedId = data[0].item_id;
         alert(`Voucher သိမ်းဆည်းပြီးပါပြီ!\nID: ${generatedId}`);
         
-        // Form Reset
         setOriginalCod(0)
         setFormData(prev => ({
             ...prev,
@@ -126,7 +124,6 @@ export default function EntryForm() {
             pickup_rider_id: '', deliver_rider_id: '', status: 'At Office', deliver_date: ''
         }))
         
-        // နောက်ထပ်စောင်ရိုက်ဖို့ Cursor ကို ပထမကွင်းပြင်ဆီ ချက်ချင်းပြန်ပို့ပေးခြင်း
         setTimeout(() => senderInputRef.current?.focus(), 50)
     }
     setLoading(false)
@@ -141,7 +138,7 @@ export default function EntryForm() {
     <div className="w-full h-screen bg-slate-50 text-xs text-slate-700 antialiased flex flex-col overflow-hidden">
       
       {/* 1. Ultra-Compact Header Panel */}
-      <div className="px-4 py-2.5 md:px-6 bg-white border-b border-slate-200/80 flex justify-between items-center flex-shrink-0">
+      <div className="w-full px-4 py-2.5 md:px-6 bg-white border-b border-slate-200/80 flex justify-between items-center flex-shrink-0">
         <div className="flex items-center gap-2">
           <div className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
@@ -164,15 +161,15 @@ export default function EntryForm() {
         </div>
       </div>
 
-      {/* 2. Main Layout Container (Scroll Locked Container) */}
+      {/* 2. Main Layout Container (w-full ဖြင့် အပြည့်ကားထားသည်) */}
       <div className="flex-1 overflow-y-auto px-4 py-4 md:px-6">
-        <form onSubmit={handleSubmit} className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <form onSubmit={handleSubmit} className="w-full grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
             
-            {/* LEFT COLUMN: Core Logistics & Client Data (7/12 width) */}
-            <div className="lg:col-span-7 space-y-4">
+            {/* LEFT COLUMN: Core Logistics & Client Data (8/12 width သို့ တိုးမြှင့်ထားသည်) */}
+            <div className="lg:col-span-8 space-y-4 flex flex-col justify-between">
               
               {/* Top Meta Controls Box */}
-              <div className="grid grid-cols-3 gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+              <div className="grid grid-cols-3 gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex-1">
                   <div>
                       <label className={labelStyle}>Item ID</label>
                       <input 
@@ -197,7 +194,7 @@ export default function EntryForm() {
               </div>
 
               {/* Sender Card */}
-              <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm hover:border-blue-500/20 transition-colors">
+              <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm hover:border-blue-500/20 transition-colors flex-1">
                   <div className="flex items-center gap-2 mb-3">
                     <div className="p-1 bg-blue-50 text-blue-600 rounded-md">
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
@@ -205,7 +202,7 @@ export default function EntryForm() {
                     <h3 className="font-bold text-slate-800 uppercase tracking-wider text-[10px]">Sender Details</h3>
                   </div>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                           <label className={labelStyle}>Sender Name <span className="text-rose-500">*</span></label>
                           <input ref={senderInputRef} type="text" value={formData.sender_name} onChange={e => setFormData({...formData, sender_name: e.target.value})} className={modernInput} placeholder="Enter sender name" required />
@@ -221,7 +218,7 @@ export default function EntryForm() {
               </div>
 
               {/* Receiver Card */}
-              <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm hover:border-emerald-500/20 transition-colors">
+              <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm hover:border-emerald-500/20 transition-colors flex-[2_2_0%]">
                   <div className="flex items-center gap-2 mb-3">
                     <div className="p-1 bg-emerald-50 text-emerald-600 rounded-md">
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
@@ -229,7 +226,7 @@ export default function EntryForm() {
                     <h3 className="font-bold text-slate-800 uppercase tracking-wider text-[10px]">Receiver Details</h3>
                   </div>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                       <div>
                           <label className={labelStyle}>Receiver Name <span className="text-rose-500">*</span></label>
                           <input type="text" value={formData.receiver_name} onChange={e => setFormData({...formData, receiver_name: e.target.value})} className={modernInput} placeholder="Enter name" required />
@@ -239,7 +236,7 @@ export default function EntryForm() {
                           <input type="text" value={formData.receiver_phone} onChange={handlePhoneChange} placeholder="09-xxx-xxx-xxx" className={`${modernInput} font-mono tracking-wide`} required />
                       </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div className="sm:col-span-2">
                           <label className={labelStyle}>Full Delivery Address</label>
                           <input type="text" value={formData.receiver_address} onChange={e => setFormData({...formData, receiver_address: e.target.value})} className={modernInput} placeholder="Enter detailed address..." />
@@ -256,15 +253,15 @@ export default function EntryForm() {
               </div>
             </div>
 
-            {/* RIGHT COLUMN: Financials, Status Operations & Submit (5/12 width) */}
-            <div className="lg:col-span-5 space-y-4">
+            {/* RIGHT COLUMN: Financials, Status Operations & Submit (4/12 width) */}
+            <div className="lg:col-span-4 space-y-4 flex flex-col justify-between">
               
               {/* Financial Calculations Section */}
-              <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
-                  <h3 className="font-bold text-slate-800 mb-3 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+              <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm flex-1">
+                  <h3 className="font-bold text-slate-800 mb-4 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
                     <span className="text-amber-500">💰</span> Financial Accounts
                   </h3>
-                  <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="grid grid-cols-2 gap-4 mb-4">
                       <div>
                           <label className={labelStyle}>COD Amount</label>
                           <div className="relative">
@@ -272,7 +269,6 @@ export default function EntryForm() {
                                 type="number" 
                                 value={formData.cod_amount || ''} 
                                 onChange={e => {
-                                    // မူလ Logic အတိုင်း COD ထဲကို ရိုက်ထည့်လိုက်ရင် Bill Type ပေါ်မူတည်ပြီး originalCod ကို ချိန်ညှိပေးခြင်း
                                     const val = Number(e.target.value);
                                     if (formData.fee_type === 'Bill') {
                                         setOriginalCod(val + Number(formData.deli_fee));
@@ -296,7 +292,7 @@ export default function EntryForm() {
                       </div>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-3 items-end">
+                  <div className="grid grid-cols-2 gap-4 items-end">
                       <div>
                           <label className={labelStyle}>Payment Type</label>
                           <select value={formData.fee_type} onChange={e => setFormData({...formData, fee_type: e.target.value})} className={modernSelect}>
@@ -320,8 +316,8 @@ export default function EntryForm() {
               </div>
 
               {/* Status & Actions Combined Panel */}
-              <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm space-y-4 flex-2">
+                  <div className="grid grid-cols-2 gap-4">
                       <div>
                           <label className={labelStyle}>Dispatch Status</label>
                           <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className={modernSelect}>
@@ -344,8 +340,8 @@ export default function EntryForm() {
                       </select>
                   </div>
 
-                  {/* System Utilities (Keyboard နဲ့ Tab ခုန်လို့ရအောင် Select boxes ပြောင်းထားပါသည်) */}
-                  <div className="grid grid-cols-2 gap-3 pt-1">
+                  {/* System Utilities */}
+                  <div className="grid grid-cols-2 gap-4 pt-1">
                       <div>
                           <label className={labelStyle}>Return Utility</label>
                           <select value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} className={modernSelect}>
@@ -378,11 +374,11 @@ export default function EntryForm() {
               </div>
 
               {/* Action Trigger Save Button */}
-              <div className="pt-1">
+              <div className="pt-2">
                   <button 
                     type="submit" 
                     disabled={loading} 
-                    className={`w-full py-3 text-xs font-black rounded-xl tracking-widest uppercase transition-all shadow-sm ${
+                    className={`w-full py-3.5 text-xs font-black rounded-xl tracking-widest uppercase transition-all shadow-sm ${
                       loading 
                         ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
                         : 'bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:opacity-95 active:scale-[0.99]'
