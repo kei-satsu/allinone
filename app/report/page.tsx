@@ -11,18 +11,14 @@ export default function DailyReport() {
   const [loading, setLoading] = useState(false)
   const [userBranch, setUserBranch] = useState<string>('')
   
-  // Rider Collection အတွက် City Filter
   const [riderLocFilter, setRiderLocFilter] = useState('YGN')
-
-  // Handovers data from cash_handovers table
   const [handovers, setHandovers] = useState<Record<string, number>>({})
   
-  // Modal state for handover form
   const [handoverModal, setHandoverModal] = useState<{ open: boolean; riderName: string }>({ open: false, riderName: '' })
   const [handoverAmounts, setHandoverAmounts] = useState({ cash: 0, kpay: 0, wave: 0 })
   const [submitting, setSubmitting] = useState(false)
 
-  // ၁။ Auth & Branch Configuration
+  // 1. Auth & Branch
   useEffect(() => {
     const storedBranch = localStorage.getItem('user_branch')
     if (!storedBranch) {
@@ -33,12 +29,11 @@ export default function DailyReport() {
     }
   }, [router])
 
-  // ၂။ Database မှ Data ဆွဲယူခြင်း (Orders + Handovers)
+  // 2. Fetch data
   const fetchReport = async () => {
     if (!selectedDate || !userBranch) return
     setLoading(true)
 
-    // Fetch orders
     const { data, error } = await supabase
       .from('orders')
       .select(`
@@ -58,7 +53,7 @@ export default function DailyReport() {
     }
     setReportData(data || [])
 
-    // Fetch handovers for the selected date
+    // Fetch handovers
     const { data: handoverData, error: handoverError } = await supabase
       .from('cash_handovers')
       .select('rider_name, total_amount')
@@ -81,88 +76,56 @@ export default function DailyReport() {
     if(userBranch) fetchReport() 
   }, [selectedDate, userBranch])
 
-  // ==========================================
-  // ၃။ အခြေခံအချက်အလက် တွက်ချက်မှုများ
-  // ==========================================
+  // 3. Calculations (unchanged)
   const deliveredToday = reportData.filter(o => o.deliver_date === selectedDate)
-  // Total COD from delivered orders (for summary box)
   const totalCodDelivered = deliveredToday.reduce((sum, o) => sum + (o.cod_amount || 0), 0)
-  // Total handed in = sum of all handovers for the date
   const totalCashAdded = Object.values(handovers).reduce((a,b) => a+b, 0)
 
-  // ==========================================
-  // ၄။ Rider Summary (Ways, Due, HandedIn from handovers, Pending)
-  // ==========================================
   const riderSummary: Record<string, { ways: number; due: number; handedIn: number; pending: number }> = {}
-  
   reportData.forEach(o => {
     const riderName = o.deliver_rider?.name || 'Unknown Rider'
-    
     if (o.receiver_loc === riderLocFilter) {
       if (!riderSummary[riderName]) {
         riderSummary[riderName] = { ways: 0, due: 0, handedIn: 0, pending: 0 }
       }
-
-      // Today's deliveries (non-RT, status Delivered)
       if (o.deliver_date === selectedDate && o.status === 'Delivered' && o.note !== 'RT') {
         riderSummary[riderName].ways += 1
         riderSummary[riderName].due += (o.total_amount || 0)
       }
     }
   })
-
-  // Apply handovers from the cash_handovers table
   Object.keys(riderSummary).forEach(rider => {
     riderSummary[rider].handedIn = handovers[rider] || 0
     riderSummary[rider].pending = riderSummary[rider].due - riderSummary[rider].handedIn
   })
 
-  // Grand Totals for Rider Section
   const grandRiderWays = Object.values(riderSummary).reduce((a, b) => a + b.ways, 0)
   const grandRiderDue = Object.values(riderSummary).reduce((a, b) => a + b.due, 0)
   const grandRiderHandedIn = Object.values(riderSummary).reduce((a, b) => a + b.handedIn, 0)
   const grandRiderPending = Object.values(riderSummary).reduce((a, b) => a + b.pending, 0)
 
-  // ==========================================
-  // ၅။ OS Payout Logic (unchanged)
-  // ==========================================
+  // OS Payout (unchanged)
   const calculateOS = (cityName: string) => {
     const senders: Record<string, number> = {}
-    let posSum = 0
-    let negSum = 0
-
+    let posSum = 0, negSum = 0
     reportData.forEach(o => {
-      if (
-          o.sender_loc === cityName && 
-          o.receiver_loc === 'MDY' && 
-          o.status === 'Delivered' && 
-          o.note !== 'RT'
-      ) {
+      if (o.sender_loc === cityName && o.receiver_loc === 'MDY' && o.status === 'Delivered' && o.note !== 'RT') {
         const senderName = o.sender_name || 'Unknown'
         if (!senders[senderName]) senders[senderName] = 0
-        senders[senderName] += (o.cod_amount || 0) 
+        senders[senderName] += (o.cod_amount || 0)
       }
     })
-
-    Object.values(senders).forEach(amt => {
-      if (amt > 0) posSum += amt
-      else if (amt < 0) negSum += amt
-    })
-
+    Object.values(senders).forEach(amt => { if (amt > 0) posSum += amt; else if (amt < 0) negSum += amt })
     return { senders, posSum, negSum }
   }
-
   const osMDY = calculateOS('MDY')
   const osYGN = calculateOS('YGN')
 
-  // ==========================================
-  // ၆။ Handover submission
-  // ==========================================
+  // 4. Handover submission (unchanged)
   const handleHandIn = async (riderName: string) => {
     setHandoverAmounts({ cash: 0, kpay: 0, wave: 0 })
     setHandoverModal({ open: true, riderName })
   }
-
   const submitHandover = async () => {
     const { cash, kpay, wave } = handoverAmounts
     const total = cash + kpay + wave
@@ -170,7 +133,6 @@ export default function DailyReport() {
       alert("Please enter at least one positive amount.")
       return
     }
-
     setSubmitting(true)
     const { error } = await supabase
       .from('cash_handovers')
@@ -183,286 +145,299 @@ export default function DailyReport() {
         created_by: userBranch,
         notes: `Handover from ${handoverModal.riderName} on ${selectedDate}`
       })
-
     if (error) {
       alert("Failed to record handover: " + error.message)
     } else {
       alert(`✅ Recorded ${total.toLocaleString()} Ks for ${handoverModal.riderName}`)
       setHandoverModal({ open: false, riderName: '' })
-      fetchReport() // Refresh to update handed-in amounts
+      fetchReport()
     }
     setSubmitting(false)
   }
 
-  // UI Styles
-  const cardStyle = "bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between"
-  const cardTitle = "text-xs font-bold text-slate-400 uppercase tracking-wider"
-  const tableTh = "p-3 text-slate-500 uppercase text-xs font-bold tracking-wider border-b border-slate-200"
+  // Windows 10 Excel-like styles
+  const card = "bg-white border border-gray-200 rounded-lg p-4 shadow-sm"
+  const tableHeaderCell = "py-2 px-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wider bg-white sticky top-0 z-10"
+  const filterInput = "w-full bg-transparent border-b border-gray-300 focus:border-orange-500 focus:outline-none py-1 text-[11px] text-gray-700 placeholder-gray-400 font-medium transition-colors"
 
   return (
-    <div className="min-h-screen bg-slate-50 p-5 md:p-7 text-sm text-slate-700 antialiased">
-      <div className="w-full max-w-[1650px] mx-auto space-y-6">
+    <div className="min-h-screen bg-[#f0f2f5] font-[system-ui,-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif] text-sm text-gray-800">
+      {/* ── Top Bar (Windows 10 style) ── */}
+      <div className="bg-white border-b border-gray-200 px-4 py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-sm">
+        <div className="flex items-center gap-3">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500" />
+          </span>
+          <div>
+            <h1 className="text-base font-semibold text-gray-900 tracking-wide uppercase">
+              Daily Settlement Report
+            </h1>
+            <p className="text-[11px] text-gray-500 font-medium">
+              Branch: {userBranch} · {selectedDate}
+            </p>
+          </div>
+        </div>
         
-        {/* TOP INTERACTIVE CONTROL HEADER */}
-        <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center bg-white p-5 rounded-2xl shadow-sm border border-slate-200 gap-4">
-          <div className="flex items-center gap-3.5">
-            <span className="bg-slate-900 text-white px-3.5 py-2 rounded-xl text-xs font-black tracking-widest">
-              {userBranch === 'MDY' ? 'MANDALAY' : 'YANGON'}
-            </span>
-            <div>
-              <h1 className="text-lg font-black text-slate-900 tracking-wider uppercase">📅 Daily Settlement Report</h1>
-              <p className="text-xs text-slate-400 font-medium mt-0.5">Realtime Node Data Operations Manager</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <input 
+            type="date" 
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="px-3 py-1.5 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 shadow-sm"
+          />
+          <button onClick={fetchReport} className="bg-white border border-gray-300 hover:border-gray-400 text-gray-700 font-medium px-3 py-1.5 rounded-md transition-all text-xs flex items-center gap-1.5 shadow-sm">
+            🔄 Refresh
+          </button>
+          <button onClick={() => { localStorage.clear(); router.push('/login'); }} className="bg-red-500 hover:bg-red-600 text-white font-medium px-3 py-1.5 rounded-md text-xs shadow-sm">
+            Logout
+          </button>
+        </div>
+      </div>
+
+      <div className="p-4 sm:p-6 space-y-5 max-w-[1600px] mx-auto">
+        {/* ── Summary Cards ── */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          <div className={card}>
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Total Deliver Ways</span>
+            <p className="text-xl font-bold text-gray-900 mt-1">{deliveredToday.length} <span className="text-sm font-medium text-gray-500">Ways</span></p>
+          </div>
+          <div className={card}>
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Total COD Delivered</span>
+            <p className="text-xl font-bold text-green-600 mt-1">{totalCodDelivered.toLocaleString()} <span className="text-xs font-medium text-green-500">Ks</span></p>
+          </div>
+          <div className={card}>
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Total Cash Handed In</span>
+            <p className="text-xl font-bold text-blue-600 mt-1">{totalCashAdded.toLocaleString()} <span className="text-xs font-medium text-blue-500">Ks</span></p>
+          </div>
+          <div className={`${card} bg-gray-50/50 border-dashed`}>
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Block 4</span>
+            <p className="text-sm text-gray-400 italic mt-1">[ Formula Later ]</p>
+          </div>
+          <div className={`${card} bg-gray-50/50 border-dashed`}>
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Block 5</span>
+            <p className="text-sm text-gray-400 italic mt-1">[ Formula Later ]</p>
+          </div>
+          <div className={`${card} bg-gray-50/50 border-dashed`}>
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Block 6</span>
+            <p className="text-sm text-gray-400 italic mt-1">[ Formula Later ]</p>
+          </div>
+        </div>
+
+        {/* ── Rider Ledger & OS Payout ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          {/* Rider Hand-In Ledger */}
+          <div className="lg:col-span-5 bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+            <div className="bg-gray-100 px-4 py-3 flex justify-between items-center border-b border-gray-200">
+              <h2 className="text-xs font-semibold text-gray-800 uppercase tracking-wider flex items-center gap-2">
+                🚴 Rider Hand-In Ledger
+              </h2>
+              <select 
+                value={riderLocFilter} 
+                onChange={(e) => setRiderLocFilter(e.target.value)}
+                className="bg-white border border-gray-300 text-gray-700 font-medium px-2 py-1 rounded-md text-xs focus:outline-none focus:border-orange-500"
+              >
+                <option value="YGN">YGN Node</option>
+                <option value="MDY">MDY Node</option>
+              </select>
+            </div>
+
+            <div className="p-3 overflow-x-auto">
+              <table className="w-full text-left text-[12px]">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className={tableHeaderCell}>Rider</th>
+                    <th className={`${tableHeaderCell} text-center`}>Ways</th>
+                    <th className={`${tableHeaderCell} text-right`}>Due (Ks)</th>
+                    <th className={`${tableHeaderCell} text-right text-blue-600`}>Handed In</th>
+                    <th className={`${tableHeaderCell} text-right text-amber-600`}>Pending</th>
+                    <th className={`${tableHeaderCell} text-center`}>Action</th>
+                    <th className={`${tableHeaderCell} text-center`}>Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {Object.entries(riderSummary).map(([rider, data]) => {
+                    const isCleared = data.pending === 0 && data.due > 0
+                    return (
+                      <tr key={rider} className="hover:bg-gray-50/60">
+                        <td className="py-2 px-3 font-medium text-gray-800">{rider}</td>
+                        <td className="py-2 px-3 text-center font-mono text-gray-600">{data.ways}</td>
+                        <td className="py-2 px-3 text-right font-mono text-gray-800">{data.due.toLocaleString()}</td>
+                        <td className="py-2 px-3 text-right font-mono text-blue-600">{data.handedIn.toLocaleString()}</td>
+                        <td className="py-2 px-3 text-right font-mono text-amber-600">{data.pending.toLocaleString()}</td>
+                        <td className="py-2 px-3 text-center">
+                          <button onClick={() => handleHandIn(rider)} className="bg-green-50 hover:bg-green-100 text-green-700 px-2 py-0.5 rounded text-[11px] font-medium border border-green-200 transition">
+                            💵 Hand In
+                          </button>
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          {isCleared ? (
+                            <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-green-200">
+                              ✓ Cleared
+                            </span>
+                          ) : data.pending > 0 ? (
+                            <span className="text-amber-600 text-[10px] font-semibold">Pending</span>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Grand totals */}
+            <div className="bg-gray-900 text-gray-200 px-4 py-2 grid grid-cols-7 text-[10px] font-semibold uppercase tracking-wider">
+              <span className="col-span-1">Total</span>
+              <span className="text-center">{grandRiderWays} W</span>
+              <span className="text-right text-gray-300">{grandRiderDue.toLocaleString()}</span>
+              <span className="text-right text-blue-400">{grandRiderHandedIn.toLocaleString()}</span>
+              <span className="text-right text-amber-400">{grandRiderPending.toLocaleString()}</span>
+              <span className="text-center col-span-2"></span>
             </div>
           </div>
-          
-          <div className="flex flex-wrap items-center gap-2.5 bg-slate-50 p-2 rounded-xl border border-slate-200">
-            <span className="font-bold text-slate-500 text-xs px-2 uppercase tracking-wide">Query Target:</span>
-            <input 
-              type="date" 
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="px-3 py-2 bg-white border border-slate-200 rounded-lg font-mono font-bold text-slate-800 focus:outline-none focus:border-orange-500 text-sm shadow-sm"
-            />
-            <button onClick={fetchReport} className="bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 px-3.5 py-2 rounded-lg font-bold transition-all text-sm shadow-sm">
-              🔄 REFRESH
-            </button>
-            <button onClick={() => { localStorage.clear(); router.push('/login'); }} className="bg-rose-500 hover:bg-rose-600 text-white px-3.5 py-2 rounded-lg font-bold transition-all text-sm shadow-sm">
-              LOGOUT
-            </button>
-          </div>
-        </div>
 
-        {/* --- SUMMARY GRID BOXES --- */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-5">
-          <div className={cardStyle}>
-            <span className={cardTitle}>Total Deliver Ways</span>
-            <p className="text-xl font-black text-slate-900 mt-2 font-mono">{deliveredToday.length} <span className="text-sm font-bold text-slate-400">Ways</span></p>
-          </div>
-          <div className={cardStyle}>
-            <span className={cardTitle}>Total COD Delivered</span>
-            <p className="text-xl font-black text-emerald-600 mt-2 font-mono">{totalCodDelivered.toLocaleString()} <span className="text-xs font-bold text-emerald-400">Ks</span></p>
-          </div>
-          <div className={cardStyle}>
-            <span className={cardTitle}>Total Cash Handed In</span>
-            <p className="text-xl font-black text-blue-600 mt-2 font-mono">{totalCashAdded.toLocaleString()} <span className="text-xs font-bold text-blue-400">Ks</span></p>
-          </div>
-          <div className={`${cardStyle} bg-slate-50/60 border-dashed`}>
-            <span className={cardTitle}>Summary Block 4</span>
-            <p className="text-sm font-bold text-slate-400 italic mt-3">[ Formula Later ]</p>
-          </div>
-          <div className={`${cardStyle} bg-slate-50/60 border-dashed`}>
-            <span className={cardTitle}>Summary Block 5</span>
-            <p className="text-sm font-bold text-slate-400 italic mt-3">[ Formula Later ]</p>
-          </div>
-          <div className={`${cardStyle} bg-slate-50/60 border-dashed`}>
-            <span className={cardTitle}>Summary Block 6</span>
-            <p className="text-sm font-bold text-slate-400 italic mt-3">[ Formula Later ]</p>
-          </div>
-        </div>
-
-        {/* --- CORE ACCOUNTS BREAKDOWN --- */}
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-            
-            {/* Rider Hand-In Ledger with Hand In buttons */}
-            <div className="xl:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-              <div className="bg-slate-900 text-white p-4 flex justify-between items-center flex-shrink-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">🚴</span>
-                  <h2 className="font-black uppercase tracking-wider text-xs">Rider Hand-In Ledger</h2>
-                </div>
-                <select 
-                  value={riderLocFilter} 
-                  onChange={(e) => setRiderLocFilter(e.target.value)}
-                  className="bg-slate-800 text-white font-bold px-2.5 py-1.5 rounded-md border border-slate-700 outline-none text-xs cursor-pointer"
-                >
-                  <option value="YGN">YGN Node Riders</option>
-                  <option value="MDY">MDY Node Riders</option>
-                </select>
+          {/* OS Payout (two columns) */}
+          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-5">
+            {/* MDY OS */}
+            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+              <div className="bg-orange-500 text-white px-4 py-3">
+                <h2 className="text-xs font-semibold uppercase tracking-wider">🏢 OS Payout (MDY Sender)</h2>
+                <p className="text-[10px] text-orange-100 mt-0.5">Origin: MDY ➡️ Destination: MDY</p>
               </div>
-
-              <div className="p-5 flex-1 overflow-y-auto max-h-[400px]">
-                {Object.keys(riderSummary).length === 0 ? (
-                  <p className="text-slate-400 text-center py-12 font-bold italic">No rider movements recorded for this query.</p>
+              <div className="p-3 overflow-x-auto max-h-[300px]">
+                {Object.keys(osMDY.senders).length === 0 ? (
+                  <p className="text-gray-400 text-center py-8 italic text-xs">No MDY OS transactions.</p>
                 ) : (
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-200">
-                        <th className={tableTh}>Rider Name</th>
-                        <th className={`${tableTh} text-center`}>Ways</th>
-                        <th className={`${tableTh} text-right text-slate-600`}>Due (Ks)</th>
-                        <th className={`${tableTh} text-right text-blue-600`}>Handed In (Ks)</th>
-                        <th className={`${tableTh} text-right text-amber-600`}>Pending (Ks)</th>
-                        <th className={`${tableTh} text-center`}>Action</th>
-                        <th className={`${tableTh} text-center`}>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {Object.entries(riderSummary).map(([rider, data]) => {
-                        const isCleared = data.pending === 0 && data.due > 0
-                        return (
-                          <tr key={rider} className="hover:bg-slate-50/80 transition-colors">
-                            <td className="py-3 font-bold text-slate-800">{rider}</td>
-                            <td className="py-3 text-center font-mono font-bold text-slate-500">{data.ways}</td>
-                            <td className="py-3 text-right font-mono font-black text-slate-700">{data.due.toLocaleString()}</td>
-                            <td className="py-3 text-right font-mono font-black text-blue-600">{data.handedIn.toLocaleString()}</td>
-                            <td className="py-3 text-right font-mono font-black text-amber-600">{data.pending.toLocaleString()}</td>
-                            <td className="py-3 text-center">
-                              <button
-                                onClick={() => handleHandIn(rider)}
-                                className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 py-1 rounded text-xs font-bold transition"
-                              >
-                                💵 Hand In
-                              </button>
-                            </td>
-                            <td className="py-3 text-center">
-                              {isCleared ? (
-                                <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 text-xs font-black px-2 py-1 rounded-full">
-                                  ✓ Cleared
-                                </span>
-                              ) : data.pending > 0 ? (
-                                <span className="text-amber-600 text-xs font-bold">Pending</span>
-                              ) : (
-                                <span className="text-slate-400 text-xs">—</span>
-                              )}
-                            </td>
-                          </tr>
-                        )
-                      })}
+                  <table className="w-full text-left text-[12px]">
+                    <tbody>
+                      {Object.entries(osMDY.senders).map(([sender, amt]) => (
+                        <tr key={sender} className="border-b border-dashed border-gray-100 last:border-none">
+                          <td className="py-2 px-3 font-medium text-gray-700">{sender}</td>
+                          <td className={`py-2 px-3 text-right font-mono font-semibold ${amt >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                            {amt.toLocaleString()} K
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 )}
               </div>
-
-              {/* Footer Grand Totals */}
-              <div className="bg-slate-900 text-slate-200 p-4 px-5 border-t border-slate-800 grid grid-cols-6 items-center text-xs font-black tracking-wider uppercase gap-1">
-                <span className="col-span-1">Total Node</span>
-                <span className="text-center font-mono text-slate-400">{grandRiderWays} W</span>
-                <span className="text-right font-mono text-slate-300">{grandRiderDue.toLocaleString()}</span>
-                <span className="text-right font-mono text-blue-400">{grandRiderHandedIn.toLocaleString()}</span>
-                <span className="text-right font-mono text-amber-400">{grandRiderPending.toLocaleString()}</span>
-                <span className="text-center"></span>
+              <div className="bg-gray-900 text-gray-300 px-4 py-2 grid grid-cols-2 text-[10px] font-semibold uppercase">
+                <div className="flex justify-between border-r border-gray-700 pr-2"><span>Total (+)</span> <span className="text-green-400">{osMDY.posSum.toLocaleString()}</span></div>
+                <div className="flex justify-between pl-2"><span>Total (-)</span> <span className="text-red-400">{Math.abs(osMDY.negSum).toLocaleString()}</span></div>
               </div>
             </div>
 
-            {/* OS Payout Cards (unchanged) */}
-            <div className="xl:col-span-7 grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                  <div className="bg-emerald-600 text-white p-4">
-                    <h2 className="font-black uppercase tracking-wider text-xs flex items-center gap-1">🏢 OS Payout (MDY Sender)</h2>
-                    <p className="text-xs text-emerald-100/80 font-medium mt-0.5">Origin: MDY ➡️ Destination: MDY</p>
-                  </div>
-                  <div className="p-5 flex-1 overflow-y-auto max-h-[300px]">
-                    {Object.keys(osMDY.senders).length === 0 ? (
-                      <p className="text-slate-400 text-center py-8 italic font-medium">No MDY OS transactions.</p>
-                    ) : (
-                      <table className="w-full text-left">
-                        <tbody>
-                          {Object.entries(osMDY.senders).map(([sender, amt]) => (
-                            <tr key={sender} className="border-b border-dashed border-slate-100 last:border-none">
-                              <td className="py-2.5 font-bold text-slate-700">{sender}</td>
-                              <td className={`py-2.5 text-right font-mono font-black ${amt >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
-                                {amt.toLocaleString()} K
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                  <div className="bg-slate-900 text-slate-300 p-4 text-xs font-bold grid grid-cols-2 border-t border-slate-800">
-                    <div className="flex justify-between border-r border-slate-800 pr-2"><span>Total (+)</span> <span className="text-emerald-400 font-mono font-black">{osMDY.posSum.toLocaleString()}</span></div>
-                    <div className="flex justify-between pl-2"><span>Total (-)</span> <span className="text-rose-400 font-mono font-black">{Math.abs(osMDY.negSum).toLocaleString()}</span></div>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                  <div className="bg-violet-600 text-white p-4">
-                    <h2 className="font-black uppercase tracking-wider text-xs flex items-center gap-1">✈️ OS Payout (YGN Sender)</h2>
-                    <p className="text-xs text-violet-100/80 font-medium mt-0.5">Origin: YGN ➡️ Destination: MDY</p>
-                  </div>
-                  <div className="p-5 flex-1 overflow-y-auto max-h-[300px]">
-                    {Object.keys(osYGN.senders).length === 0 ? (
-                      <p className="text-slate-400 text-center py-8 italic font-medium">No YGN OS transactions.</p>
-                    ) : (
-                      <table className="w-full text-left">
-                        <tbody>
-                          {Object.entries(osYGN.senders).map(([sender, amt]) => (
-                            <tr key={sender} className="border-b border-dashed border-slate-100 last:border-none">
-                              <td className="py-2.5 font-bold text-slate-700">{sender}</td>
-                              <td className={`py-2.5 text-right font-mono font-black ${amt >= 0 ? 'text-violet-600' : 'text-rose-500'}`}>
-                                {amt.toLocaleString()} K
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                  <div className="bg-slate-900 text-slate-300 p-4 text-xs font-bold grid grid-cols-2 border-t border-slate-800">
-                    <div className="flex justify-between border-r border-slate-800 pr-2"><span>Total (+)</span> <span className="text-emerald-400 font-mono font-black">{osYGN.posSum.toLocaleString()}</span></div>
-                    <div className="flex justify-between pl-2"><span>Total (-)</span> <span className="text-rose-400 font-mono font-black">{Math.abs(osYGN.negSum).toLocaleString()}</span></div>
-                  </div>
-                </div>
+            {/* YGN OS */}
+            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+              <div className="bg-purple-600 text-white px-4 py-3">
+                <h2 className="text-xs font-semibold uppercase tracking-wider">✈️ OS Payout (YGN Sender)</h2>
+                <p className="text-[10px] text-purple-100 mt-0.5">Origin: YGN ➡️ Destination: MDY</p>
+              </div>
+              <div className="p-3 overflow-x-auto max-h-[300px]">
+                {Object.keys(osYGN.senders).length === 0 ? (
+                  <p className="text-gray-400 text-center py-8 italic text-xs">No YGN OS transactions.</p>
+                ) : (
+                  <table className="w-full text-left text-[12px]">
+                    <tbody>
+                      {Object.entries(osYGN.senders).map(([sender, amt]) => (
+                        <tr key={sender} className="border-b border-dashed border-gray-100 last:border-none">
+                          <td className="py-2 px-3 font-medium text-gray-700">{sender}</td>
+                          <td className={`py-2 px-3 text-right font-mono font-semibold ${amt >= 0 ? 'text-purple-600' : 'text-red-500'}`}>
+                            {amt.toLocaleString()} K
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              <div className="bg-gray-900 text-gray-300 px-4 py-2 grid grid-cols-2 text-[10px] font-semibold uppercase">
+                <div className="flex justify-between border-r border-gray-700 pr-2"><span>Total (+)</span> <span className="text-green-400">{osYGN.posSum.toLocaleString()}</span></div>
+                <div className="flex justify-between pl-2"><span>Total (-)</span> <span className="text-red-400">{Math.abs(osYGN.negSum).toLocaleString()}</span></div>
+              </div>
             </div>
+          </div>
         </div>
 
-        {/* --- DETAILED DATA TABLE (unchanged) --- */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="bg-slate-50 p-4 px-5 border-b border-slate-200 flex justify-between items-center">
-            <h2 className="font-black text-slate-800 uppercase tracking-wider text-xs">Detailed Records Verification</h2>
-            <span className="text-xs bg-slate-200 text-slate-700 px-3 py-1 rounded-lg font-mono font-black">
-              {reportData.length} Vouchers Loaded
+        {/* ── Detailed Records Table (Excel style) ── */}
+        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+          <div className="px-4 py-3 bg-gray-100 border-b border-gray-200 flex justify-between items-center">
+            <h2 className="text-xs font-semibold text-gray-800 uppercase tracking-wider">📋 Detailed Records Verification</h2>
+            <span className="text-[10px] bg-white border border-gray-300 text-gray-700 px-2.5 py-0.5 rounded-full font-medium">
+              {reportData.length} Vouchers
             </span>
           </div>
-          
-          <div className="overflow-x-auto max-h-[45vh]">
-            <table className="w-full text-left border-collapse text-sm">
-              <thead className="bg-slate-100/80 sticky top-0 shadow-sm z-10 backdrop-blur-md">
-                <tr className="text-slate-500 font-bold uppercase border-b border-slate-200 text-xs">
-                  <th className="p-3.5">Item ID</th>
-                  <th className="p-3.5">Sender / LOC</th>
-                  <th className="p-3.5">Receiver / R.LOC</th>
-                  <th className="p-3.5 text-center">Status</th>
-                  <th className="p-3.5 text-center">Deli Date</th>
-                  <th className="p-3.5 text-center">Cash Added</th>
-                  <th className="p-3.5">Deliver Rider</th>
-                  <th className="p-3.5 text-right">Deli Fee</th>
-                  <th className="p-3.5 text-right">COD</th>
-                  <th className="p-3.5 text-right pr-5">TOTAL</th>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-[12px]">
+              <thead>
+                <tr className="border-b border-gray-200 bg-white sticky top-0 z-10">
+                  <th className={tableHeaderCell}>Item ID</th>
+                  <th className={tableHeaderCell}>Sender / LOC</th>
+                  <th className={tableHeaderCell}>Receiver / R.LOC</th>
+                  <th className={`${tableHeaderCell} text-center`}>Status</th>
+                  <th className={`${tableHeaderCell} text-center`}>Deli Date</th>
+                  <th className={`${tableHeaderCell} text-center`}>Cash Added</th>
+                  <th className={tableHeaderCell}>Deliver Rider</th>
+                  <th className={`${tableHeaderCell} text-right`}>Deli Fee</th>
+                  <th className={`${tableHeaderCell} text-right`}>COD</th>
+                  <th className={`${tableHeaderCell} text-right`}>TOTAL</th>
+                </tr>
+                {/* Filter row (like OrderList) */}
+                <tr className="bg-gray-50/80 border-b border-gray-200">
+                  <th className="px-2 py-1"><input className={filterInput} placeholder="Filter ID" /></th>
+                  <th className="px-2 py-1"><input className={filterInput} placeholder="Sender" /></th>
+                  <th className="px-2 py-1"><input className={filterInput} placeholder="Receiver" /></th>
+                  <th className="px-2 py-1"><input className={filterInput} placeholder="Status" /></th>
+                  <th className="px-2 py-1"><input className={filterInput} placeholder="Date" /></th>
+                  <th className="px-2 py-1"><input className={filterInput} placeholder="Date" /></th>
+                  <th className="px-2 py-1"><input className={filterInput} placeholder="Rider" /></th>
+                  <th className="px-2 py-1"></th>
+                  <th className="px-2 py-1"></th>
+                  <th className="px-2 py-1"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr><td colSpan={10} className="p-12 text-center font-bold text-slate-400 italic">Synchronizing database tables......</td></tr>
+                  <tr><td colSpan={10} className="p-12 text-center font-medium text-gray-400">Loading records...</td></tr>
                 ) : reportData.length === 0 ? (
-                  <tr><td colSpan={10} className="p-12 text-center text-rose-500 font-bold italic">No records found matching this operational date.</td></tr>
+                  <tr><td colSpan={10} className="p-12 text-center text-gray-400 font-medium">No records found for this date.</td></tr>
                 ) : (
                   reportData.map((o) => {
                     const isDeliverMatch = o.deliver_date === selectedDate;
                     const isCashMatch = o.cash_added_date === selectedDate;
-
                     return (
-                      <tr key={o.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="p-3.5 font-mono font-black text-blue-600">{o.item_id}</td>
-                        <td className="p-3.5">
-                            <div className="font-bold text-slate-800">{o.sender_name}</div>
-                            <div className="text-xs text-slate-400 font-semibold mt-0.5">{o.sender_loc}</div>
+                      <tr key={o.id} className="hover:bg-gray-50/80 transition-colors">
+                        <td className="py-2 px-3 font-mono font-semibold text-blue-600">{o.item_id}</td>
+                        <td className="py-2 px-3">
+                          <div className="font-medium text-gray-800">{o.sender_name}</div>
+                          <div className="text-[10px] text-gray-400">{o.sender_loc}</div>
                         </td>
-                        <td className="p-3.5">
-                          <div className="font-bold text-slate-800">{o.receiver_name}</div>
-                          <div className="text-xs text-slate-400 font-semibold mt-0.5">{o.receiver_loc}</div>
+                        <td className="py-2 px-3">
+                          <div className="font-medium text-gray-800">{o.receiver_name}</div>
+                          <div className="text-[10px] text-gray-400">{o.receiver_loc}</div>
                         </td>
-                        <td className="p-3.5 text-center"><span className="px-2.5 py-1 bg-slate-100 rounded-md font-bold text-xs uppercase text-slate-600">{o.status}</span></td>
-                        <td className={`p-3.5 font-mono font-bold text-center text-sm ${isDeliverMatch ? 'bg-emerald-50 text-emerald-700 border-x border-emerald-100/50' : 'text-slate-400'}`}>
+                        <td className="py-2 px-3 text-center">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                            o.status === 'Delivered' ? 'bg-green-50 text-green-700 border-green-200' : 
+                            o.status === 'Pending' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
+                            'bg-gray-100 text-gray-600 border-gray-200'
+                          }`}>{o.status}</span>
+                        </td>
+                        <td className={`py-2 px-3 text-center font-mono text-xs ${isDeliverMatch ? 'bg-green-50 text-green-700 font-semibold' : 'text-gray-500'}`}>
                           {o.deliver_date || '-'}
                         </td>
-                        <td className={`p-3.5 font-mono font-bold text-center text-sm ${isCashMatch ? 'bg-blue-50 text-blue-700 border-x border-blue-100/50' : 'text-slate-400'}`}>
+                        <td className={`py-2 px-3 text-center font-mono text-xs ${isCashMatch ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-500'}`}>
                           {o.cash_added_date || '-'}
                         </td>
-                        <td className="p-3.5 font-bold text-slate-700">{o.deliver_rider?.name || '-'}</td>
-                        <td className="p-3.5 text-right font-mono font-bold text-slate-500">{o.deli_fee?.toLocaleString()}</td>
-                        <td className="p-3.5 text-right font-mono font-bold text-emerald-600">{o.cod_amount?.toLocaleString()}</td>
-                        <td className="p-3.5 text-right font-mono font-black text-slate-900 bg-slate-50/50 pr-5">{o.total_amount?.toLocaleString()}</td>
+                        <td className="py-2 px-3 font-medium text-gray-700">{o.deliver_rider?.name || '-'}</td>
+                        <td className="py-2 px-3 text-right font-mono text-gray-600">{o.deli_fee?.toLocaleString()}</td>
+                        <td className="py-2 px-3 text-right font-mono text-green-600">{o.cod_amount?.toLocaleString()}</td>
+                        <td className="py-2 px-3 text-right font-mono font-bold text-gray-900">{o.total_amount?.toLocaleString()}</td>
                       </tr>
                     )
                   })
@@ -473,58 +448,56 @@ export default function DailyReport() {
         </div>
       </div>
 
-      {/* Handover Modal */}
+      {/* ── Handover Modal (Windows 10 Dialog) ── */}
       {handoverModal.open && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md border border-slate-200">
-            <div className="p-5 border-b border-slate-100">
-              <h3 className="font-black text-slate-800 uppercase tracking-wider">
-                Hand In Cash – {handoverModal.riderName}
-              </h3>
-              <p className="text-xs text-slate-400 mt-1">Record payment received from rider</p>
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-[1px] flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl border border-gray-200 w-full max-w-md">
+            <div className="px-5 py-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
+              <h3 className="font-semibold text-gray-900">Hand In Cash – {handoverModal.riderName}</h3>
+              <p className="text-[11px] text-gray-500 mt-0.5">Record payment received from rider</p>
             </div>
             <div className="p-5 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cash (Ks)</label>
+                <label className="block text-[11px] font-semibold text-gray-600 uppercase tracking-wider mb-1">Cash (Ks)</label>
                 <input
                   type="number"
                   value={handoverAmounts.cash}
                   onChange={(e) => setHandoverAmounts({ ...handoverAmounts, cash: parseInt(e.target.value) || 0 })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 shadow-sm"
                   placeholder="0"
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">K-Pay (Ks)</label>
+                <label className="block text-[11px] font-semibold text-gray-600 uppercase tracking-wider mb-1">K-Pay (Ks)</label>
                 <input
                   type="number"
                   value={handoverAmounts.kpay}
                   onChange={(e) => setHandoverAmounts({ ...handoverAmounts, kpay: parseInt(e.target.value) || 0 })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 shadow-sm"
                   placeholder="0"
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Wave Pay (Ks)</label>
+                <label className="block text-[11px] font-semibold text-gray-600 uppercase tracking-wider mb-1">Wave Pay (Ks)</label>
                 <input
                   type="number"
                   value={handoverAmounts.wave}
                   onChange={(e) => setHandoverAmounts({ ...handoverAmounts, wave: parseInt(e.target.value) || 0 })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 shadow-sm"
                   placeholder="0"
                 />
               </div>
-              <div className="bg-slate-50 p-3 rounded-lg">
-                <div className="flex justify-between text-sm font-bold">
+              <div className="bg-gray-50 p-3 rounded-md">
+                <div className="flex justify-between text-sm font-semibold">
                   <span>Total:</span>
-                  <span className="text-blue-600 font-mono">{(handoverAmounts.cash + handoverAmounts.kpay + handoverAmounts.wave).toLocaleString()} Ks</span>
+                  <span className="text-orange-600">{(handoverAmounts.cash + handoverAmounts.kpay + handoverAmounts.wave).toLocaleString()} Ks</span>
                 </div>
               </div>
-              <div className="flex justify-end gap-3 pt-2">
+              <div className="flex justify-end gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => setHandoverModal({ open: false, riderName: '' })}
-                  className="px-4 py-2 border border-slate-200 rounded-lg text-slate-600 font-bold text-sm hover:bg-slate-50 transition"
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-50 transition"
                 >
                   Cancel
                 </button>
@@ -532,7 +505,7 @@ export default function DailyReport() {
                   type="button"
                   onClick={submitHandover}
                   disabled={submitting}
-                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition disabled:opacity-50"
+                  className="px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-md text-sm font-medium shadow-sm transition disabled:opacity-50"
                 >
                   {submitting ? 'Recording...' : 'Confirm Handover'}
                 </button>

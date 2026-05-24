@@ -8,7 +8,6 @@ export default function Dashboard() {
   const [userBranch, setUserBranch] = useState('')
   const [loading, setLoading] = useState(true)
 
-  // ရုံးခွဲအချက်အလက်ကို localStorage မှ ရယူခြင်း
   useEffect(() => {
     const storedBranch = localStorage.getItem('user_branch')
     if (storedBranch) {
@@ -18,7 +17,6 @@ export default function Dashboard() {
     }
   }, [])
 
-  // Supabase မှ အော်ဒါများ ဆွဲယူခြင်း
   useEffect(() => {
     async function fetchStats() {
       setLoading(true)
@@ -36,7 +34,6 @@ export default function Dashboard() {
     fetchStats()
   }, [])
 
-  // စာရင်းအင်းတွက်ချက်မှုများ
   const stats = useMemo(() => {
     if (!userBranch || allOrders.length === 0) {
       return {
@@ -63,122 +60,122 @@ export default function Dashboard() {
     }
   }, [userBranch, allOrders])
 
-  const glassCard = "relative overflow-hidden bg-white/80 backdrop-blur-xl rounded-3xl border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.03)] group hover:border-orange-500/30 transition-all duration-300 p-6 md:p-8"
+  const excelCard = "bg-white border border-gray-200 rounded-lg p-5 md:p-6 hover:border-orange-400 transition-all duration-200 shadow-sm hover:shadow-md"
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-pulse">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-32 bg-white rounded-2xl border border-slate-200/60 shadow-sm" />
-          ))}
+    <div className="min-h-screen bg-[#f5f5f5] text-gray-800 font-[system-ui,-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif]">
+      {/* Windows 10 Title Bar - full width, sticky */}
+      <div className="bg-white border-b border-gray-200 px-5 py-3 flex items-center justify-between sticky top-0 z-50 shadow-sm">
+        <div className="flex items-center gap-2">
+          <span className="text-orange-600 text-lg font-bold tracking-tight">📊 ALL IN ONE</span>
+          <span className="text-xs text-gray-500 font-medium hidden sm:inline">Express Delivery</span>
         </div>
-      ) : (
-        <>
-          {/* Header အပိုင်း */}
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 pb-6 border-b border-slate-200/60">
-            <div>
-              <h1 className="text-3xl md:text-4xl font-extrabold tracking-wider bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 bg-clip-text text-transparent">
-                ALL IN ONE EXPRESS DELIVERY
-              </h1>
-              <p className="text-slate-500 text-sm font-semibold mt-1">
-                Branch: <span className="text-orange-600 font-bold uppercase">{userBranch}</span> Dashboard Overview
-              </p>
-            </div>
-            <div className="mt-4 md:mt-0 flex items-center gap-2 bg-emerald-50 px-4 py-2 rounded-full border border-emerald-200/60 w-fit">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-bold tracking-widest text-emerald-700 uppercase">Live System</span>
-            </div>
+        <div className="flex items-center gap-2 text-xs text-gray-500">
+          <span className={`w-2 h-2 rounded-full ${userBranch ? 'bg-green-500' : 'bg-gray-300'} animate-pulse`} />
+          {userBranch ? `Branch: ${userBranch}` : 'Loading...'}
+        </div>
+      </div>
+
+      {/* ── Main Content (full width, minimal padding) ── */}
+      <div className="px-3 sm:px-5 py-6">
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-pulse">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-32 bg-white rounded-lg border border-gray-200" />
+            ))}
           </div>
-
-          {/* Quick Links ကတ်များ */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-12">
-            <Link href="/entry" className="group relative bg-orange-50/60 backdrop-blur-xl p-5 rounded-2xl border border-orange-200/60 hover:border-orange-400 transition-all duration-300 shadow-[0_8px_30px_rgb(249,115,22,0.03)] hover:shadow-[0_8px_30px_rgb(249,115,22,0.08)] hover:-translate-y-1">
-              <div className="text-3xl mb-3">📝</div>
-              <h3 className="text-lg font-bold text-orange-600">New Entry</h3>
-              <p className="text-slate-500 text-xs mt-1 font-semibold leading-relaxed pt-1">အော်ဒါအသစ်များ သွင်းရန်</p>
-            </Link>
-
-            <Link href="/list" className="group relative bg-white backdrop-blur-xl p-5 rounded-2xl border border-slate-200/80 hover:border-orange-300 transition-all duration-300 shadow-[0_8px_30px_rgb(0,0,0,0.02)] hover:shadow-[0_8px_30px_rgb(249,115,22,0.04)] hover:-translate-y-1">
-              <div className="text-3xl mb-3">📋</div>
-              <h3 className="text-lg font-bold text-slate-800 group-hover:text-orange-600 transition-colors">Order List</h3>
-              <p className="text-slate-500 text-xs mt-1 font-semibold leading-relaxed pt-1">စာရင်းများအားလုံး ပြန်ကြည့်ရန်</p>
-            </Link>
-
-            <div className="group relative bg-white backdrop-blur-xl p-5 rounded-2xl border border-slate-200/80 hover:border-orange-300 transition-all duration-300 shadow-[0_8px_30px_rgb(0,0,0,0.02)] hover:shadow-[0_8px_30px_rgb(249,115,22,0.04)] hover:-translate-y-1 cursor-pointer">
-              <div className="text-3xl mb-3">🚴</div>
-              <h3 className="text-lg font-bold text-slate-800 group-hover:text-orange-600 transition-colors">Riders</h3>
-              <p className="text-slate-500 text-xs mt-1 font-semibold leading-relaxed pt-1">Rider များ စီမံခန့်ခွဲရန်</p>
-            </div>
-          </div>
-
-          <h2 className="text-xs font-bold tracking-widest text-slate-400 uppercase mb-5 flex items-center gap-2">
-            <span>📊</span> Statistics for {userBranch === 'ALL' ? 'All Branches' : `Branch (${userBranch})`}
-          </h2>
-
-          {/* ကိန်းဂဏန်းပြကတ်ငယ်များ */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-8">
-            <div className="relative overflow-hidden bg-white p-5 rounded-2xl border border-slate-200/80 shadow-[0_4px_20px_rgb(0,0,0,0.02)]">
-              <p className="text-slate-400 text-xs font-bold tracking-wider uppercase">Total Orders</p>
-              <p className="text-3xl font-black text-slate-800 mt-2 font-mono">{stats.total}</p>
-            </div>
-
-            <div className="relative overflow-hidden bg-amber-50/40 p-5 rounded-2xl border border-amber-200/70 shadow-[0_4px_20px_rgb(245,158,11,0.02)]">
-              <p className="text-amber-600 text-xs font-bold tracking-wider uppercase">At Office</p>
-              <p className="text-3xl font-black text-amber-600 mt-2 font-mono">{stats.atOffice}</p>
-            </div>
-
-            <div className="relative overflow-hidden bg-blue-50/40 p-5 rounded-2xl border border-blue-200/70 shadow-[0_4px_20px_rgb(59,130,246,0.02)]">
-              <p className="text-blue-600 text-xs font-bold tracking-wider uppercase">Pending</p>
-              <p className="text-3xl font-black text-blue-600 mt-2 font-mono">{stats.pending}</p>
-            </div>
-
-            <div className="relative overflow-hidden bg-emerald-50/40 p-5 rounded-2xl border border-emerald-200/70 shadow-[0_4px_20px_rgb(16,185,129,0.02)]">
-              <p className="text-emerald-600 text-xs font-bold tracking-wider uppercase">Delivered</p>
-              <p className="text-3xl font-black text-emerald-600 mt-2 font-mono">{stats.delivered}</p>
-            </div>
-          </div>
-
-          {/* COD ငွေစာရင်းကတ်ကြီးများ */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
-            <div className={glassCard}>
-              <div className="absolute top-0 right-0 w-40 h-40 bg-orange-500/[0.03] rounded-full blur-3xl group-hover:bg-orange-500/[0.06] transition-all z-0" />
-              <div className="flex justify-between items-start z-10 relative">
+        ) : (
+          <>
+            {/* Quick Links */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+              <Link href="/entry" className="bg-white border border-gray-200 rounded-lg p-4 hover:border-orange-400 hover:shadow-md transition-all flex items-center gap-3 group cursor-pointer">
+                <span className="text-2xl">📝</span>
                 <div>
-                  <h4 className="text-slate-700 font-bold text-sm tracking-wider uppercase mb-3 leading-relaxed">စုစုပေါင်း ကောက်ရမည့် COD</h4>
-                  <p className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-amber-600 font-mono pb-1">
-                    {stats.totalCod.toLocaleString()} <span className="text-xl font-sans text-orange-500 font-bold">Ks</span>
-                  </p>
+                  <h3 className="text-sm font-semibold text-gray-800 group-hover:text-orange-700">New Entry</h3>
+                  <p className="text-xs text-gray-500">အော်ဒါအသစ်သွင်းရန်</p>
                 </div>
-                <div className="bg-orange-50 p-3 rounded-2xl text-orange-500 border border-orange-200/60 text-xl shadow-sm">💰</div>
-              </div>
-              <div className="mt-5 pt-4 border-t border-slate-100 text-[13px] text-slate-400 font-semibold z-10 relative leading-relaxed">
-                လက်ရှိရုံးခွဲ၏ အော်ဒါအားလုံးပေါင်း ငွေပမာဏ
-              </div>
-            </div>
+              </Link>
 
-            <div className={glassCard}>
-              <div className="absolute top-0 right-0 w-40 h-40 bg-rose-500/[0.03] rounded-full blur-3xl group-hover:bg-rose-500/[0.06] transition-all z-0" />
-              <div className="flex justify-between items-start z-10 relative">
+              <Link href="/list" className="bg-white border border-gray-200 rounded-lg p-4 hover:border-orange-400 hover:shadow-md transition-all flex items-center gap-3 group cursor-pointer">
+                <span className="text-2xl">📋</span>
                 <div>
-                  <h4 className="text-slate-700 font-bold text-sm tracking-wider uppercase mb-3 leading-relaxed">လက်ဝယ်မရောက်သေးသောငွေ (UNPAID)</h4>
-                  <p className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-rose-600 to-red-500 font-mono pb-1">
-                    {stats.unpaidCod.toLocaleString()} <span className="text-xl font-sans text-rose-500 font-bold">Ks</span>
-                  </p>
+                  <h3 className="text-sm font-semibold text-gray-800 group-hover:text-orange-700">Order List</h3>
+                  <p className="text-xs text-gray-500">စာရင်းများကြည့်ရန်</p>
                 </div>
-                <div className="bg-rose-50 p-3 rounded-2xl text-rose-500 border border-rose-100 text-xl shadow-sm">⚠️</div>
+              </Link>
+
+              <Link href="/riders" className="bg-white border border-gray-200 rounded-lg p-4 hover:border-orange-400 hover:shadow-md transition-all flex items-center gap-3 group cursor-pointer">
+                <span className="text-2xl">🚴</span>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-800 group-hover:text-orange-700">Riders</h3>
+                  <p className="text-xs text-gray-500">Rider စီမံခန့်ခွဲရန်</p>
+                </div>
+              </Link>
+            </div>
+
+            {/* Section Title */}
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-orange-600 font-bold text-sm uppercase tracking-wide">
+                📈 Statistics {userBranch !== 'ALL' ? `(${userBranch})` : '(All Branches)'}
+              </span>
+              <div className="flex-1 border-t border-gray-200" />
+            </div>
+
+            {/* Small Stat Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Total</p>
+                <p className="text-3xl font-bold text-gray-900 mt-1">{stats.total}</p>
               </div>
-              <div className="mt-5 pt-4 border-t border-slate-100 text-[13px] text-slate-400 font-semibold z-10 relative leading-relaxed">
-                လက်ရှိရုံးခွဲ၏ Cash Added မလုပ်ရသေးသော ရရန်ကျန်ငွေ
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
+                <p className="text-xs text-amber-700 uppercase tracking-wide">At Office</p>
+                <p className="text-3xl font-bold text-amber-700 mt-1">{stats.atOffice}</p>
+              </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                <p className="text-xs text-blue-700 uppercase tracking-wide">Pending</p>
+                <p className="text-3xl font-bold text-blue-700 mt-1">{stats.pending}</p>
+              </div>
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                <p className="text-xs text-green-700 uppercase tracking-wide">Delivered</p>
+                <p className="text-3xl font-bold text-green-700 mt-1">{stats.delivered}</p>
               </div>
             </div>
-          </div>
-        </>
-      )}
 
-      {/* Footer */}
-      <div className="mt-20 text-center text-slate-400 text-xs tracking-wide border-t border-slate-200/60 pt-6 font-semibold relative z-10">
-        © 2026 Delivery Management System | Built with Next.js & Supabase
+            {/* COD Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className={excelCard}>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 uppercase">စုစုပေါင်း COD</h4>
+                    <p className="text-3xl font-bold text-gray-900 mt-2">
+                      {stats.totalCod.toLocaleString()} <span className="text-xl text-orange-600 font-medium">Ks</span>
+                    </p>
+                  </div>
+                  <span className="text-2xl">💰</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-3">အော်ဒါအားလုံး၏ ကောက်ခံရမည့်ငွေ</p>
+              </div>
+
+              <div className={excelCard}>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 uppercase">မရသေးသောငွေ (UNPAID)</h4>
+                    <p className="text-3xl font-bold text-red-600 mt-2">
+                      {stats.unpaidCod.toLocaleString()} <span className="text-xl text-red-500 font-medium">Ks</span>
+                    </p>
+                  </div>
+                  <span className="text-2xl">⚠️</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-3">Cash Added မလုပ်ရသေးသော ရရန်ကျန်ငွေ</p>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Footer */}
+        <div className="mt-12 text-center text-gray-400 text-xs border-t border-gray-200 pt-6">
+          © 2026 Delivery Management System | Built with Next.js & Supabase
+        </div>
       </div>
     </div>
   )
