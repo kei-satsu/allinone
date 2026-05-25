@@ -19,6 +19,7 @@ const COLUMN_DEFS = [
   { key: 'deli_fee', label: 'Deli Fee (Ks)', defaultVisible: true },
   { key: 'total_amount', label: 'Total (Ks)', defaultVisible: true },
   { key: 'status', label: 'Status', defaultVisible: true },
+  { key: 'image_url', label: 'Photo', defaultVisible: true }, // ပုံကြည့်ရန် ကော်လံအသစ်
   { key: 'pickup_rider', label: 'Pickup By', defaultVisible: true },
   { key: 'deliver_rider', label: 'Deliver By', defaultVisible: true },
   { key: 'deliver_date', label: 'Deliver Date', defaultVisible: false },
@@ -36,6 +37,7 @@ export default function OrderList() {
   const [userBranch, setUserBranch] = useState<string>('')
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; order: any } | null>(null)
+  const [previewImage, setPreviewImage] = useState<string | null>(null) // Image preview state
 
   const [visibleCols, setVisibleCols] = useState<Record<string, boolean>>(() => {
     const initialState: Record<string, boolean> = {}
@@ -43,7 +45,6 @@ export default function OrderList() {
     return initialState
   })
   const [showColDropdown, setShowColDropdown] = useState(false)
-
   const [colFilters, setColFilters] = useState<Record<string, string>>({})
 
   // ── Windows 10 style input classes ──
@@ -170,6 +171,18 @@ export default function OrderList() {
         o.status === 'In-Transit' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-gray-100 text-gray-600 border border-gray-200'
       }`}>{o.status}</span>
     )
+    if (key === 'image_url') return o.image_url ? (
+      <div className="flex items-center justify-center">
+        <img 
+          src={o.image_url} 
+          alt="Attachment" 
+          onClick={(e) => { e.stopPropagation(); setPreviewImage(o.image_url); }}
+          className="w-8 h-8 object-cover rounded border border-gray-200 cursor-pointer hover:scale-110 hover:shadow transition-all"
+        />
+      </div>
+    ) : (
+      <span className="text-gray-400 font-mono text-[10px]">-</span>
+    )
     if (['cod_amount', 'deli_fee', 'total_amount'].includes(key)) return (
       <span className={key === 'total_amount' ? 'font-bold text-gray-900' : ''}>
         {o[key]?.toLocaleString() || '-'}
@@ -251,14 +264,13 @@ export default function OrderList() {
 
       {/* ── Table Area ── */}
       <div className="flex-1 overflow-auto bg-white mx-3 sm:mx-5 my-3 rounded-lg border border-gray-200 shadow-sm">
-        {/* Mobile: horizontal scroll wrapper */}
         <div className="min-w-[800px] lg:min-w-0">
           <table className="w-full text-left whitespace-nowrap text-[12px]">
             {/* Header Row */}
             <thead className="sticky top-0 z-20 bg-white">
               <tr className="text-gray-400 border-b border-gray-200 font-semibold uppercase tracking-wider text-[10px]">
                 {COLUMN_DEFS.map(col => visibleCols[col.key] && (
-                  <th key={col.key} className={`py-2.5 px-3 ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right' : ''}`}>
+                  <th key={col.key} className={`py-2.5 px-3 ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right' : ''} ${col.key === 'image_url' ? 'text-center' : ''}`}>
                     {col.label}
                   </th>
                 ))}
@@ -268,12 +280,16 @@ export default function OrderList() {
               <tr className="bg-gray-50/80 border-b border-gray-200">
                 {COLUMN_DEFS.map(col => visibleCols[col.key] && (
                   <th key={`filter-${col.key}`} className="px-2 py-1.5 font-normal">
-                    <input 
-                      className={filterInputCls} 
-                      placeholder="Filter..." 
-                      value={colFilters[col.key] || ''}
-                      onChange={e => handleFilterChange(col.key, e.target.value)} 
-                    />
+                    {col.key !== 'image_url' ? (
+                      <input 
+                        className={filterInputCls} 
+                        placeholder="Filter..." 
+                        value={colFilters[col.key] || ''}
+                        onChange={e => handleFilterChange(col.key, e.target.value)} 
+                      />
+                    ) : (
+                      <div className="h-5" /> // Image Filter Column Blank Area
+                    )}
                   </th>
                 ))}
               </tr>
@@ -354,10 +370,28 @@ export default function OrderList() {
         </div>
       )}
 
+      {/* ── Image Lightbox Preview Modal ── */}
+      {previewImage && (
+        <div 
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-in fade-in duration-150"
+          onClick={() => setPreviewImage(null)}
+        >
+          <div className="relative max-w-3xl max-h-[85vh] bg-white p-2 rounded-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <button 
+              onClick={() => setPreviewImage(null)}
+              className="absolute top-4 right-4 bg-black/50 hover:bg-black text-white rounded-full p-1.5 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <img src={previewImage} alt="Preview attachment" className="max-w-full max-h-[80vh] object-contain rounded" />
+          </div>
+        </div>
+      )}
+
       {/* ── Edit Modal (Windows 10 Dialog Style) ── */}
       {editingOrder && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-[1px] flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-200">
+            <div className="bg-white rounded-lg w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-200">
                 
                 {/* Modal Header */}
                 <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-gray-50/50 rounded-t-lg">
@@ -370,131 +404,155 @@ export default function OrderList() {
                     </button>
                 </div>
                 
-                {/* Modal Body */}
-                <form className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm" onSubmit={handleUpdate}>
-                    <div>
-                      <label className={labelStyle}>Received Date</label>
-                      <input type="date" className={winInput} value={editingOrder.received_date || ''} onChange={e => setEditingOrder({...editingOrder, received_date: e.target.value})}/>
-                    </div>
-                    <div>
-                      <label className={labelStyle}>Branch</label>
-                      <select className={winSelect} value={editingOrder.branch || ''} onChange={e => setEditingOrder({...editingOrder, branch: e.target.value})}>
-                        <option value="MDY">MANDALAY (MDY)</option>
-                        <option value="YGN">YANGON (YGN)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className={labelStyle}>Status</label>
-                      <select className={winSelect} value={editingOrder.status} onChange={e => setEditingOrder({...editingOrder, status: e.target.value})}>
-                        <option value="At Office">At Office</option>
-                        <option value="Pending">Pending</option>
-                        <option value="In-Transit">In-Transit</option>
-                        <option value="Delivered">Delivered</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className={labelStyle}>Pick Up Rider</label>
-                      <select className={winSelect} value={editingOrder.pickup_rider_id || ''} onChange={e => setEditingOrder({...editingOrder, pickup_rider_id: e.target.value})}>
-                        <option value="">Select...</option>
-                        {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                      </select>
-                    </div>
-
-                    <div className="sm:col-span-2 lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+                {/* Modal Body & Form Layout */}
+                <div className="flex flex-col lg:flex-row gap-6 p-6">
+                  {/* Form fields section */}
+                  <form className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm" onSubmit={handleUpdate}>
                       <div>
-                        <label className={labelStyle}>Sender Name</label>
-                        <input className={winInput} value={editingOrder.sender_name || ''} onChange={e => setEditingOrder({...editingOrder, sender_name: e.target.value})}/>
+                        <label className={labelStyle}>Received Date</label>
+                        <input type="date" className={winInput} value={editingOrder.received_date || ''} onChange={e => setEditingOrder({...editingOrder, received_date: e.target.value})}/>
                       </div>
                       <div>
-                        <label className={labelStyle}>Sender City</label>
-                        <select className={winSelect} value={editingOrder.sender_loc || ''} onChange={e => setEditingOrder({...editingOrder, sender_loc: e.target.value})}>
-                          <option value="MDY">MANDALAY</option>
-                          <option value="YGN">YANGON</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="sm:col-span-2 lg:col-span-4 grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-gray-100">
-                      <div>
-                        <label className={labelStyle}>Receiver Name</label>
-                        <input className={winInput} value={editingOrder.receiver_name || ''} onChange={e => setEditingOrder({...editingOrder, receiver_name: e.target.value})}/>
-                      </div>
-                      <div>
-                        <label className={labelStyle}>Receiver Phone</label>
-                        <input className={winInput} value={editingOrder.receiver_phone || ''} onChange={e => setEditingOrder({...editingOrder, receiver_phone: e.target.value})}/>
-                      </div>
-                      <div>
-                        <label className={labelStyle}>Destination City</label>
-                        <select className={winSelect} value={editingOrder.receiver_loc || ''} onChange={e => setEditingOrder({...editingOrder, receiver_loc: e.target.value})}>
-                          <option value="MDY">Mandalay (MDY)</option>
-                          <option value="YGN">Yangon (YGN)</option>
-                          <option value="NPT">Nay Pyi Taw (NPT)</option>
-                        </select>
-                      </div>
-                      <div className="sm:col-span-3">
-                        <label className={labelStyle}>Full Delivery Address</label>
-                        <textarea rows={2} className={winInput} value={editingOrder.receiver_address || ''} onChange={e => setEditingOrder({...editingOrder, receiver_address: e.target.value})}/>
-                      </div>
-                    </div>
-
-                    <div className="sm:col-span-2 lg:col-span-4 grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2 border-t border-gray-100 bg-gray-50/50 -mx-6 px-6 py-4">
-                      <div>
-                        <label className={labelStyle}>Payment Type</label>
-                        <select className={winSelect} value={editingOrder.fee_type || ''} onChange={e => setEditingOrder({...editingOrder, fee_type: e.target.value})}>
-                          <option value="Deli">Deli (+)</option>
-                          <option value="Kpay">Kpay (Prepaid)</option>
-                          <option value="Cash">Cash (Prepaid)</option>
-                          <option value="Bill">Bill (-)</option>
+                        <label className={labelStyle}>Branch</label>
+                        <select className={winSelect} value={editingOrder.branch || ''} onChange={e => setEditingOrder({...editingOrder, branch: e.target.value})}>
+                          <option value="MDY">MANDALAY (MDY)</option>
+                          <option value="YGN">YANGON (YGN)</option>
                         </select>
                       </div>
                       <div>
-                        <label className={labelStyle}>COD Amount</label>
-                        <input type="number" className={winInput} value={editingOrder.cod_amount || 0} onChange={e => setEditingOrder({...editingOrder, cod_amount: Number(e.target.value)})}/>
+                        <label className={labelStyle}>Status</label>
+                        <select className={winSelect} value={editingOrder.status} onChange={e => setEditingOrder({...editingOrder, status: e.target.value})}>
+                          <option value="At Office">At Office</option>
+                          <option value="Pending">Pending</option>
+                          <option value="In-Transit">In-Transit</option>
+                          <option value="Delivered">Delivered</option>
+                        </select>
                       </div>
                       <div>
-                        <label className={labelStyle}>Deli Fee</label>
-                        <input type="number" className={winInput} value={editingOrder.deli_fee || 0} onChange={e => setEditingOrder({...editingOrder, deli_fee: Number(e.target.value)})}/>
-                      </div>
-                      <div>
-                        <label className="block text-orange-600 font-semibold mb-1 uppercase text-[11px] tracking-wide">Total Amount</label>
-                        <input type="number" className="w-full px-3 py-2 bg-orange-50 border border-orange-200 rounded-md text-orange-800 text-lg font-bold focus:outline-none focus:ring-2 focus:ring-orange-100" value={editingOrder.total_amount || 0} onChange={e => setEditingOrder({...editingOrder, total_amount: Number(e.target.value)})}/>
-                      </div>
-                    </div>
-
-                    <div className="sm:col-span-2 lg:col-span-4 grid grid-cols-1 sm:grid-cols-4 gap-4 pt-2 border-t border-gray-100">
-                      <div>
-                        <label className={labelStyle}>Deliver Rider</label>
-                        <select className={winSelect} value={editingOrder.deliver_rider_id || ''} onChange={e => setEditingOrder({...editingOrder, deliver_rider_id: e.target.value})}>
+                        <label className={labelStyle}>Pick Up Rider</label>
+                        <select className={winSelect} value={editingOrder.pickup_rider_id || ''} onChange={e => setEditingOrder({...editingOrder, pickup_rider_id: e.target.value})}>
                           <option value="">Select...</option>
                           {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                         </select>
                       </div>
-                      <div>
-                        <label className={labelStyle}>Deliver Date</label>
-                        <input type="date" className={winInput} value={editingOrder.deliver_date || ''} onChange={e => setEditingOrder({...editingOrder, deliver_date: e.target.value})}/>
-                      </div>
-                      <div>
-                        <label className={labelStyle}>Cash Added Date</label>
-                        <input type="date" className={winInput} value={editingOrder.cash_added_date || ''} onChange={e => setEditingOrder({...editingOrder, cash_added_date: e.target.value})}/>
-                      </div>
-                      <div>
-                        <label className={labelStyle}>Note / Remarks</label>
-                        <select className={winSelect} value={editingOrder.note || ''} onChange={e => setEditingOrder({...editingOrder, note: e.target.value})}>
-                          <option value="">Normal Delivery</option>
-                          <option value="RT">Return Item (RT)</option>
-                        </select>
-                      </div>
-                    </div>
 
-                    <div className="sm:col-span-2 lg:col-span-4 flex justify-end gap-2 pt-3 border-t border-gray-100">
-                      <button type="button" onClick={() => setEditingOrder(null)} className="px-5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-md transition-colors border border-gray-200">
-                        Cancel
-                      </button>
-                      <button type="submit" className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-md shadow-sm transition-all">
-                        Save Changes
-                      </button>
-                    </div>
-                </form>
+                      <div className="sm:col-span-2 lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+                        <div>
+                          <label className={labelStyle}>Sender Name</label>
+                          <input className={winInput} value={editingOrder.sender_name || ''} onChange={e => setEditingOrder({...editingOrder, sender_name: e.target.value})}/>
+                        </div>
+                        <div>
+                          <label className={labelStyle}>Sender City</label>
+                          <select className={winSelect} value={editingOrder.sender_loc || ''} onChange={e => setEditingOrder({...editingOrder, sender_loc: e.target.value})}>
+                            <option value="MDY">MANDALAY</option>
+                            <option value="YGN">YANGON</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="sm:col-span-2 lg:col-span-4 grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-gray-100">
+                        <div>
+                          <label className={labelStyle}>Receiver Name</label>
+                          <input className={winInput} value={editingOrder.receiver_name || ''} onChange={e => setEditingOrder({...editingOrder, receiver_name: e.target.value})}/>
+                        </div>
+                        <div>
+                          <label className={labelStyle}>Receiver Phone</label>
+                          <input className={winInput} value={editingOrder.receiver_phone || ''} onChange={e => setEditingOrder({...editingOrder, receiver_phone: e.target.value})}/>
+                        </div>
+                        <div>
+                          <label className={labelStyle}>Destination City</label>
+                          <select className={winSelect} value={editingOrder.receiver_loc || ''} onChange={e => setEditingOrder({...editingOrder, receiver_loc: e.target.value})}>
+                            <option value="MDY">Mandalay (MDY)</option>
+                            <option value="YGN">Yangon (YGN)</option>
+                            <option value="NPT">Nay Pyi Taw (NPT)</option>
+                          </select>
+                        </div>
+                        <div className="sm:col-span-3">
+                          <label className={labelStyle}>Full Delivery Address</label>
+                          <textarea rows={2} className={winInput} value={editingOrder.receiver_address || ''} onChange={e => setEditingOrder({...editingOrder, receiver_address: e.target.value})}/>
+                        </div>
+                      </div>
+
+                      <div className="sm:col-span-2 lg:col-span-4 grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2 border-t border-gray-100 bg-gray-50/50 -mx-6 px-6 py-4">
+                        <div>
+                          <label className={labelStyle}>Payment Type</label>
+                          <select className={winSelect} value={editingOrder.fee_type || ''} onChange={e => setEditingOrder({...editingOrder, fee_type: e.target.value})}>
+                            <option value="Deli">Deli (+)</option>
+                            <option value="Kpay">Kpay (Prepaid)</option>
+                            <option value="Cash">Cash (Prepaid)</option>
+                            <option value="Bill">Bill (-)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className={labelStyle}>COD Amount</label>
+                          <input type="number" className={winInput} value={editingOrder.cod_amount || 0} onChange={e => setEditingOrder({...editingOrder, cod_amount: Number(e.target.value)})}/>
+                        </div>
+                        <div>
+                          <label className={labelStyle}>Deli Fee</label>
+                          <input type="number" className={winInput} value={editingOrder.deli_fee || 0} onChange={e => setEditingOrder({...editingOrder, deli_fee: Number(e.target.value)})}/>
+                        </div>
+                        <div>
+                          <label className="block text-orange-600 font-semibold mb-1 uppercase text-[11px] tracking-wide">Total Amount</label>
+                          <input type="number" className="w-full px-3 py-2 bg-orange-50 border border-orange-200 rounded-md text-orange-800 text-lg font-bold focus:outline-none focus:ring-2 focus:ring-orange-100" value={editingOrder.total_amount || 0} onChange={e => setEditingOrder({...editingOrder, total_amount: Number(e.target.value)})}/>
+                        </div>
+                      </div>
+
+                      <div className="sm:col-span-2 lg:col-span-4 grid grid-cols-1 sm:grid-cols-4 gap-4 pt-2 border-t border-gray-100">
+                        <div>
+                          <label className={labelStyle}>Deliver Rider</label>
+                          <select className={winSelect} value={editingOrder.deliver_rider_id || ''} onChange={e => setEditingOrder({...editingOrder, deliver_rider_id: e.target.value})}>
+                            <option value="">Select...</option>
+                            {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className={labelStyle}>Deliver Date</label>
+                          <input type="date" className={winInput} value={editingOrder.deliver_date || ''} onChange={e => setEditingOrder({...editingOrder, deliver_date: e.target.value})}/>
+                        </div>
+                        <div>
+                          <label className={labelStyle}>Cash Added Date</label>
+                          <input type="date" className={winInput} value={editingOrder.cash_added_date || ''} onChange={e => setEditingOrder({...editingOrder, cash_added_date: e.target.value})}/>
+                        </div>
+                        <div>
+                          <label className={labelStyle}>Note / Remarks</label>
+                          <select className={winSelect} value={editingOrder.note || ''} onChange={e => setEditingOrder({...editingOrder, note: e.target.value})}>
+                            <option value="">Normal Delivery</option>
+                            <option value="RT">Return Item (RT)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="sm:col-span-2 lg:col-span-4 flex justify-end gap-2 pt-3 border-t border-gray-100">
+                        <button type="button" onClick={() => setEditingOrder(null)} className="px-5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-md transition-colors border border-gray-200">
+                          Cancel
+                        </button>
+                        <button type="submit" className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-md shadow-sm transition-all">
+                          Save Changes
+                        </button>
+                      </div>
+                  </form>
+
+                  {/* ညာဘက်ဘေးမှာ ပုံကိုပါတွဲမြင်ရမယ့် Sidebar Preview */}
+                  <div className="w-full lg:w-64 border border-gray-200 rounded-lg p-3 bg-gray-50 flex flex-col items-center justify-center">
+                    <span className={labelStyle + " w-full text-left mb-2"}>Attached Order Photo</span>
+                    {editingOrder.image_url ? (
+                      <div className="relative w-full h-48 bg-white border border-gray-300 rounded overflow-hidden flex items-center justify-center group">
+                        <img src={editingOrder.image_url} alt="Order attachment" className="max-w-full max-h-full object-contain" />
+                        <div 
+                          onClick={() => setPreviewImage(editingOrder.image_url)}
+                          className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-medium cursor-pointer"
+                        >
+                          Click to enlarge
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="w-full h-48 border border-dashed border-gray-300 rounded flex flex-col items-center justify-center text-gray-400 text-xs">
+                        <svg className="w-8 h-8 mb-2 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        No image uploaded
+                      </div>
+                    )}
+                  </div>
+                </div>
             </div>
         </div>
       )}

@@ -2,6 +2,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+// Cloudinary Uploader Component ကို Import လုပ်ပါ (လမ်းကြောင်းမှန်အောင် ပြင်ပေးပါ)
+import ImageUploader from '@/components/ImageUploader' 
 
 interface QueueItem {
   local_id: string;
@@ -15,6 +17,9 @@ export default function EntryForm() {
   const [riders, setRiders] = useState<any[]>([])
   const [originalCod, setOriginalCod] = useState<number>(0)
   const [userBranch, setUserBranch] = useState<string>('') 
+  
+  // ImageUploader ကို Form ရှင်းတဲ့အခါ Auto Clear ဖြစ်သွားအောင် သုံးမယ့် State
+  const [resetKey, setResetKey] = useState<number>(Date.now())
   
   // Offline Sync States
   const [syncQueue, setSyncQueue] = useState<QueueItem[]>([])
@@ -41,7 +46,8 @@ export default function EntryForm() {
     deliver_date: '',
     note: '',
     cash_added_date: '',
-    branch: '' 
+    branch: '',
+    image_url: '' // 🔥 ပုံ Link သိမ်းဖို့ နေရာအသစ်
   })
 
   // 1. Initial Load, Auth, Online Listener & Queue Load
@@ -54,13 +60,11 @@ export default function EntryForm() {
       setFormData(prev => ({ ...prev, branch: storedBranch, sender_loc: storedBranch }))
     }
 
-    // စက်ထဲမှာ သိမ်းထားမိတဲ့ အဟောင်းတွေရှိရင် ပြန်ယူမယ်
     const storedQueue = localStorage.getItem('offline_orders_queue')
     if (storedQueue) {
       try { setSyncQueue(JSON.parse(storedQueue)) } catch(e) {}
     }
 
-    // လိုင်းရှိမရှိ စောင့်ကြည့်မည့် Listeners
     setIsOnline(navigator.onLine)
     const goOnline = () => setIsOnline(true)
     const goOffline = () => setIsOnline(false)
@@ -105,32 +109,29 @@ export default function EntryForm() {
     }))
   }, [originalCod, formData.deli_fee, formData.fee_type])
 
-  // 3. Background Sync Engine (လိုင်းပြန်တက်လာရင် သို့မဟုတ် Queue ထဲ Data အသစ်တိုးရင် အော်တို Supabase ပို့ပေးမည့်စနစ်)
+  // 3. Background Sync Engine
   useEffect(() => {
     if (!isOnline || syncQueue.length === 0 || syncing) return;
 
     async function processQueue() {
       setSyncing(true)
       const currentQueue = [...syncQueue]
-      const itemToSync = currentQueue[0] // ထိပ်ဆုံးက အလှည့်ကျတစ်ခုကို ယူမယ်
+      const itemToSync = currentQueue[0] 
 
       const { error } = await supabase
         .from('orders')
         .insert([itemToSync.payload])
 
       if (!error) {
-        // အောင်မြင်ရင် Queue ထဲက ဖယ်ထုတ်မယ်
         const updatedQueue = currentQueue.slice(1)
         setSyncQueue(updatedQueue)
         localStorage.setItem('offline_orders_queue', JSON.stringify(updatedQueue))
       } else {
         console.error("Sync error, retrying later:", error.message)
-        // တကယ်လို့ Database Error (Data ပုံစံမှားနေတာမျိုးမဟုတ်ဘဲ Network ကြောင့်ဆိုရင်) ခဏရပ်ထားမယ်
         if (error.message.includes('fetch')) {
           setSyncing(false)
           return
         }
-        // Data Error မျိုးဆိုရင်တော့ နောက်တစ်ခုဆီ ကျော်သွားအောင် ဖယ်ထုတ်ပစ်လိုက်မယ်
         const updatedQueue = currentQueue.slice(1)
         setSyncQueue(updatedQueue)
         localStorage.setItem('offline_orders_queue', JSON.stringify(updatedQueue))
@@ -138,7 +139,6 @@ export default function EntryForm() {
       setSyncing(false)
     }
 
-    // 1 စက္ကန့်ခြားတစ်ခါ Queue ကို လှမ်းလှမ်းရှင်းပေးမယ်
     const timer = setTimeout(() => {
       processQueue()
     }, 1000)
@@ -156,7 +156,7 @@ export default function EntryForm() {
     setFormData(prev => ({ ...prev, receiver_phone: formatted }))
   }
 
-  // 5. Submit Mechanism (စက်ထဲကို ချက်ချင်းထည့်ပြီး Form တန်းရှင်းမည်)
+  // 5. Submit Mechanism
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -173,31 +173,31 @@ export default function EntryForm() {
         cash_added_date: formData.cash_added_date || null, 
     }
 
-    // Queue Item အသစ် တည်ဆောက်မယ်
     const newItem: QueueItem = {
       local_id: `local_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
       payload: payload
     }
 
-    // လက်ရှိ Queue ထဲ တိုးထည့်လိုက်မယ်
     const updatedQueue = [...syncQueue, newItem]
     setSyncQueue(updatedQueue)
     localStorage.setItem('offline_orders_queue', JSON.stringify(updatedQueue))
 
-    // 🔥 ချက်ချင်း Form ကို ရှင်းပစ်ပြီး နောက်တစ်စောင်အတွက် အဆင်သင့်လုပ်မယ် (Supabase တုံ့ပြန်မှုကို မစောင့်တော့ပါ)
+    // 🔥 Form ပြန်ရှင်းတဲ့အခါ image_url ကိုပါ ရှင်းမယ်
     setOriginalCod(0)
     setFormData(prev => ({
         ...prev,
         sender_name: '', receiver_name: '', receiver_phone: '', receiver_address: '',
         cod_amount: 0, deli_fee: 0, fee_type: 'Deli', total_amount: 0, note: '', cash_added_date: '',
-        pickup_rider_id: '', deliver_rider_id: '', status: 'At Office', deliver_date: ''
+        pickup_rider_id: '', deliver_rider_id: '', status: 'At Office', deliver_date: '',
+        image_url: '' // Reset Image
     }))
     
-    // စာရိုက်သွင်းသူ စက္ကန့်ပိုင်းမျှ မစောင့်ရအောင် အမြန်ဆုံး Focus ပြန်ပေးမယ်
+    // ImageUploader Component အသစ်ပြန်ဖြစ်သွားအောင် (Preview ပုံပျောက်သွားအောင်) Key ကို ပြောင်းပေးလိုက်မယ်
+    setResetKey(Date.now())
+
     setTimeout(() => senderInputRef.current?.focus(), 30)
   }
 
-  // ── Windows 10 Style Input Classes ──
   const winInput = "w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-800 text-base placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all shadow-sm"
   const winSelect = "w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-800 text-base focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all appearance-none bg-no-repeat bg-[length:0.75rem_auto] bg-[right_1rem_center] cursor-pointer shadow-sm"
   const labelStyle = "block text-gray-600 font-semibold mb-1.5 uppercase text-xs tracking-wide"
@@ -330,25 +330,25 @@ export default function EntryForm() {
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                <div>
-  <label className={labelStyle}>COD Amount</label>
-  <div className="relative">
-    <input 
-      type="number" 
-      value={formData.cod_amount || ''} 
-      onChange={e => {
-        const val = Number(e.target.value);
-        if (formData.fee_type === 'Bill') {
-          setOriginalCod(val + Number(formData.deli_fee));
-        } else {
-          setOriginalCod(val);
-        }
-      }} 
-      className={`${winInput} pl-8 font-mono font-bold text-gray-900`} 
-      placeholder="0" 
-    />
-    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">K</span>
-  </div>
-</div>
+                  <label className={labelStyle}>COD Amount</label>
+                  <div className="relative">
+                    <input 
+                      type="number" 
+                      value={formData.cod_amount || ''} 
+                      onChange={e => {
+                        const val = Number(e.target.value);
+                        if (formData.fee_type === 'Bill') {
+                          setOriginalCod(val + Number(formData.deli_fee));
+                        } else {
+                          setOriginalCod(val);
+                        }
+                      }} 
+                      className={`${winInput} pl-8 font-mono font-bold text-gray-900`} 
+                      placeholder="0" 
+                    />
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">K</span>
+                  </div>
+                </div>
                 <div>
                   <label className={labelStyle}>Delivery Fee</label>
                   <div className="relative">
@@ -429,6 +429,21 @@ export default function EntryForm() {
                   />
                 </div>
               )}
+            </div>
+
+            {/* 🔥 Voucher Image Uploader Card 🔥 */}
+            <div className="bg-white border border-gray-200 p-5 rounded-lg shadow-sm">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-purple-600 bg-purple-50 p-2 rounded-lg">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                </span>
+                <h3 className="font-semibold text-gray-800 uppercase tracking-wide text-sm">Voucher Image</h3>
+              </div>
+              
+              <ImageUploader 
+                key={resetKey} // Form reset တိုင်း ဒီ Uploader ကို အသစ်ပြန်ဖြစ်သွားအောင် key ထည့်ပေးထားပါတယ်
+                onUploadSuccess={(url) => setFormData(prev => ({ ...prev, image_url: url }))} 
+              />
             </div>
 
             {/* Submit Button */}
