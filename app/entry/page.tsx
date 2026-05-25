@@ -3,7 +3,13 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 // Cloudinary Uploader Component ကို Import လုပ်ပါ (လမ်းကြောင်းမှန်အောင် ပြင်ပေးပါ)
-import ImageUploader from '@/components/ImageUploader' 
+// လောလောဆယ် ရှိနေတဲ့ import စာကြောင်းကို ဖျက်ပြီး ဒါလေးနဲ့ အစားထိုးပါ
+import dynamic from 'next/dynamic'
+
+const ImageUploader = dynamic(
+  () => import('@/components/ImageUploader'),
+  { ssr: false } // Server-Side Rendering ကို ပိတ်ထားတာပါ
+)
 
 interface QueueItem {
   local_id: string;
