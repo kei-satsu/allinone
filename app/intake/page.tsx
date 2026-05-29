@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-// 🔥 Supabase Client ကို Import လုပ်ပါ
 import { supabase } from '@/lib/supabase';
 
 export default function IntakePage() {
@@ -19,14 +18,15 @@ export default function IntakePage() {
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraSupported, setCameraSupported] = useState(true);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+  const [showImagePanel, setShowImagePanel] = useState(false);
 
-  // Branch
+  // Branch from localStorage
   useEffect(() => {
     const storedBranch = localStorage.getItem('user_branch');
     if (storedBranch) setUserBranch(storedBranch);
   }, []);
 
-  // Start camera stream
+  // Start camera stream with Portrait (9:16) ideal
   const startCamera = useCallback(async () => {
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
@@ -34,7 +34,12 @@ export default function IntakePage() {
         return;
       }
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        video: {
+          facingMode,
+          width: { ideal: 1080 },
+          height: { ideal: 1920 },
+          aspectRatio: { ideal: 9 / 16 }
+        },
         audio: false,
       });
 
@@ -53,7 +58,6 @@ export default function IntakePage() {
     }
   }, [facingMode]);
 
-  // Stop camera
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
@@ -65,7 +69,6 @@ export default function IntakePage() {
     setCameraActive(false);
   }, []);
 
-  // Auto start/stop when facingMode changes
   useEffect(() => {
     if (cameraActive) {
       stopCamera();
@@ -73,12 +76,11 @@ export default function IntakePage() {
     }
   }, [facingMode]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => stopCamera();
   }, [stopCamera]);
 
-  // Take photo from current video frame
+  // Capture photo
   const capturePhoto = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
@@ -99,21 +101,15 @@ export default function IntakePage() {
     }
   }, []);
 
-  // Toggle camera open/close
   const toggleCamera = () => {
-    if (cameraActive) {
-      stopCamera();
-    } else {
-      startCamera();
-    }
+    if (cameraActive) stopCamera();
+    else startCamera();
   };
 
-  // Switch front/rear camera
   const switchFacing = () => {
     setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
   };
 
-  // Fallback file input
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       setCapturedImages((prev) => [...prev, ...Array.from(e.target.files!)]);
@@ -129,14 +125,13 @@ export default function IntakePage() {
     setCapturedImages((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // 🔥 ပြင်ဆင်လိုက်သည့် Upload & Supabase Insertion Logic
+  // Upload all images
   const handleUploadAll = async () => {
     if (capturedImages.length === 0) return;
     setUploading(true);
-    
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
     if (!cloudName) {
-      alert('Cloudinary Cloud Name (Environment Variable) မရှိပါ။');
+      alert('Cloudinary Cloud Name not set.');
       setUploading(false);
       return;
     }
@@ -149,56 +144,43 @@ export default function IntakePage() {
         formData.append('file', file);
         formData.append('upload_preset', 'for_allinone');
 
-        // 1. Cloudinary ကို ပုံအရင် တင်ပါတယ်
-        const cloudinaryRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-          method: 'POST',
-          body: formData,
-        });
+        const cloudinaryRes = await fetch(
+          `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+          { method: 'POST', body: formData }
+        );
         const cloudinaryData = await cloudinaryRes.json();
         const imageUrl = cloudinaryData.secure_url;
-        
-        if (!imageUrl) throw new Error('Cloudinary Upload failed');
+        if (!imageUrl) throw new Error('Cloudinary upload failed');
 
-        // 2. ရလာတဲ့ Image Link ကို Supabase ရဲ့ 'orders' table ထဲ တိုက်ရိုက်ထည့်ပါတယ်
-        // (မှတ်ချက် - သင့် Database table name က 'orders' မဟုတ်ရင် ပြောင်းပေးပါ)
-        const today = new Date().toISOString().split('T')[0];
-        
-        const { data, error } = await supabase
-          .from('orders') 
-          .insert([
-            { 
-              image_url: imageUrl, 
-              branch: userBranch, 
-              status: 'Pending',
-              received_date: today
-            }
-          ])
-          .select(); // ID သို့မဟုတ် ထည့်လိုက်တဲ့ data ကို ပြန်လိုချင်ရင် select() သုံးနိုင်ပါတယ်
-
-        if (error) {
-          throw new Error(`Supabase Error: ${error.message}`);
-        }
+        const { error } = await supabase.from('orders').insert([
+          {
+            image_url: imageUrl,
+            branch: userBranch,
+            status: 'Pending',
+            received_date: new Date().toISOString().split('T')[0],
+          },
+        ]);
+        if (error) throw new Error(`DB Error: ${error.message}`);
       }
 
-      setUploadProgress('All uploaded to Supabase! 🎉');
+      setUploadProgress('All uploaded successfully!');
       setTimeout(() => {
         setCapturedImages([]);
         setUploading(false);
         setUploadProgress('');
-        
+        setShowImagePanel(false);
       }, 1500);
-
     } catch (error: any) {
       console.error(error);
-      alert(error.message || 'Error occurred during process');
+      alert(error.message || 'Upload failed');
       setUploading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#f3f3f3] font-[system-ui,-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif] flex flex-col select-none">
+    <div className="h-screen flex flex-col bg-[#f3f3f3] font-[system-ui,-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif] select-none overflow-hidden">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center shadow-sm">
+      <div className="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center shadow-sm flex-shrink-0">
         <div>
           <h1 className="text-lg font-semibold text-gray-800">📸 Parcel Intake</h1>
           <p className="text-xs text-gray-500">Continuous camera capture</p>
@@ -208,78 +190,109 @@ export default function IntakePage() {
         </span>
       </div>
 
-      {/* Camera / Preview Area */}
-      <div className="relative bg-black flex-1 flex items-center justify-center overflow-hidden" style={{ minHeight: '300px' }}>
-        {cameraSupported && (
-          <video
-            ref={videoRef}
-            className={`w-full h-full object-cover ${cameraActive ? 'block' : 'hidden'}`}
-            playsInline
-            muted
-            autoPlay
-          />
-        )}
-        <canvas ref={canvasRef} className="hidden" />
+      {/* Camera Area (Portrait 9:16) */}
+      <div className="relative bg-black flex-1 flex items-center justify-center overflow-hidden" style={{ minHeight: 0 }}>
+        <div className="relative h-full" style={{ aspectRatio: '9 / 16', maxWidth: '100%' }}>
+          {cameraSupported && (
+            <video
+              ref={videoRef}
+              className={`absolute inset-0 w-full h-full object-cover ${cameraActive ? 'block' : 'hidden'}`}
+              playsInline
+              muted
+              autoPlay
+            />
+          )}
+          <canvas ref={canvasRef} className="hidden" />
 
-        {cameraActive && (
-          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-6 z-10">
-            <button
-              onClick={switchFacing}
-              className="w-12 h-12 bg-white/30 backdrop-blur rounded-full flex items-center justify-center text-white hover:bg-white/40 transition"
-            >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-              </svg>
-            </button>
-            <button
-              onClick={capturePhoto}
-              className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-lg border-4 border-orange-500 active:scale-95 transition"
-            >
-              <span className="w-8 h-8 rounded-full bg-orange-500" />
-            </button>
-            <button
-              onClick={toggleCamera}
-              className="w-12 h-12 bg-white/30 backdrop-blur rounded-full flex items-center justify-center text-white hover:bg-white/40 transition"
-            >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        )}
-
-        {!cameraActive && (
-          cameraSupported ? (
-            <div className="text-center z-10">
-              <button onClick={startCamera} className="bg-orange-500 hover:bg-orange-600 text-white font-medium px-6 py-3 rounded-lg shadow-md">
-                Open Camera
+          {/* Camera controls */}
+          {cameraActive && (
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-6 z-10">
+              <button onClick={switchFacing} className="w-12 h-12 bg-white/30 backdrop-blur rounded-full flex items-center justify-center text-white hover:bg-white/40 transition">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                </svg>
               </button>
-              <p className="text-gray-400 text-sm mt-2">or</p>
-              <label className="mt-2 inline-block bg-white border border-gray-300 rounded-lg px-4 py-2 text-gray-700 cursor-pointer hover:bg-gray-50">
-                Choose Files
-                <input type="file" accept="image/*" multiple onChange={handleFileInput} className="hidden" ref={fileInputRef} />
-              </label>
+              <button onClick={capturePhoto} className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-lg border-4 border-orange-500 active:scale-95 transition">
+                <span className="w-8 h-8 rounded-full bg-orange-500" />
+              </button>
+              <button onClick={toggleCamera} className="w-12 h-12 bg-white/30 backdrop-blur rounded-full flex items-center justify-center text-white hover:bg-white/40 transition">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
-          ) : (
-            <div className="text-center z-10">
-              <p className="text-gray-500 mb-3">Camera not available on this device</p>
-              <label className="bg-white border border-gray-300 rounded-lg px-4 py-2 text-gray-700 cursor-pointer hover:bg-gray-50">
-                Select Photos
-                <input type="file" accept="image/*" multiple onChange={handleFileInput} className="hidden" ref={fileInputRef} />
-              </label>
-            </div>
-          )
-        )}
+          )}
+
+          {/* Camera start / fallback */}
+          {!cameraActive && (
+            cameraSupported ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
+                <button onClick={startCamera} className="bg-orange-500 hover:bg-orange-600 text-white font-medium px-6 py-3 rounded-lg shadow-md">
+                  Open Camera
+                </button>
+                <p className="text-gray-400 text-sm mt-2">or</p>
+                <label className="mt-2 inline-block bg-white border border-gray-300 rounded-lg px-4 py-2 text-gray-700 cursor-pointer hover:bg-gray-50">
+                  Choose Files
+                  <input type="file" accept="image/*" multiple onChange={handleFileInput} className="hidden" ref={fileInputRef} />
+                </label>
+              </div>
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
+                <p className="text-gray-500 mb-3">Camera not available</p>
+                <label className="bg-white border border-gray-300 rounded-lg px-4 py-2 text-gray-700 cursor-pointer hover:bg-gray-50">
+                  Select Photos
+                  <input type="file" accept="image/*" multiple onChange={handleFileInput} className="hidden" ref={fileInputRef} />
+                </label>
+              </div>
+            )
+          )}
+        </div>
       </div>
 
-      {/* Captured Images Grid */}
-      <div className="p-4">
+      {/* Bottom Control Bar – Upload on LEFT, Photo Count on RIGHT */}
+      <div className="bg-white border-t border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0 shadow-sm">
+        {/* Left side: Upload button (if images exist) */}
         {capturedImages.length > 0 ? (
-          <div className="grid grid-cols-4 gap-3 mb-4">
+          <button
+            onClick={handleUploadAll}
+            disabled={uploading}
+            className={`px-4 py-2 rounded-lg font-semibold text-sm shadow-sm transition ${
+              uploading ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600 text-white'
+            }`}
+          >
+            {uploading ? uploadProgress : 'Upload All'}
+          </button>
+        ) : (
+          <div /> /* invisible placeholder to keep alignment */
+        )}
+
+        {/* Right side: Photo count button */}
+        <button
+          onClick={() => setShowImagePanel(!showImagePanel)}
+          className="flex items-center gap-2 text-gray-700 hover:text-orange-600 transition"
+        >
+          <span className="text-lg">📸</span>
+          <span className="font-medium">{capturedImages.length} photos</span>
+          <svg className={`w-4 h-4 transition-transform ${showImagePanel ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Image Panel (Bottom Sheet) */}
+      {showImagePanel && (
+        <div className="bg-white border-t border-gray-200 flex-shrink-0 overflow-y-auto" style={{ maxHeight: '40vh' }}>
+          <div className="p-3 grid grid-cols-3 sm:grid-cols-4 gap-3">
             {capturedImages.map((file, idx) => (
-              <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 bg-white">
+              <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 bg-white group">
                 <img src={URL.createObjectURL(file)} alt={`capture ${idx}`} className="w-full h-full object-cover" />
-                <button onClick={() => removeImage(idx)} disabled={uploading} className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center shadow">×</button>
+                <button
+                  onClick={() => removeImage(idx)}
+                  disabled={uploading}
+                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center shadow opacity-0 group-hover:opacity-100 transition"
+                >
+                  ×
+                </button>
                 <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1 rounded">{idx + 1}</div>
               </div>
             ))}
@@ -290,22 +303,11 @@ export default function IntakePage() {
               <span className="text-3xl">+</span>
             </button>
           </div>
-        ) : (
-          !cameraActive && <p className="text-gray-400 text-sm text-center py-8">Take photos or choose files to start</p>
-        )}
-
-        {capturedImages.length > 0 && (
-          <button
-            onClick={handleUploadAll}
-            disabled={uploading}
-            className={`w-full py-3 rounded-lg font-semibold transition shadow-sm ${
-              uploading ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600 text-white'
-            }`}
-          >
-            {uploading ? uploadProgress : `Upload ${capturedImages.length} Photos`}
-          </button>
-        )}
-      </div>
+          {capturedImages.length === 0 && (
+            <p className="text-gray-400 text-sm text-center py-4">No photos captured yet.</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
