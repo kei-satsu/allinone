@@ -14,13 +14,14 @@ interface BranchInfo { code: string; displayName: string; color: string }
 const BRANCH_MAP: Record<string, BranchInfo> = {
   MDY: { code: "MDY", displayName: "Mandalay Branch", color: "from-orange-500 to-amber-500" },
   YGN: { code: "YGN", displayName: "Yangon Branch", color: "from-sky-500 to-blue-600" },
-  MAIN: { code: "MAIN", displayName: "Main Office", color: "from-purple-600 to-indigo-700" }, // Main Office အတွက် Color အသစ် ပြောင်းပေးထားပါတယ်
+  MAIN: { code: "MAIN", displayName: "Main Office", color: "from-purple-600 to-indigo-700" },
 }
 
 const DEFAULT_BRANCH: BranchInfo = {
   code: "ALL", displayName: "All In One", color: "from-gray-600 to-gray-800",
 }
 
+// ✂️ Parcel Intake ကို Sidebar ကနေ ဖြုတ်လိုက်ပါပြီ
 const MENU_ITEMS: MenuItem[] = [
   {
     name: "Dashboard",
@@ -59,16 +60,6 @@ const MENU_ITEMS: MenuItem[] = [
     ),
   },
   {
-    name: "Parcel Intake",
-    path: "/intake",
-    icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-    ),
-  },
-  {
     name: "Pending Orders",
     path: "/pending",
     icon: (
@@ -89,10 +80,9 @@ const MENU_ITEMS: MenuItem[] = [
 ]
 
 // ──────────────────────────────────────
-// ✨ Custom Hook: Auth & Branch (Optimized ဗားရှင်း)
+// Custom Hook: Auth & Branch
 // ──────────────────────────────────────
 function useAuth(redirectIfMissing: boolean) {
-  // 🎯 UX Optimization: Initial State ကို localStorage ကနေ အရင်ဆွဲထုတ်ပြီး UI တန်းပြထားမည် (No Flicker)
   const [userBranch, setUserBranch] = useState<string | null>(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("user_branch")
@@ -131,7 +121,6 @@ function useAuth(redirectIfMissing: boolean) {
 
     initializeAuth()
 
-    // Real-time Auth Event စောင့်ကြည့်ခြင်း
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
         const currentBranch = getBranchFromEmail(session.user.email)
@@ -180,7 +169,7 @@ function useAuth(redirectIfMissing: boolean) {
 }
 
 // ──────────────────────────────────────
-// Sub-component: SidebarMenuItem (unchanged)
+// Sub-component: SidebarMenuItem
 // ──────────────────────────────────────
 function SidebarMenuItem({ item, isActive, collapsed, onClick }: { item: MenuItem; isActive: boolean; collapsed: boolean; onClick?: () => void }) {
   return (
@@ -208,6 +197,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const pathname = usePathname()
   const isLoginPage = pathname === "/login"
+  const isIntakePage = pathname === "/intake" // ✨ Intake Page ဟုတ်မဟုတ် စစ်ဆေးရန်
   const { branchInfo, isAuthenticated, isReady, logout } = useAuth(!isLoginPage)
   const sidebarRef = useRef<HTMLElement>(null)
 
@@ -237,7 +227,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       if ((e.metaKey || e.ctrlKey) && e.key === "b") {
         e.preventDefault()
         if (isMobile) {
-          setMobileSidebarOpen(prev => !prev)
+          if (!isIntakePage) setMobileSidebarOpen(prev => !prev) // Intake မှာဆို Shortcut ကိုပါ ကျော်ခိုင်းထားမည်
         } else {
           setSidebarLocked(prev => !prev)
           if (!sidebarLocked) setSidebarExpanded(true)
@@ -253,7 +243,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [isMobile, sidebarLocked])
+  }, [isMobile, sidebarLocked, isIntakePage])
 
   if (!mounted || !isReady) return <div className="w-full h-screen bg-[#f3f3f3]" />
   if (isLoginPage) return <div className="w-full min-h-screen">{children}</div>
@@ -345,8 +335,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Floating Button (bottom-left) */}
-        {isMobile && (
+        {/* 🛠️ Floating Button (bottom-left) - /intake စာမျက်နှာပေါ်မှာဆိုရင် ဖျောက်ထားပါမည် */}
+        {isMobile && !isIntakePage && (
           <button
             onClick={() => setMobileSidebarOpen(true)}
             className="fixed bottom-6 left-6 z-50 w-12 h-12 bg-white/90 backdrop-blur-md border border-gray-200 rounded-full flex items-center justify-center shadow-lg hover:shadow-xl active:scale-95 transition-all duration-200 text-gray-600 hover:text-orange-600"
@@ -358,6 +348,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </button>
         )}
 
+        {/* ➕ Floating Action Button (bottom-right) - Intake သို့သွားရန် Button (Desktop ရော Mobile ပါ ပေါ်ပါမည်) */}
+        {!isIntakePage && (
+          <Link
+            href="/intake"
+            className="fixed bottom-6 right-6 z-50 flex items-center justify-center gap-2 bg-gradient-to-br from-orange-500 to-amber-500 text-white w-12 h-12 md:w-auto md:h-12 md:px-5 rounded-full shadow-lg hover:shadow-orange-500/30 active:scale-95 transition-all duration-200 group font-semibold tracking-wide"
+            title="Go to Parcel Intake"
+          >
+            <svg className="w-5 h-5 transition-transform group-hover:rotate-90 duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            <span className="hidden md:inline text-sm">Intake</span>
+          </Link>
+        )}
+
         {/* Page content */}
         <main className="flex-1 overflow-y-auto bg-[#f3f3f3]">
           {children}
@@ -365,4 +369,4 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
     </div>
   )
-} 
+}

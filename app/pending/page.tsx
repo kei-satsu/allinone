@@ -104,7 +104,7 @@ export default function PendingEntry() {
       .select('*')
       .eq('branch', branch)
       .eq('status', 'Pending')
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: true })
 
     if (!error && data) {
       setPendingItems(data)
@@ -114,7 +114,6 @@ export default function PendingEntry() {
     }
   }
 
-  // ── Select item & load form ──
   const handleSelectItem = (item: any) => {
     setSelectedItem(item)
     setOriginalCod(item.cod_amount || 0)
@@ -144,23 +143,17 @@ export default function PendingEntry() {
     setTimeout(() => senderInputRef.current?.focus(), 50)
   }
 
-  // ── Load previous item from stack ──
   const handleUndo = async () => {
     if (processedStack.length === 0) return
     const lastId = processedStack[processedStack.length - 1]
-    // Remove it from stack
     setProcessedStack(prev => prev.slice(0, -1))
-    // Fetch that item
     const { data, error } = await supabase.from('orders').select('*').eq('id', lastId).single()
     if (!error && data) {
-      // Re-insert it into pending list if it's still pending? Actually it might have been updated, but we'll load it anyway.
-      // We can add it back to pendingItems for consistency
       setPendingItems(prev => [data, ...prev])
       handleSelectItem(data)
     }
   }
 
-  // Persist field handlers
   const handlePersistChange = (field: string, value: string) => {
     if (field === 'sender_name') setPersistSenderName(value)
     else if (field === 'sender_loc') setPersistSenderLoc(value)
@@ -168,7 +161,6 @@ export default function PendingEntry() {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
-  // COD calculation
   useEffect(() => {
     let currentCOD = originalCod;
     const deli = Number(formData.deli_fee) || 0;
@@ -191,7 +183,6 @@ export default function PendingEntry() {
     setFormData(prev => ({ ...prev, receiver_phone: formatted }))
   }
 
-  // ── Smooth Enter key handling for selects ──
   const handleSelectKeyDown = (e: React.KeyboardEvent<HTMLSelectElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault()
@@ -199,7 +190,6 @@ export default function PendingEntry() {
       if (!form) return
       const elements = Array.from(form.elements) as HTMLElement[]
       const index = elements.indexOf(e.currentTarget)
-      // Find next input/select/textarea that is not disabled
       for (let i = index + 1; i < elements.length; i++) {
         const el = elements[i] as HTMLElement
         if (el && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' || el.tagName === 'BUTTON')) {
@@ -228,7 +218,6 @@ export default function PendingEntry() {
     }
     const { error } = await supabase.from('orders').update(payload).eq('id', selectedItem.id)
     if (!error) {
-      // Push to processed stack
       setProcessedStack(prev => [...prev, selectedItem.id])
       const updatedPending = pendingItems.filter(item => item.id !== selectedItem.id)
       setPendingItems(updatedPending)
@@ -243,7 +232,6 @@ export default function PendingEntry() {
     setLoading(false)
   }
 
-  // Image helpers (same)
   const handleZoomIn = () => setZoomScale(prev => Math.min(prev + 0.25, 4))
   const handleZoomOut = () => setZoomScale(prev => Math.max(prev - 0.25, 0.5))
   const handleRotateClockwise = () => setRotation(prev => prev + 90)
@@ -294,10 +282,10 @@ export default function PendingEntry() {
       {/* Main Split Layout */}
       <div className="flex-1 overflow-hidden flex flex-col lg:flex-row relative">
         
-        {/* Left panel: Image + thumbnail strip */}
+        {/* Left panel: Image + thumbnail strip (Mobile Responsive Updated) */}
         <div 
           style={{ width: isMobile ? '100%' : `${leftWidth}px` }}
-          className="w-full lg:flex-shrink-0 border-r border-gray-300 bg-gray-900 flex flex-col relative overflow-hidden"
+          className="w-full h-[45vh] lg:h-full lg:flex-shrink-0 border-b lg:border-b-0 lg:border-r border-gray-300 bg-gray-900 flex flex-col relative overflow-hidden"
         >
           {selectedItem ? (
             <>
@@ -309,15 +297,76 @@ export default function PendingEntry() {
                 onMouseUp={handleMouseUpOrLeave}
                 onMouseLeave={handleMouseUpOrLeave}
               >
-                {/* Image control bar (same) */}
-                <div className="absolute top-3 left-1/2 transform -translate-x-1/2 bg-gray-900/80 backdrop-blur-md px-2.5 py-1.5 rounded-xl flex items-center gap-2.5 border border-gray-700 shadow-xl z-20 transition-opacity opacity-90 hover:opacity-100" onMouseDown={e => e.stopPropagation()}>
-                  <button type="button" onClick={handleZoomIn} className="p-1 bg-gray-800 hover:bg-orange-500 text-white rounded transition text-xs" title="Zoom In">➕</button>
-                  <button type="button" onClick={handleZoomOut} className="p-1 bg-gray-800 hover:bg-orange-500 text-white rounded transition text-xs" title="Zoom Out">➖</button>
-                  <button type="button" onClick={handleRotateCounterClockwise} className="p-1 bg-gray-800 hover:bg-orange-500 text-white rounded transition text-xs" title="Rotate Left">↩️</button>
-                  <button type="button" onClick={handleRotateClockwise} className="p-1 bg-gray-800 hover:bg-orange-500 text-white rounded transition text-xs" title="Rotate Right">↪️</button>
-                  <div className="w-px h-4 bg-gray-700 mx-0.5" />
-                  <button type="button" onClick={handleResetImage} className="text-[10px] bg-gray-700 hover:bg-red-500 px-1.5 py-1 rounded text-gray-200 font-medium transition">RESET</button>
-                </div>
+               {/* 🛠️ Modernized Image Control Bar */}
+<div 
+  className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-gray-950/80 backdrop-blur-xl px-3 py-1.5 rounded-2xl flex items-center gap-2 border border-white/10 shadow-2xl z-20 transition-all duration-300"
+  onMouseDown={e => e.stopPropagation()}
+>
+  {/* Zoom In Button */}
+  <button
+    type="button"
+    onClick={handleZoomIn}
+    className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-orange-500 hover:bg-white/5 rounded-xl transition-all duration-200 active:scale-95"
+    title="Zoom In"
+  >
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+    </svg>
+  </button>
+
+  {/* Zoom Out Button */}
+  <button
+    type="button"
+    onClick={handleZoomOut}
+    className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-orange-500 hover:bg-white/5 rounded-xl transition-all duration-200 active:scale-95"
+    title="Zoom Out"
+  >
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
+    </svg>
+  </button>
+
+  {/* Divider */}
+  <div className="w-px h-4 bg-white/10 mx-0.5" />
+
+  {/* Rotate Left Button */}
+  <button
+    type="button"
+    onClick={handleRotateCounterClockwise}
+    className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-orange-500 hover:bg-white/5 rounded-xl transition-all duration-200 active:scale-95"
+    title="Rotate Left"
+  >
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.3}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+    </svg>
+  </button>
+
+  {/* Rotate Right Button */}
+  <button
+    type="button"
+    onClick={handleRotateClockwise}
+    className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-orange-500 hover:bg-white/5 rounded-xl transition-all duration-200 active:scale-95"
+    title="Rotate Right"
+  >
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.3}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 000 12h3" />
+    </svg>
+  </button>
+
+  {/* Divider */}
+  <div className="w-px h-4 bg-white/10 mx-0.5" />
+
+  {/* Sleek Reset Button */}
+  <button
+    type="button"
+    onClick={handleResetImage}
+    className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all duration-200 active:scale-95 flex items-center gap-1"
+  >
+    Reset
+  </button>
+</div>
+
+               
 
                 <div className="w-full h-full flex items-center justify-center overflow-hidden pointer-events-none">
                   <img 
@@ -336,14 +385,18 @@ export default function PendingEntry() {
                   Zoom: {Math.round(zoomScale * 100)}%
                 </div>
               </div>
+              
               <div className="h-20 bg-gray-950 border-t border-gray-800 p-1.5 flex gap-2 overflow-x-auto scrollbar-thin flex-shrink-0">
                 {pendingItems.map((item, idx) => (
                   <div 
                     key={item.id || idx}
                     onClick={() => handleSelectItem(item)}
-                    className={`w-14 h-full min-w-[56px] rounded-md overflow-hidden cursor-pointer border-2 transition-all ${selectedItem.id === item.id ? 'border-orange-500 scale-95 opacity-100' : 'border-transparent opacity-50 hover:opacity-100'}`}
+                    className={`w-14 h-full min-w-[56px] rounded-md overflow-hidden cursor-pointer border-2 transition-all relative ${selectedItem.id === item.id ? 'border-orange-500 scale-95 opacity-100' : 'border-transparent opacity-50 hover:opacity-100'}`}
                   >
                     <img src={item.image_url} className="w-full h-full object-cover" alt="thumb" draggable={false} />
+                    {item.uploader_note && (
+                      <span className="absolute top-0.5 right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-black" title="Has Note" />
+                    )}
                   </div>
                 ))}
               </div>
@@ -363,10 +416,17 @@ export default function PendingEntry() {
           className={`hidden lg:block w-2 h-full cursor-col-resize transition-colors flex-shrink-0 z-30 ${isResizing ? 'bg-orange-500' : 'bg-gray-800 hover:bg-orange-500'} border-l border-r border-gray-950/40`}
         />
 
-        {/* Right panel: Form */}
+        {/* Right panel: Form (Mobile Scrollable) */}
         <div className="flex-1 overflow-y-auto p-4">
           <form onSubmit={handleSubmit} className="w-full space-y-4">
             
+            {selectedItem?.uploader_note && (
+              <div className="bg-amber-50 border-l-4 border-amber-500 p-3.5 rounded-r-lg shadow-sm">
+                <span className="text-xs font-bold text-amber-800 uppercase tracking-wide block mb-1">💬 Note for this Percel</span>
+                <p className="text-gray-900 font-medium text-sm">{selectedItem.uploader_note}</p>
+              </div>
+            )}
+
             {/* Top row: Item ID, Arrival Date, Pickup Rider */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
               <div>
@@ -394,7 +454,7 @@ export default function PendingEntry() {
 
             {/* Sender & Receiver cards */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              {/* Sender (with persistence) */}
+              {/* Sender */}
               <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-sm">
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-blue-600 bg-blue-50 p-1.5 rounded-lg">
@@ -512,7 +572,6 @@ export default function PendingEntry() {
                       <option value="In-Transit">🚚 In-Transit</option>
                     </select>
                   </div>
-                  {/* Extra empty space or notes? Already have button. */}
                 </div>
                 <button 
                   type="submit" 

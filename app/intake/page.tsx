@@ -48,6 +48,9 @@ export default function IntakePage() {
   const [drawingText, setDrawingText] = useState(false);
   const [newText, setNewText] = useState('');
 
+  // ✨ Global Batch Note State (Data Entry သမားအတွက် ချန်မည့် Message)
+  const [batchNote, setBatchNote] = useState('');
+
   // Real Crop States
   const [showCropModal, setShowCropModal] = useState(false);
   const [currentCropOrder, setCurrentCropOrder] = useState<CapturedFile | null>(null);
@@ -55,14 +58,14 @@ export default function IntakePage() {
   const [zoomState, setZoomState] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
 
-  // Dynamic Responsive Dimension (ပုံအချိုးအစားအတိုင်း ကွက်တိဖြစ်စေရန်)
+  // Dynamic Responsive Dimension
   const [stageDimensions, setStageDimensions] = useState({ width: 320, height: 400 });
 
   // လက်ရှိ ရွေးချယ်ထားတဲ့ ပုံကို Konva Image အဖြစ် Load လုပ်ခြင်း
   const currentImgObj = capturedImages[currentIdx];
   const [konvaImage] = useImage(currentImgObj?.preview || '', 'anonymous');
 
-  // 🛠️ ✨ FIX: ပုံရဲ့ မူရင်း Aspect Ratio (ကင်မရာပေးတဲ့အတိုင်း) အလိုအလျောက် တွက်ချက်ပြီး ပုံမရှည်အောင် ထိန်းညှိခြင်း
+  // ပုံရဲ့ မူရင်း Aspect Ratio အလိုအလျောက် တွက်ချက်ခြင်း
   useEffect(() => {
     if (!konvaImage) return;
     
@@ -73,8 +76,7 @@ export default function IntakePage() {
     let computedWidth = availableWidth;
     let computedHeight = availableWidth / imgRatio;
     
-    // ဖုန်းမျက်နှာပြင် အမြင့်ထက် ကျော်မသွားအောင် Boundary ထိန်းခြင်း
-    const maxAvailableHeight = window.innerHeight * 0.58; 
+    const maxAvailableHeight = window.innerHeight * 0.55; 
     if (computedHeight > maxAvailableHeight) {
       computedHeight = maxAvailableHeight;
       computedWidth = maxAvailableHeight * imgRatio;
@@ -122,7 +124,7 @@ export default function IntakePage() {
     whiteNoise.stop(audioCtx.currentTime + 0.08);
   };
 
-  // Camera စတင်ဖွင့်ခြင်း (🛠️ အချိုးအစား ကန့်သတ်ချက် ဖယ်ရှားပြီး ကင်မရာမူရင်းအတိုင်း ယူခြင်း)
+  // Camera စတင်ဖွင့်ခြင်း
   const startCamera = useCallback(async () => {
     try {
       stopCamera();
@@ -163,7 +165,7 @@ export default function IntakePage() {
     setCameraActive(false);
   }, []);
 
-  // Gallery မှ ပုံရွေးချယ်မှု ထိန်းချုပ်ခြင်း
+  // Gallery မှ ပုံရွေးချယ်မှု
   const handleGallerySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     const files = Array.from(e.target.files);
@@ -201,7 +203,6 @@ export default function IntakePage() {
     shutterFlashRef.current.classList.add('animate-flash');
     try { playShutterSound(); } catch (e) {}
 
-    // ကင်မရာရဲ့ မူရင်း Resolution အတိုင်း Canvas ကို ဆောက်ပါတယ်
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
@@ -352,7 +353,7 @@ export default function IntakePage() {
     });
   };
 
-  // Upload Logic
+  // ✨ Upload Logic (အသစ်ပြင်ဆင်ထားသော စာတိုပါ တစ်ခါတည်းသိမ်းမည့် အပိုင်း)
   const handleFinalUploadAll = async () => {
     if (capturedImages.length === 0) return;
     setUploading(true);
@@ -388,12 +389,14 @@ export default function IntakePage() {
         const imageUrl = cloudinaryData.secure_url;
         if (!imageUrl) throw new Error('Cloudinary upload failed');
 
+        // ✨ ကုဒ်အသစ် - 'uploader_note' column ထဲသို့ စာတိုကို ပုံတိုင်းအတွက် ထည့်သွင်းသိမ်းဆည်းခြင်း
         const { error } = await supabase.from('orders').insert([
           {
             image_url: imageUrl,
             branch: userBranch,
             status: 'Pending',
             received_date: new Date().toISOString().split('T')[0],
+            uploader_note: batchNote.trim() || null, 
           },
         ]);
         if (error) throw new Error(`DB Error: ${error.message}`);
@@ -402,6 +405,7 @@ export default function IntakePage() {
       setUploadProgress('Success!');
       setTimeout(() => {
         setCapturedImages([]);
+        setBatchNote(''); // ✨ တင်ပြီးရင် Message ကို clear လုပ်ပေးခြင်း
         setUploading(false);
         setUploadProgress('');
         setFlowMode('camera');
@@ -430,7 +434,7 @@ export default function IntakePage() {
       {/* Visual Shutter Flash */}
       <div ref={shutterFlashRef} className="fixed inset-0 bg-white opacity-0 z-[100] pointer-events-none hidden" />
 
-      {/* Real Crop Feature Modal (🛠️ Aspect Free အလွတ်ဖြတ်စနစ်ပြောင်းလဲထားသည်) */}
+      {/* Real Crop Feature Modal */}
       {showCropModal && currentCropOrder && (
         <div className="fixed inset-0 bg-black z-[200] flex flex-col">
           <div className="bg-neutral-900 border-b border-neutral-800 px-4 py-3 flex justify-between items-center text-white font-medium">
@@ -445,7 +449,7 @@ export default function IntakePage() {
                     image={currentCropOrder.preview}
                     crop={cropState}
                     zoom={zoomState}
-                    aspect={undefined} // 🛠️ ဘယ်အချိုးမှ အတင်းမသတ်မှတ်တော့ဘဲ လွတ်လပ်စွာ ဖြတ်ခွင့်ပြုခြင်း
+                    aspect={undefined} 
                     showGrid={true}
                     onCropChange={setCropState}
                     onCropComplete={onCropComplete}
@@ -480,22 +484,19 @@ export default function IntakePage() {
             </button>
           </div>
 
-          {/* Viewfinder Area (🛠️ ဖုန်းမှာ ဘေးမည်းလုံးဝမပါဘဲ စမတ်ကျကျ အပြည့်ပေါ်စေရန် ပြင်ဆင်ခြင်း) */}
-<div className="flex-1 flex items-center justify-center my-2 overflow-hidden relative">
-  <div className="w-full h-full bg-neutral-950 rounded-2xl overflow-hidden shadow-2xl relative border border-neutral-800">
-    
-    {/* object-cover သုံးပြီး w-full h-full ပေးလိုက်ရင် ဖုန်း screen အပြည့် ကွက်တိ ဖြစ်သွားပါလိမ့်မယ် */}
-    <video 
-      ref={videoRef} 
-      className="w-full h-full object-cover" 
-      playsInline 
-      muted 
-      autoPlay 
-    />
-    <canvas ref={canvasRef} className="hidden" />
-    
-  </div>
-</div>
+          {/* Viewfinder Area */}
+          <div className="flex-1 flex items-center justify-center my-2 overflow-hidden relative">
+            <div className="w-full h-full bg-neutral-950 rounded-2xl overflow-hidden shadow-2xl relative border border-neutral-800">
+              <video 
+                ref={videoRef} 
+                className="w-full h-full object-cover" 
+                playsInline 
+                muted 
+                autoPlay 
+              />
+              <canvas ref={canvasRef} className="hidden" />
+            </div>
+          </div>
 
           {/* Bottom Controls Panel */}
           <div className="flex flex-col gap-3 flex-shrink-0 pb-2">
@@ -566,7 +567,7 @@ export default function IntakePage() {
             </button>
           </div>
 
-          {/* Canvas Preview Container (🛠️ မူရင်းအချိုးအစားအတိုင်း ကွက်တိဖြစ်နေစေမည့် Canvas Box) */}
+          {/* Canvas Preview Container */}
           <div className="flex-1 flex items-center justify-center my-2 overflow-hidden relative">
             <div 
               className="bg-neutral-950 rounded-xl overflow-hidden flex items-center justify-center border border-neutral-800 shadow-2xl relative"
@@ -640,6 +641,18 @@ export default function IntakePage() {
                 ))}
               </div>
             )}
+
+            {/* ✨ ကုဒ်အသစ် - Data Entry သမားအတွက် စာတိုချန်ရန် Input Box အကွက် */}
+            <div className="px-1 py-1 animate-slideUp">
+              <label className="text-[10px] text-orange-400 font-bold block mb-1 uppercase tracking-wider">💬 Message to Data Entry Staff (ဤအုပ်စုရှိပုံအားလုံးအတွက်)</label>
+              <input 
+                type="text"
+                className="w-full px-3 py-2.5 bg-neutral-900/90 border border-neutral-800 rounded-xl text-white text-xs outline-none focus:border-blue-500 transition-colors shadow-inner placeholder-neutral-500"
+                value={batchNote}
+                onChange={(e) => setBatchNote(e.target.value)}
+                placeholder="ဥပမာ - COD ၅သောင်းပါသည်၊ ဂိတ်ခ ရှင်းပြီး၊ လိပ်စာမရှင်းပါ..."
+              />
+            </div>
 
             {/* Bottom Floating Action Utility Row */}
             <div className="flex items-center justify-around px-4 py-2 border-t border-neutral-900/60 bg-neutral-950/40 rounded-xl backdrop-blur-md">
