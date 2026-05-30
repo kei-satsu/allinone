@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabase" // ✨ Supabase Client
 
 export default function LoginPage() {
-  const [branch, setBranch] = useState("")
+  const [email, setEmail] = useState("") // ✨ Branch အစား Email State သို့ ပြောင်းလဲခြင်း
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
@@ -12,11 +13,9 @@ export default function LoginPage() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [currentTime, setCurrentTime] = useState("")
   const [currentDate, setCurrentDate] = useState("")
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   
   const router = useRouter()
-  const inputRef = useRef<HTMLInputElement>(null)
-  const dropdownRef = useRef<HTMLDivElement>(null)
+  const emailInputRef = useRef<HTMLInputElement>(null) // Email field ကို focus ရန်
 
   // ── Windows 10 Style Clock ──
   useEffect(() => {
@@ -39,73 +38,70 @@ export default function LoginPage() {
     return () => clearInterval(interval)
   }, [])
 
-  // ── Auto-redirect if already logged in ──
+  // ── ✨ Auto-redirect if already logged in ──
   useEffect(() => {
-    try {
-      const storedBranch = localStorage.getItem("user_branch")
-      const isLoggedIn = localStorage.getItem("isLoggedIn")
-      if (storedBranch && isLoggedIn === "true") {
-        window.location.href = "/"
-        return
-      }
-    } catch (err) {
-      console.warn("localStorage access error:", err)
-    } finally {
-      const timer = setTimeout(() => setIsCheckingAuth(false), 300)
-      return () => clearTimeout(timer)
-    }
-  }, [])
-
-  // Dropdown အပြင်ဘက်ကိုနှိပ်ရင် ပိတ်သွားအောင်
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsDropdownOpen(false)
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          window.location.href = "/"
+          return
+        }
+      } catch (err) {
+        console.warn("Auth check error:", err)
+      } finally {
+        const timer = setTimeout(() => setIsCheckingAuth(false), 300)
+        return () => clearTimeout(timer)
       }
     }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
+    checkAuth()
   }, [])
 
-  // Focus password field when branch selected
+  // Page တက်လာတာနဲ့ Email Field ကို Auto Focus ပေးခြင်း
   useEffect(() => {
-    if (branch && inputRef.current) {
-      inputRef.current.focus()
+    if (!isCheckingAuth && emailInputRef.current) {
+      emailInputRef.current.focus()
     }
-  }, [branch])
+  }, [isCheckingAuth])
 
-  const handleLogin = (e: React.FormEvent) => {
+  // ── ✨ Supabase Auth ဖြင့် Login ဝင်ခြင်း Handler ──
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
 
-    if (!branch) {
-      setError("ကျေးဇူးပြု၍ ရုံးခွဲရွေးချယ်ပါ။")
+    if (!email || !password) {
+      setError("ကျေးဇူးပြု၍ Email နှင့် Password ကို ဖြည့်သွင်းပေးပါ။")
       return
     }
 
     setLoading(true)
 
-    setTimeout(() => {
-      if (password === "123456") {
-        try {
-          localStorage.setItem("user_branch", branch)
-          localStorage.setItem("isLoggedIn", "true")
-          window.location.href = "/"
-        } catch (err) {
-          setError("Login သိမ်းဆည်းရာတွင် အမှားရှိနေပါသည်။")
-          setLoading(false)
-        }
-      } else {
-        setError("Password မှားနေပါတယ်ဗျာ။ ပြန်လည်စစ်ဆေးပေးပါ။")
-        setLoading(false)
-      }
-    }, 600)
-  }
+    try {
+      // Supabase Auth သို့ User ရိုက်ထည့်လိုက်သော Email/Password တိုက်ရိုက်ပေးပို့ခြင်း
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password,
+      })
 
-  const branchList = [
-    { id: "MDY", name: "Mandalay Branch (MDY)" },
-    { id: "YGN", name: "Yangon Branch (YGN)" },
-  ]
+      if (authError) {
+        setError("Email (သို့) Password မှားယွင်းနေပါတယ်ဗျာ။ ပြန်လည်စစ်ဆေးပေးပါ။")
+        setLoading(false)
+        return
+      }
+
+      if (data.session) {
+        // AppLayout UI နဲ့ အဆင်ပြေစေရန် Email ရဲ့ ရှေ့ဆုံးစာလုံးကိုယူပြီး user_branch သတ်မှတ်ပေးခြင်း
+        const prefix = email.split("@")[0].toUpperCase()
+        const assignedBranch = ["MDY", "YGN", "MAIN"].includes(prefix) ? prefix : "MAIN"
+        
+        localStorage.setItem("user_branch", assignedBranch)
+        window.location.href = "/"
+      }
+    } catch (err) {
+      setError("ချိတ်ဆက်မှု အမှားအယွင်း ရှိနေပါတယ်ဗျာ။")
+      setLoading(false)
+    }
+  }
 
   if (isCheckingAuth) {
     return (
@@ -141,7 +137,7 @@ export default function LoginPage() {
         />
       </div>
 
-      {/* ── Lock Screen Clock (Dark text) ── */}
+      {/* ── Lock Screen Clock ── */}
       <div className="absolute top-12 md:top-16 w-full text-center z-10 pointer-events-none px-4 flex flex-col items-center animate-in fade-in slide-in-from-top-4 duration-1000">
         <div className="text-6xl md:text-8xl font-extralight tracking-tight text-gray-800 drop-shadow-sm">
           {currentTime}
@@ -167,8 +163,8 @@ export default function LoginPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
                   </svg>
                 </div>
-                <h2 className="text-gray-800 text-xl font-semibold tracking-tight">ALL IN ONE Express Delivery</h2>
-                <p className="text-gray-500 text-sm mt-1">Login With Your Branch</p>
+                <h2 className="text-gray-800 text-xl font-semibold tracking-tight">ALL IN ONE Express</h2>
+                <p className="text-gray-500 text-sm mt-1">Sign in to your account</p>
               </div>
 
               {/* ── Error Alert ── */}
@@ -184,70 +180,42 @@ export default function LoginPage() {
               {/* ── Form ── */}
               <form onSubmit={handleLogin} className="space-y-4">
                 
-                {/* ── Premium Custom Dropdown (White theme) ── */}
-                <div className="relative" ref={dropdownRef}>
-                  <button
-                    type="button"
-                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                    className={`w-full flex items-center justify-between px-4 py-3 bg-gray-50 border rounded-xl font-medium text-sm outline-none transition-all text-left ${
-                      isDropdownOpen ? "border-orange-500 ring-2 ring-orange-100 bg-white" : "border-gray-300 hover:border-gray-400 bg-white"
-                    }`}
-                  >
-                    <span className={branch ? "text-gray-800" : "text-gray-400"}>
-                      {branch ? branchList.find(b => b.id === branch)?.name : "Select Branch"}
-                    </span>
-                    <svg 
-                      className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isDropdownOpen ? "rotate-180 text-orange-500" : ""}`} 
-                      fill="none" 
-                      viewBox="0 0 24 24" 
-                      stroke="currentColor" 
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-
-                  {/* Dropdown Menu */}
-                  {isDropdownOpen && (
-                    <div className="absolute left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-lg z-30 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                      <div className="p-1">
-                        {branchList.map((b) => (
-                          <button
-                            key={b.id}
-                            type="button"
-                            onClick={() => {
-                              setBranch(b.id)
-                              setIsDropdownOpen(false)
-                            }}
-                            className={`w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg transition-colors flex items-center justify-between ${
-                              branch === b.id 
-                                ? "bg-orange-50 text-orange-600" 
-                                : "text-gray-700 hover:bg-gray-50"
-                            }`}
-                          >
-                            <span>{b.name}</span>
-                            {branch === b.id && (
-                              <span className="w-1.5 h-1.5 bg-orange-500 rounded-full shadow-[0_0_8px_rgba(249,115,22,0.5)]" />
-                            )}
-                          </button>
-                        ))}
-                      </div>
+                {/* ── ✨ Email Input ── */}
+                <div>
+                  <div className="relative">
+                    <input
+                      ref={emailInputRef}
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="Email Address"
+                      className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-800 font-medium text-sm outline-none transition-all focus:border-orange-500 focus:ring-2 focus:ring-orange-100 hover:border-gray-400 placeholder-gray-400 pl-11"
+                    />
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.206" />
+                      </svg>
                     </div>
-                  )}
+                  </div>
                 </div>
 
                 {/* Password Input */}
                 <div>
                   <div className="relative group">
                     <input
-                      ref={inputRef}
                       type={showPassword ? "text" : "password"}
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Password"
-                      className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-800 font-medium text-sm outline-none transition-all focus:border-orange-500 focus:ring-2 focus:ring-orange-100 hover:border-gray-400 placeholder-gray-400 pr-12"
+                      className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-800 font-medium text-sm outline-none transition-all focus:border-orange-500 focus:ring-2 focus:ring-orange-100 hover:border-gray-400 placeholder-gray-400 pl-11 pr-12"
                     />
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    </div>
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}

@@ -3,21 +3,22 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabase" // ✨ Supabase Client
 
 // ──────────────────────────────────────
-// Types & Constants (unchanged)
+// Types & Constants
 // ──────────────────────────────────────
 interface MenuItem { name: string; path: string; icon: React.ReactNode }
 interface BranchInfo { code: string; displayName: string; color: string }
 
 const BRANCH_MAP: Record<string, BranchInfo> = {
-  MDY: { code: "MDY", displayName: "Mandalay", color: "from-orange-400 to-amber-500" },
-  YGN: { code: "YGN", displayName: "Yangon", color: "from-sky-400 to-blue-500" },
-  MAIN: { code: "MAIN", displayName: "Main", color: "from-gray-600 to-gray-800" },
+  MDY: { code: "MDY", displayName: "Mandalay Branch", color: "from-orange-500 to-amber-500" },
+  YGN: { code: "YGN", displayName: "Yangon Branch", color: "from-sky-500 to-blue-600" },
+  MAIN: { code: "MAIN", displayName: "Main Office", color: "from-purple-600 to-indigo-700" }, // Main Office အတွက် Color အသစ် ပြောင်းပေးထားပါတယ်
 }
 
 const DEFAULT_BRANCH: BranchInfo = {
-  code: "OP", displayName: "Main", color: "from-gray-600 to-gray-800",
+  code: "ALL", displayName: "All In One", color: "from-gray-600 to-gray-800",
 }
 
 const MENU_ITEMS: MenuItem[] = [
@@ -26,7 +27,7 @@ const MENU_ITEMS: MenuItem[] = [
     path: "/",
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V16zM14 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V16z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2-2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V16zM14 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V16z" />
       </svg>
     ),
   },
@@ -88,24 +89,67 @@ const MENU_ITEMS: MenuItem[] = [
 ]
 
 // ──────────────────────────────────────
-// Custom Hook: Auth & Branch (unchanged)
+// ✨ Custom Hook: Auth & Branch (Optimized ဗားရှင်း)
 // ──────────────────────────────────────
 function useAuth(redirectIfMissing: boolean) {
-  const [userBranch, setUserBranch] = useState<string | null>(null)
+  // 🎯 UX Optimization: Initial State ကို localStorage ကနေ အရင်ဆွဲထုတ်ပြီး UI တန်းပြထားမည် (No Flicker)
+  const [userBranch, setUserBranch] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("user_branch")
+    }
+    return null
+  })
   const [isReady, setIsReady] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
   const hasRedirected = useRef(false)
 
+  const getBranchFromEmail = (email?: string) => {
+    if (!email) return null
+    const prefix = email.split("@")[0].toUpperCase()
+    return ["MDY", "YGN", "MAIN"].includes(prefix) ? prefix : "MAIN"
+  }
+
   useEffect(() => {
-    try {
-      setUserBranch(localStorage.getItem("user_branch"))
-    } catch (error) {
-      console.error("Failed to read localStorage:", error)
-    } finally {
-      setIsReady(true)
+    const initializeAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user) {
+          const currentBranch = getBranchFromEmail(session.user.email)
+          setUserBranch(currentBranch)
+          if (currentBranch) localStorage.setItem("user_branch", currentBranch)
+        } else {
+          setUserBranch(null)
+          localStorage.removeItem("user_branch")
+        }
+      } catch (error) {
+        console.error("Supabase session read error:", error)
+      } finally {
+        setIsReady(true)
+      }
     }
-  }, [])
+
+    initializeAuth()
+
+    // Real-time Auth Event စောင့်ကြည့်ခြင်း
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        const currentBranch = getBranchFromEmail(session.user.email)
+        setUserBranch(currentBranch)
+        if (currentBranch) localStorage.setItem("user_branch", currentBranch)
+      } else {
+        setUserBranch(null)
+        localStorage.removeItem("user_branch")
+        if (redirectIfMissing && pathname !== "/login") {
+          router.replace("/login")
+        }
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [router, pathname, redirectIfMissing])
 
   useEffect(() => {
     if (!isReady || pathname === "/login" || hasRedirected.current) return
@@ -120,11 +164,13 @@ function useAuth(redirectIfMissing: boolean) {
     return BRANCH_MAP[userBranch] ?? { ...DEFAULT_BRANCH, code: userBranch, displayName: userBranch }
   }, [userBranch])
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
     try {
+      await supabase.auth.signOut()
       localStorage.removeItem("user_branch")
-      localStorage.removeItem("isLoggedIn")
-    } catch (error) {}
+    } catch (error) {
+      console.error("Sign out failed:", error)
+    }
     setUserBranch(null)
     hasRedirected.current = false
     router.replace("/login")
@@ -241,7 +287,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className={`flex items-center gap-2.5 ${collapsed && !isMobile ? "justify-center" : ""}`}>
             <div className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse flex-shrink-0" />
             <span className={`font-bold text-sm tracking-wide text-gray-800 uppercase whitespace-nowrap transition-all duration-200 ${collapsed && !isMobile ? "w-0 opacity-0 overflow-hidden" : "w-auto opacity-100"}`}>
-              {branchInfo.code} Branch
+              {branchInfo.code}
             </span>
           </div>
           {!isMobile && (
@@ -285,7 +331,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               {branchInfo.code.substring(0, 2)}
             </div>
             <div className={`flex flex-col min-w-0 transition-all duration-200 ${collapsed && !isMobile ? "w-0 opacity-0 overflow-hidden" : "w-auto opacity-100"}`}>
-              <span className="text-xs font-semibold text-gray-800 truncate">Logged In</span>
+              <span className="text-xs font-semibold text-gray-800 truncate">Staff Active</span>
               <span className="text-[10px] text-gray-500 font-mono uppercase truncate">{branchInfo.displayName}</span>
             </div>
           </div>
@@ -299,18 +345,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* ── Floating Button (bottom-left) ── */}
-       {isMobile && (
-  <button
-    onClick={() => setMobileSidebarOpen(true)}
-    className="fixed bottom-6 left-6 z-50 w-12 h-12 bg-white/90 backdrop-blur-md border border-gray-200 rounded-full flex items-center justify-center shadow-lg hover:shadow-xl active:scale-95 transition-all duration-200 text-gray-600 hover:text-orange-600"
-    title="Open menu"
-  >
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-    </svg>
-  </button>
-)}
+        {/* Floating Button (bottom-left) */}
+        {isMobile && (
+          <button
+            onClick={() => setMobileSidebarOpen(true)}
+            className="fixed bottom-6 left-6 z-50 w-12 h-12 bg-white/90 backdrop-blur-md border border-gray-200 rounded-full flex items-center justify-center shadow-lg hover:shadow-xl active:scale-95 transition-all duration-200 text-gray-600 hover:text-orange-600"
+            title="Open menu"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        )}
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto bg-[#f3f3f3]">
@@ -319,4 +365,4 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
     </div>
   )
-}
+} 
