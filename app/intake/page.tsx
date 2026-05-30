@@ -480,13 +480,22 @@ export default function IntakePage() {
             </button>
           </div>
 
-          {/* Viewfinder Area (🛠️ ပုံမပြတ်၊ မရှည်စေရန် object-contain ဖြင့် မူရင်းအတိုင်းပြခြင်း) */}
-          <div className="flex-1 flex items-center justify-center my-2 overflow-hidden relative">
-            <div className="w-full h-full max-h-[60vh] bg-neutral-950 rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center border-2 border-neutral-900 relative">
-              <video ref={videoRef} className="w-full h-full object-contain" playsInline muted autoPlay />
-              <canvas ref={canvasRef} className="hidden" />
-            </div>
-          </div>
+          {/* Viewfinder Area (🛠️ ဖုန်းမှာ ဘေးမည်းလုံးဝမပါဘဲ စမတ်ကျကျ အပြည့်ပေါ်စေရန် ပြင်ဆင်ခြင်း) */}
+<div className="flex-1 flex items-center justify-center my-2 overflow-hidden relative">
+  <div className="w-full h-full bg-neutral-950 rounded-2xl overflow-hidden shadow-2xl relative border border-neutral-800">
+    
+    {/* object-cover သုံးပြီး w-full h-full ပေးလိုက်ရင် ဖုန်း screen အပြည့် ကွက်တိ ဖြစ်သွားပါလိမ့်မယ် */}
+    <video 
+      ref={videoRef} 
+      className="w-full h-full object-cover" 
+      playsInline 
+      muted 
+      autoPlay 
+    />
+    <canvas ref={canvasRef} className="hidden" />
+    
+  </div>
+</div>
 
           {/* Bottom Controls Panel */}
           <div className="flex flex-col gap-3 flex-shrink-0 pb-2">
