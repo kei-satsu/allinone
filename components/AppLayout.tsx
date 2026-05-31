@@ -197,12 +197,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const pathname = usePathname()
   const isLoginPage = pathname === "/login"
-  const isIntakePage = pathname === "/intake" // ✨ Intake Page ဟုတ်မဟုတ် စစ်ဆေးရန်
+  const isIntakePage = pathname === "/intake" 
   const { branchInfo, isAuthenticated, isReady, logout } = useAuth(!isLoginPage)
   const sidebarRef = useRef<HTMLElement>(null)
 
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
+
+  // 📊 Browser Tab Title အလိုအလျောက် သတ်မှတ်ပေးမည့်နေရာ
+  useEffect(() => {
+    if (branchInfo?.code) {
+      // အကယ်၍ Branch ရှိနေရင် (ဥပမာ - MDY) Title မှာပါ တစ်ပါတည်း ပြပေးပါမည်
+      const branchSuffix = branchInfo.code !== "ALL" ? ` (${branchInfo.code})` : ""
+      document.title = `ALL IN ONE${branchSuffix} | Express Delivery`
+    } else {
+      document.title = "ALL IN ONE | Express Delivery"
+    }
+  }, [branchInfo?.code])
 
   const [isMobile, setIsMobile] = useState(false)
   useEffect(() => {
@@ -227,7 +238,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       if ((e.metaKey || e.ctrlKey) && e.key === "b") {
         e.preventDefault()
         if (isMobile) {
-          if (!isIntakePage) setMobileSidebarOpen(prev => !prev) // Intake မှာဆို Shortcut ကိုပါ ကျော်ခိုင်းထားမည်
+          if (!isIntakePage) setMobileSidebarOpen(prev => !prev) 
         } else {
           setSidebarLocked(prev => !prev)
           if (!sidebarLocked) setSidebarExpanded(true)
@@ -273,32 +284,67 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }`}
       >
         {/* Sidebar header */}
-        <div className={`h-14 flex items-center border-b border-gray-100 flex-shrink-0 ${collapsed && !isMobile ? "justify-center px-2" : "px-4"}`}>
-          <div className={`flex items-center gap-2.5 ${collapsed && !isMobile ? "justify-center" : ""}`}>
-            <div className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse flex-shrink-0" />
-            <span className={`font-bold text-sm tracking-wide text-gray-800 uppercase whitespace-nowrap transition-all duration-200 ${collapsed && !isMobile ? "w-0 opacity-0 overflow-hidden" : "w-auto opacity-100"}`}>
+        <div className={`flex flex-col border-b border-gray-100 flex-shrink-0 transition-all duration-300 ${
+          collapsed && !isMobile ? "h-14 justify-center items-center px-2" : "min-h-[80px] justify-center px-4 py-3"
+        }`}>
+          
+          {/* Top Row: Logo, Brand Text and Action Buttons */}
+          <div className="flex items-center w-full justify-between">
+            
+            {/* 🖼️ Logo & Brand Name Section */}
+            <div className="flex items-center gap-2">
+              <img
+                src="/logo.png" 
+                alt="All In One Logo"
+                className="w-7 h-7 object-contain rounded"
+              />
+              <span className={`font-bold text-base tracking-tight text-orange-600 uppercase whitespace-nowrap transition-all duration-200 ${
+                collapsed && !isMobile ? "w-0 opacity-0 overflow-hidden" : "w-auto opacity-100"
+              }`}>
+                ALL IN ONE
+              </span>
+            </div>
+
+            {/* Pin / Close Button Section */}
+            <div className="flex items-center gap-1">
+              {!isMobile && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setSidebarLocked(!sidebarLocked)
+                    if (!sidebarLocked) setSidebarExpanded(true)
+                    else setSidebarExpanded(false)
+                  }}
+                  title={sidebarLocked ? "Unpin sidebar" : "Pin sidebar"}
+                  className={`flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center transition-all duration-150 ${
+                    sidebarLocked ? "bg-orange-100 text-orange-600" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                  } ${collapsed ? "hidden" : ""}`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                  </svg>
+                </button>
+              )}
+              {isMobile && (
+                <button onClick={() => setMobileSidebarOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 📍 Bottom Row: Branch Info (MDY, YGN, etc.) - Only shows when expanded */}
+          <div className={`flex items-center gap-2 mt-2 transition-all duration-200 ${
+            collapsed && !isMobile ? "hidden" : "flex"
+          }`}>
+            <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse flex-shrink-0" />
+            <span className="font-bold text-xs tracking-wider text-gray-500 uppercase whitespace-nowrap">
               {branchInfo.code}
             </span>
           </div>
-          {!isMobile && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                setSidebarLocked(!sidebarLocked)
-                if (!sidebarLocked) setSidebarExpanded(true)
-                else setSidebarExpanded(false)
-              }}
-              title={sidebarLocked ? "Unpin sidebar" : "Pin sidebar"}
-              className={`ml-auto flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center transition-all duration-150 ${sidebarLocked ? "bg-orange-100 text-orange-600" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"} ${collapsed ? "hidden" : ""}`}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
-            </button>
-          )}
-          {isMobile && (
-            <button onClick={() => setMobileSidebarOpen(false)} className="ml-auto w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-          )}
+
         </div>
 
         {/* Navigation */}
@@ -335,7 +381,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* 🛠️ Floating Button (bottom-left) - /intake စာမျက်နှာပေါ်မှာဆိုရင် ဖျောက်ထားပါမည် */}
+        {/* Floating Button (bottom-left) */}
         {isMobile && !isIntakePage && (
           <button
             onClick={() => setMobileSidebarOpen(true)}
@@ -348,7 +394,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </button>
         )}
 
-        {/* ➕ Floating Action Button (bottom-right) - Intake သို့သွားရန် Button (Desktop ရော Mobile ပါ ပေါ်ပါမည်) */}
+        {/* Floating Action Button (bottom-right) */}
         {!isIntakePage && (
           <Link
             href="/intake"

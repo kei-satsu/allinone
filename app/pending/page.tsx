@@ -34,6 +34,9 @@ export default function PendingEntry() {
   const [isResizing, setIsResizing] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
 
+  // ✨ Gallery Expand State
+  const [isThumbGridOpen, setIsThumbGridOpen] = useState(false)
+
   const today = new Date().toISOString().split('T')[0]
 
   const [formData, setFormData] = useState({
@@ -75,6 +78,39 @@ export default function PendingEntry() {
     return () => window.removeEventListener('resize', checkMobile)
   }, [router])
 
+  // ✨ Keyboard Arrow Key Navigation Handler (Shift + Arrow Key for Inputs)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (pendingItems.length <= 1 || !selectedItem) return
+
+      const currentIndex = pendingItems.findIndex(item => item.id === selectedItem.id)
+      if (currentIndex === -1) return
+
+      // လက်ရှိ Input, Textarea သို့မဟုတ် Select box ထဲမှာ Focus ရောက်နေသလား စစ်ဆေးမယ်
+      const isInputActive =
+        document.activeElement?.tagName === 'INPUT' ||
+        document.activeElement?.tagName === 'TEXTAREA' ||
+        document.activeElement?.tagName === 'SELECT'
+
+      // အကယ်၍ စာရိုက်တဲ့နေရာထဲ ရောက်နေပြီး Shift Key မပါဘူးဆိုရင် ဘာမှမလုပ်ဘဲ ကျော်သွားမယ်
+      if (isInputActive && !e.shiftKey) return
+
+      if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        const nextIndex = (currentIndex + 1) % pendingItems.length
+        // စာရိုက်နေရင်း Shift + Arrow နှိပ်တာဆိုရင် ပုံအသစ်ပြောင်းပြီး Sender Name အကွက်ထဲကို Focus တန်းပြန်ပေးမယ်
+        handleSelectItem(pendingItems[nextIndex], isInputActive)
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        const prevIndex = (currentIndex - 1 + pendingItems.length) % pendingItems.length
+        handleSelectItem(pendingItems[prevIndex], isInputActive)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [pendingItems, selectedItem])
+
   // Divider resize
   useEffect(() => {
     const handleResizeMove = (e: MouseEvent) => {
@@ -114,7 +150,7 @@ export default function PendingEntry() {
     }
   }
 
-  const handleSelectItem = (item: any) => {
+  const handleSelectItem = (item: any, shouldFocusInput = true) => {
     setSelectedItem(item)
     setOriginalCod(item.cod_amount || 0)
     setZoomScale(1); setRotation(0); setPosition({ x: 0, y: 0 })
@@ -140,7 +176,14 @@ export default function PendingEntry() {
       branch: item.branch || userBranch,
       image_url: item.image_url || ''
     }))
-    setTimeout(() => senderInputRef.current?.focus(), 50)
+
+    if (shouldFocusInput) {
+      setTimeout(() => senderInputRef.current?.focus(), 50)
+    } else {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur() // Arrow Key နဲ့ အမြန်ကျော်ရင် focus ဖြုတ်ပေးထားမယ်
+      }
+    }
   }
 
   const handleUndo = async () => {
@@ -282,13 +325,54 @@ export default function PendingEntry() {
       {/* Main Split Layout */}
       <div className="flex-1 overflow-hidden flex flex-col lg:flex-row relative">
         
-        {/* Left panel: Image + thumbnail strip (Mobile Responsive Updated) */}
+        {/* Left panel: Image + thumbnail strip */}
         <div 
           style={{ width: isMobile ? '100%' : `${leftWidth}px` }}
           className="w-full h-[45vh] lg:h-full lg:flex-shrink-0 border-b lg:border-b-0 lg:border-r border-gray-300 bg-gray-900 flex flex-col relative overflow-hidden"
         >
           {selectedItem ? (
             <>
+              {/* ✨ Expandable Grid View Overlay Panel */}
+              {isThumbGridOpen && (
+                <div className="absolute inset-0 bg-gray-950 z-40 flex flex-col p-4 transition-all duration-300">
+                  <div className="flex items-center justify-between mb-3 border-b border-gray-800 pb-2 flex-shrink-0">
+                    <h4 className="text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2">
+                      <span>Vouchers Gallery Grid</span>
+                      <span className="bg-orange-500 text-white font-mono text-[10px] px-2 py-0.5 rounded-full">{pendingItems.length} items</span>
+                    </h4>
+                    <button 
+                      type="button" 
+                      onClick={() => setIsThumbGridOpen(false)} 
+                      className="text-xs font-bold text-white bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg transition"
+                    >
+                      Close Grid View
+                    </button>
+                  </div>
+                  
+                  {/* Grid Scroll Area */}
+                  <div className="flex-1 grid grid-cols-4 sm:grid-cols-5 lg:grid-cols-4 xl:grid-cols-5 gap-2 overflow-y-auto content-start pb-4 pr-1 scrollbar-thin">
+                    {pendingItems.map((item, idx) => (
+                      <div
+                        key={item.id || idx}
+                        onClick={() => {
+                          handleSelectItem(item)
+                          setIsThumbGridOpen(false) // ပုံရွေးပြီးရင် grid ကိုပိတ်မယ်
+                        }}
+                        className={`aspect-[3/4] bg-gray-900 rounded-lg overflow-hidden cursor-pointer border-2 transition-all duration-200 relative group ${selectedItem.id === item.id ? 'border-orange-500 ring-2 ring-orange-500/30' : 'border-gray-800 hover:border-gray-500'}`}
+                      >
+                        <img src={item.image_url} className="w-full h-full object-cover select-none pointer-events-none" alt="thumb" />
+                        {item.uploader_note && (
+                          <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-black animate-pulse" title="Has Note" />
+                        )}
+                        <div className="absolute inset-x-0 bottom-0 bg-black/70 text-[10px] text-gray-300 px-1 py-0.5 truncate text-center font-mono group-hover:text-white">
+                          No. {idx + 1}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div 
                 className="flex-1 flex items-center justify-center p-3 bg-black overflow-hidden relative group select-none"
                 onWheel={handleWheel}
@@ -297,76 +381,67 @@ export default function PendingEntry() {
                 onMouseUp={handleMouseUpOrLeave}
                 onMouseLeave={handleMouseUpOrLeave}
               >
-               {/* 🛠️ Modernized Image Control Bar */}
-<div 
-  className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-gray-950/80 backdrop-blur-xl px-3 py-1.5 rounded-2xl flex items-center gap-2 border border-white/10 shadow-2xl z-20 transition-all duration-300"
-  onMouseDown={e => e.stopPropagation()}
->
-  {/* Zoom In Button */}
-  <button
-    type="button"
-    onClick={handleZoomIn}
-    className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-orange-500 hover:bg-white/5 rounded-xl transition-all duration-200 active:scale-95"
-    title="Zoom In"
-  >
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-    </svg>
-  </button>
+                {/* Image Control Bar */}
+                <div 
+                  className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-gray-950/80 backdrop-blur-xl px-3 py-1.5 rounded-2xl flex items-center gap-2 border border-white/10 shadow-2xl z-20 transition-all duration-300"
+                  onMouseDown={e => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    onClick={handleZoomIn}
+                    className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-orange-500 hover:bg-white/5 rounded-xl transition-all duration-200 active:scale-95"
+                    title="Zoom In"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                  </button>
 
-  {/* Zoom Out Button */}
-  <button
-    type="button"
-    onClick={handleZoomOut}
-    className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-orange-500 hover:bg-white/5 rounded-xl transition-all duration-200 active:scale-95"
-    title="Zoom Out"
-  >
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
-    </svg>
-  </button>
+                  <button
+                    type="button"
+                    onClick={handleZoomOut}
+                    className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-orange-500 hover:bg-white/5 rounded-xl transition-all duration-200 active:scale-95"
+                    title="Zoom Out"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
+                    </svg>
+                  </button>
 
-  {/* Divider */}
-  <div className="w-px h-4 bg-white/10 mx-0.5" />
+                  <div className="w-px h-4 bg-white/10 mx-0.5" />
 
-  {/* Rotate Left Button */}
-  <button
-    type="button"
-    onClick={handleRotateCounterClockwise}
-    className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-orange-500 hover:bg-white/5 rounded-xl transition-all duration-200 active:scale-95"
-    title="Rotate Left"
-  >
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.3}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
-    </svg>
-  </button>
+                  <button
+                    type="button"
+                    onClick={handleRotateCounterClockwise}
+                    className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-orange-500 hover:bg-white/5 rounded-xl transition-all duration-200 active:scale-95"
+                    title="Rotate Left"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                    </svg>
+                  </button>
 
-  {/* Rotate Right Button */}
-  <button
-    type="button"
-    onClick={handleRotateClockwise}
-    className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-orange-500 hover:bg-white/5 rounded-xl transition-all duration-200 active:scale-95"
-    title="Rotate Right"
-  >
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.3}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 000 12h3" />
-    </svg>
-  </button>
+                  <button
+                    type="button"
+                    onClick={handleRotateClockwise}
+                    className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-orange-500 hover:bg-white/5 rounded-xl transition-all duration-200 active:scale-95"
+                    title="Rotate Right"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 000 12h3" />
+                    </svg>
+                  </button>
 
-  {/* Divider */}
-  <div className="w-px h-4 bg-white/10 mx-0.5" />
+                  <div className="w-px h-4 bg-white/10 mx-0.5" />
 
-  {/* Sleek Reset Button */}
-  <button
-    type="button"
-    onClick={handleResetImage}
-    className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all duration-200 active:scale-95 flex items-center gap-1"
-  >
-    Reset
-  </button>
-</div>
-
-               
+                  <button
+                    type="button"
+                    onClick={handleResetImage}
+                    className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all duration-200 active:scale-95 flex items-center gap-1"
+                  >
+                    Reset
+                  </button>
+                </div>
 
                 <div className="w-full h-full flex items-center justify-center overflow-hidden pointer-events-none">
                   <img 
@@ -386,7 +461,25 @@ export default function PendingEntry() {
                 </div>
               </div>
               
-              <div className="h-20 bg-gray-950 border-t border-gray-800 p-1.5 flex gap-2 overflow-x-auto scrollbar-thin flex-shrink-0">
+              {/* Bottom Strip Zone with Expand Grid Trigger */}
+              <div className="h-20 bg-gray-950 border-t border-gray-800 p-1.5 flex gap-2 overflow-x-auto scrollbar-thin flex-shrink-0 items-center">
+                
+                {/* ✨ Grid Trigger Icon Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsThumbGridOpen(true)}
+                  className="w-14 h-full min-w-[56px] rounded-md bg-gray-800 hover:bg-orange-600 text-gray-300 hover:text-white border border-gray-700 flex flex-col items-center justify-center transition-all gap-1 shrink-0 active:scale-95 shadow-lg"
+                  title="Expand All Vouchers (Grid View)"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.3} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                  </svg>
+                  <span className="text-[9px] font-bold uppercase tracking-wider">Expand</span>
+                </button>
+
+                <div className="w-px h-full bg-gray-800 shrink-0" />
+
+                {/* Horizontal list of thumbnails */}
                 {pendingItems.map((item, idx) => (
                   <div 
                     key={item.id || idx}
@@ -416,7 +509,7 @@ export default function PendingEntry() {
           className={`hidden lg:block w-2 h-full cursor-col-resize transition-colors flex-shrink-0 z-30 ${isResizing ? 'bg-orange-500' : 'bg-gray-800 hover:bg-orange-500'} border-l border-r border-gray-950/40`}
         />
 
-        {/* Right panel: Form (Mobile Scrollable) */}
+        {/* Right panel: Form */}
         <div className="flex-1 overflow-y-auto p-4">
           <form onSubmit={handleSubmit} className="w-full space-y-4">
             
@@ -586,7 +679,7 @@ export default function PendingEntry() {
             </div>
           </form>
         </div>
-      </div>
+      </div>      
     </div>
   )
-}
+} 
