@@ -31,6 +31,18 @@ export default function BulkUpdatePage() {
   const winSelect = "w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-gray-800 text-sm focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all appearance-none bg-no-repeat bg-[length:0.75rem_auto] bg-[right_1rem_center] cursor-pointer shadow-sm"
   const labelStyle = "block text-gray-600 font-semibold mb-1 uppercase text-[11px] tracking-wide"
 
+  // 📝 🌟 (ဒီနေရာတွင် လာထည့်ပေးပါ) လှုပ်ရှားမှု မှတ်တမ်းအသစ် ဖန်တီးပေးမည့် Helper Function
+  const appendLog = (currentHistory: any[], action: string, note: string) => {
+    const operator = userBranch || localStorage.getItem('user_branch') || 'Unknown Office';
+    const newLogEntry = {
+      timestamp: new Date().toISOString(),
+      action: action,
+      operator: operator,
+      note: note
+    };
+    return [...(currentHistory || []), newLogEntry];
+  };
+
   // 1. Initial Load & Auth Check
   useEffect(() => {
     const storedBranch = localStorage.getItem('user_branch')
@@ -172,33 +184,78 @@ export default function BulkUpdatePage() {
     }
   }
 
-  // 4. Execute Bulk Update
+  // 🔥 4. Execute Bulk Update (သမိုင်းကြောင်းမှတ်တမ်းပါ JSON ထဲ တစ်ခါတည်း ထည့်သွင်းမည့် စနစ်သစ်)
   const handleBulkUpdateSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (selectedIds.length === 0) return alert("ကျေးဇူးပြု၍ အပ်ဒိတ်လုပ်မည့် ပါဆယ်ထုပ်များကို အရင်ရွေးချယ်ပါ!")
 
     setLoading(true)
-    const updatePayload: any = {
-      status: bulkStatus,
-      deliver_rider_id: bulkRiderId || null,
-      deliver_date: bulkDeliverDate || null
-    }
 
-    const { error } = await supabase
-      .from('orders')
-      .update(updatePayload)
-      .in('id', selectedIds) 
+    try {
+      // ၁။ ရွေးချယ်လိုက်တဲ့ Rider ရဲ့ အမည်ကို ရှာဖွေခြင်း
+      const selectedRider = riders.find(r => r.id === bulkRiderId);
+      const riderName = selectedRider ? selectedRider.name : 'ဖြုတ်လိုက်သည်';
 
-    if (!error) {
-      alert(`ပါဆယ်ထုပ် (${selectedIds.length}) ထုပ်အား Status ပြောင်းလဲခြင်း အောင်မြင်ပါသည်! 🎉`)
-      setSelectedIds([])
-      setSearchTerm('')
-      fetchRecentOrders(userBranch)
-    } else {
-      alert("Error: ဒေတာများ အပ်ဒိတ်လုပ်ခြင်း မအောင်မြင်ပါ။ " + error.message)
+      // ၂။ ရွေးချယ်ထားသော ပါဆယ် ID တစ်ခုချင်းစီအတွက် သီးသန့် Log တွက်ချက်ပြီး Update လုပ်ရန် Map ပတ်ခြင်း
+      const updatePromises = selectedIds.map(async (id) => {
+        // လက်ရှိပြသနေတဲ့ orders စာရင်းထဲကနေ ဒီပါဆယ်ရဲ့ လက်ရှိဒေတာကို ရှာဖွေမယ်
+        const currentOrder = orders.find(o => o.id === id);
+        if (!currentOrder) return null;
+
+        let changes: string[] = [];
+        
+        // Status ပြောင်းလဲသွားခြင်း ရှိမရှိ စစ်ဆေးပြီး Log စာသားတည်ဆောက်ခြင်း
+        if (currentOrder.status !== bulkStatus) {
+          changes.push(`Bulk စနစ်ဖြင့် Status ကို "${currentOrder.status || 'At Office'}" မှ "${bulkStatus}" သို့ ပြောင်းလဲခဲ့သည်`);
+        }
+        
+        // Rider ပြောင်းလဲသွားခြင်း ရှိမရှိ စစ်ဆေးခြင်း
+        if (currentOrder.deliver_rider_id !== bulkRiderId) {
+          changes.push(`Rider ကို "${riderName}" သို့ တာဝန်ပေးခဲ့သည်`);
+        }
+
+        // အကယ်၍ ဘာမှမပြောင်းလဲဘဲ Date ပဲပြင်တာမျိုးဆိုလျှင်
+        if (changes.length === 0) {
+          changes.push("Bulk စနစ်ဖြင့် ပါဆယ်အချက်အလက်များကို ပြင်ဆင်ခဲ့သည်");
+        }
+
+        const logNote = changes.join("၊ ");
+        
+        // မူလရှိပြီးသား JSON History ထဲသို့ Log အသစ်ကို လှမ်းပေါင်းထည့်ခြင်း
+        const updatedHistory = appendLog(currentOrder.history, "Bulk Updated", logNote);
+
+        // Supabase ထဲသို့ တစ်ထုပ်ချင်းစီအလိုက် သီးသန့် သမိုင်းကြောင်းဖြင့် Update သွားလုပ်ခြင်း
+        return supabase
+          .from('orders')
+          .update({
+            status: bulkStatus,
+            deliver_rider_id: bulkRiderId || null,
+            deliver_date: bulkDeliverDate || null,
+            history: updatedHistory // 🌟 JSON History Log အသစ်
+          })
+          .eq('id', id);
+      });
+
+      // ၃။ ဒေတာဘေ့စ် Update တောင်းဆိုမှုအားလုံးကို တစ်ပြိုင်တည်း (Parallel) လှမ်းပို့လိုက်ခြင်း
+      const results = await Promise.all(updatePromises);
+      
+      // Error ရှိမရှိ စစ်ဆေးခြင်း
+      const hasError = results.some(res => res && res.error);
+
+      if (!hasError) {
+        alert(`ပါဆယ်ထုပ် (${selectedIds.length}) ထုပ်အား Status နှင့် လှုပ်ရှားမှုမှတ်တမ်း ပြောင်းလဲခြင်း အောင်မြင်ပါသည်! 🎉`);
+        setSelectedIds([])
+        setSearchTerm('')
+        fetchRecentOrders(userBranch)
+      } else {
+        alert("ဒေတာအချို့ကို အပ်ဒိတ်လုပ်ရာတွင် အမှားအယွင်း ရှိခဲ့ပါသည်။ ကျေးဇူးပြု၍ ပြန်လည်စစ်ဆေးပါ။")
+      }
+    } catch (error: any) {
+      alert("Error: " + error.message)
+    } finally {
+      setLoading(false)
+      qrInputRef.current?.focus()
     }
-    setLoading(false)
-    qrInputRef.current?.focus()
   }
 
   return (
@@ -294,10 +351,10 @@ export default function BulkUpdatePage() {
               <label className={labelStyle}>2. Change Status To</label>
               <div className="relative">
                 <select value={bulkStatus} onChange={e => setBulkStatus(e.target.value)} className={winSelect}>
-                  <option value="In-Transit">🚚 On Way (In-Transit)</option>
-                  <option value="Delivered">✅ Delivered (ပို့ဆောင်ပြီး)</option>
-                  <option value="At Office">📦 At Office (ရုံးရောက်)</option>
-                  <option value="Pending">⏳ Pending</option>
+                   <option value="At Office">📦 At Office</option>
+                    <option value="On Way">🚵 On Way</option>
+                    <option value="Delivered">✅ Delivered</option>
+                    <option value="In-Transit">🚚 In-Transit</option>
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">▼</div>
               </div>

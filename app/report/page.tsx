@@ -18,6 +18,13 @@ export default function DailyReport() {
   const [handoverAmounts, setHandoverAmounts] = useState({ cash: 0, kpay: 0, wave: 0 })
   const [submitting, setSubmitting] = useState(false)
 
+  // ✨ BUG 4 FIXED: Detailed Table Filter များအတွက် State များ သတ်မှတ်ခြင်း
+  const [filterId, setFilterId] = useState('')
+  const [filterSender, setFilterSender] = useState('')
+  const [filterReceiver, setFilterReceiver] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
+  const [filterRider, setFilterRider] = useState('')
+
   // 1. Auth & Branch
   useEffect(() => {
     const storedBranch = localStorage.getItem('user_branch')
@@ -76,40 +83,57 @@ export default function DailyReport() {
     if(userBranch) fetchReport() 
   }, [selectedDate, userBranch])
 
-  // 3. Calculations (unchanged)
-  const deliveredToday = reportData.filter(o => o.deliver_date === selectedDate)
+  // 3. Calculations
+  const deliveredToday = reportData.filter(o => o.deliver_date === selectedDate && o.status === 'Delivered')
   const totalCodDelivered = deliveredToday.reduce((sum, o) => sum + (o.cod_amount || 0), 0)
   const totalCashAdded = Object.values(handovers).reduce((a,b) => a+b, 0)
 
-  const riderSummary: Record<string, { ways: number; due: number; handedIn: number; pending: number }> = {}
+  // 🚴 Rider Ledger Logic Setup
+  const riderSummary: Record<string, { ways: number; onWay: number; due: number; handedIn: number; pending: number }> = {}
+  
+  // ✨ BUG 2 FIXED: ဒီနေ့ ပါဆယ်မရှိဘဲ ငွေပဲလာအပ်သွားတဲ့ Rider တွေ စာရင်းမပျောက်အောင် ကြိုထည့်ထားခြင်း
+  Object.keys(handovers).forEach(riderName => {
+    riderSummary[riderName] = { ways: 0, onWay: 0, due: 0, handedIn: 0, pending: 0 }
+  })
+
   reportData.forEach(o => {
     const riderName = o.deliver_rider?.name || 'Unknown Rider'
     if (o.receiver_loc === riderLocFilter) {
       if (!riderSummary[riderName]) {
-        riderSummary[riderName] = { ways: 0, due: 0, handedIn: 0, pending: 0 }
+        riderSummary[riderName] = { ways: 0, onWay: 0, due: 0, handedIn: 0, pending: 0 }
       }
+      
+      // Delivered Ways တွက်ချက်ခြင်း
       if (o.deliver_date === selectedDate && o.status === 'Delivered' && o.note !== 'RT') {
         riderSummary[riderName].ways += 1
         riderSummary[riderName].due += (o.total_amount || 0)
       }
+
+      // 💡 USER RULE: Rider ယူသွားပြီး မပို့ရသေးတဲ့ ပစ္စည်းကို "On-way" အဖြစ် သတ်မှတ်ရေတွက်ခြင်း
+      if (o.status === 'On-way') {
+        riderSummary[riderName].onWay += 1
+      }
     }
   })
+
   Object.keys(riderSummary).forEach(rider => {
     riderSummary[rider].handedIn = handovers[rider] || 0
     riderSummary[rider].pending = riderSummary[rider].due - riderSummary[rider].handedIn
   })
 
   const grandRiderWays = Object.values(riderSummary).reduce((a, b) => a + b.ways, 0)
+  const grandRiderOnWay = Object.values(riderSummary).reduce((a, b) => a + b.onWay, 0) // On-way Total
   const grandRiderDue = Object.values(riderSummary).reduce((a, b) => a + b.due, 0)
   const grandRiderHandedIn = Object.values(riderSummary).reduce((a, b) => a + b.handedIn, 0)
   const grandRiderPending = Object.values(riderSummary).reduce((a, b) => a + b.pending, 0)
 
-  // OS Payout (unchanged)
+  // OS Payout Calculation
   const calculateOS = (cityName: string) => {
     const senders: Record<string, number> = {}
     let posSum = 0, negSum = 0
     reportData.forEach(o => {
-      if (o.sender_loc === cityName && o.receiver_loc === 'MDY' && o.status === 'Delivered' && o.note !== 'RT') {
+      // ✨ BUG 3 FIXED: o.deliver_date === selectedDate ကို စစ်လိုက်ခြင်းဖြင့် ရက်ဟောင်းက ငွေစာရင်းလာသွင်းတာတွေ ပေါင်းမသွားတော့ပါ
+      if (o.deliver_date === selectedDate && o.sender_loc === cityName && o.receiver_loc === 'MDY' && o.status === 'Delivered' && o.note !== 'RT') {
         const senderName = o.sender_name || 'Unknown'
         if (!senders[senderName]) senders[senderName] = 0
         senders[senderName] += (o.cod_amount || 0)
@@ -121,11 +145,12 @@ export default function DailyReport() {
   const osMDY = calculateOS('MDY')
   const osYGN = calculateOS('YGN')
 
-  // 4. Handover submission (unchanged)
+  // 4. Handover submission
   const handleHandIn = async (riderName: string) => {
     setHandoverAmounts({ cash: 0, kpay: 0, wave: 0 })
     setHandoverModal({ open: true, riderName })
   }
+
   const submitHandover = async () => {
     const { cash, kpay, wave } = handoverAmounts
     const total = cash + kpay + wave
@@ -142,6 +167,7 @@ export default function DailyReport() {
         cash_amount: cash,
         kpay_amount: kpay,
         wave_amount: wave,
+        total_amount: total, // ✨ BUG 1 FIXED: DB ထဲ စုစုပေါင်း total_amount ပါ တခါတည်းတွက်ထည့်ပေးလိုက်ခြင်း
         created_by: userBranch,
         notes: `Handover from ${handoverModal.riderName} on ${selectedDate}`
       })
@@ -155,6 +181,16 @@ export default function DailyReport() {
     setSubmitting(false)
   }
 
+  // ✨ BUG 4 FIXED: Table ရဲ့ Input များမှ Filter စစ်ထုတ်ပေးမည့် Logic
+  const filteredReportData = reportData.filter(o => {
+    const matchId = !filterId || o.item_id?.toLowerCase().includes(filterId.toLowerCase())
+    const matchSender = !filterSender || o.sender_name?.toLowerCase().includes(filterSender.toLowerCase())
+    const matchReceiver = !filterReceiver || o.receiver_name?.toLowerCase().includes(filterReceiver.toLowerCase())
+    const matchStatus = !filterStatus || o.status?.toLowerCase().includes(filterStatus.toLowerCase())
+    const matchRider = !filterRider || o.deliver_rider?.name?.toLowerCase().includes(filterRider.toLowerCase())
+    return matchId && matchSender && matchReceiver && matchStatus && matchRider
+  })
+
   // Windows 10 Excel-like styles
   const card = "bg-white border border-gray-200 rounded-lg p-4 shadow-sm"
   const tableHeaderCell = "py-2 px-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wider bg-white sticky top-0 z-10"
@@ -162,7 +198,7 @@ export default function DailyReport() {
 
   return (
     <div className="min-h-screen bg-[#f0f2f5] font-[system-ui,-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif] text-sm text-gray-800">
-      {/* ── Top Bar (Windows 10 style) ── */}
+      {/* ── Top Bar ── */}
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-sm">
         <div className="flex items-center gap-3">
           <span className="relative flex h-2.5 w-2.5">
@@ -170,12 +206,8 @@ export default function DailyReport() {
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500" />
           </span>
           <div>
-            <h1 className="text-base font-semibold text-gray-900 tracking-wide uppercase">
-              Daily Settlement Report
-            </h1>
-            <p className="text-[11px] text-gray-500 font-medium">
-              Branch: {userBranch} · {selectedDate}
-            </p>
+            <h1 className="text-base font-semibold text-gray-900 tracking-wide uppercase">Daily Settlement Report</h1>
+            <p className="text-[11px] text-gray-500 font-medium">Branch: {userBranch} · {selectedDate}</p>
           </div>
         </div>
         
@@ -199,7 +231,7 @@ export default function DailyReport() {
         {/* ── Summary Cards ── */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
           <div className={card}>
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Total Deliver Ways</span>
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Total Delivered Ways</span>
             <p className="text-xl font-bold text-gray-900 mt-1">{deliveredToday.length} <span className="text-sm font-medium text-gray-500">Ways</span></p>
           </div>
           <div className={card}>
@@ -210,9 +242,9 @@ export default function DailyReport() {
             <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Total Cash Handed In</span>
             <p className="text-xl font-bold text-blue-600 mt-1">{totalCashAdded.toLocaleString()} <span className="text-xs font-medium text-blue-500">Ks</span></p>
           </div>
-          <div className={`${card} bg-gray-50/50 border-dashed`}>
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Block 4</span>
-            <p className="text-sm text-gray-400 italic mt-1">[ Formula Later ]</p>
+          <div className={card}>
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Total On-Way Items</span>
+            <p className="text-xl font-bold text-orange-600 mt-1">{grandRiderOnWay} <span className="text-xs font-medium text-orange-400">Items</span></p>
           </div>
           <div className={`${card} bg-gray-50/50 border-dashed`}>
             <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Block 5</span>
@@ -226,11 +258,12 @@ export default function DailyReport() {
 
         {/* ── Rider Ledger & OS Payout ── */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          
           {/* Rider Hand-In Ledger */}
-          <div className="lg:col-span-5 bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+          <div className="lg:col-span-6 bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
             <div className="bg-gray-100 px-4 py-3 flex justify-between items-center border-b border-gray-200">
               <h2 className="text-xs font-semibold text-gray-800 uppercase tracking-wider flex items-center gap-2">
-                🚴 Rider Hand-In Ledger
+                🚴 Rider Hand-In Ledger (On-Way Tracked)
               </h2>
               <select 
                 value={riderLocFilter} 
@@ -247,7 +280,8 @@ export default function DailyReport() {
                 <thead>
                   <tr className="border-b border-gray-200">
                     <th className={tableHeaderCell}>Rider</th>
-                    <th className={`${tableHeaderCell} text-center`}>Ways</th>
+                    <th className={`${tableHeaderCell} text-center`}>Deli Ways</th>
+                    <th className={`${tableHeaderCell} text-center text-orange-600`}>On-Way</th>
                     <th className={`${tableHeaderCell} text-right`}>Due (Ks)</th>
                     <th className={`${tableHeaderCell} text-right text-blue-600`}>Handed In</th>
                     <th className={`${tableHeaderCell} text-right text-amber-600`}>Pending</th>
@@ -262,6 +296,8 @@ export default function DailyReport() {
                       <tr key={rider} className="hover:bg-gray-50/60">
                         <td className="py-2 px-3 font-medium text-gray-800">{rider}</td>
                         <td className="py-2 px-3 text-center font-mono text-gray-600">{data.ways}</td>
+                        {/* 💡 On-Way ကော်လံအသစ် ထည့်သွင်းပြသမှု */}
+                        <td className="py-2 px-3 text-center font-mono font-bold text-orange-600 bg-orange-50/50">{data.onWay}</td>
                         <td className="py-2 px-3 text-right font-mono text-gray-800">{data.due.toLocaleString()}</td>
                         <td className="py-2 px-3 text-right font-mono text-blue-600">{data.handedIn.toLocaleString()}</td>
                         <td className="py-2 px-3 text-right font-mono text-amber-600">{data.pending.toLocaleString()}</td>
@@ -272,9 +308,7 @@ export default function DailyReport() {
                         </td>
                         <td className="py-2 px-3 text-center">
                           {isCleared ? (
-                            <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-green-200">
-                              ✓ Cleared
-                            </span>
+                            <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-green-200">✓ Cleared</span>
                           ) : data.pending > 0 ? (
                             <span className="text-amber-600 text-[10px] font-semibold">Pending</span>
                           ) : (
@@ -289,18 +323,19 @@ export default function DailyReport() {
             </div>
 
             {/* Grand totals */}
-            <div className="bg-gray-900 text-gray-200 px-4 py-2 grid grid-cols-7 text-[10px] font-semibold uppercase tracking-wider">
-              <span className="col-span-1">Total</span>
+            <div className="bg-gray-900 text-gray-200 px-4 py-2 grid grid-cols-8 text-[10px] font-semibold uppercase tracking-wider items-center">
+              <span>Total</span>
               <span className="text-center">{grandRiderWays} W</span>
+              <span className="text-center text-orange-400">{grandRiderOnWay} OW</span>
               <span className="text-right text-gray-300">{grandRiderDue.toLocaleString()}</span>
               <span className="text-right text-blue-400">{grandRiderHandedIn.toLocaleString()}</span>
               <span className="text-right text-amber-400">{grandRiderPending.toLocaleString()}</span>
-              <span className="text-center col-span-2"></span>
+              <span className="col-span-2"></span>
             </div>
           </div>
 
-          {/* OS Payout (two columns) */}
-          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-5">
+          {/* OS Payout */}
+          <div className="lg:col-span-6 grid grid-cols-1 sm:grid-cols-2 gap-5">
             {/* MDY OS */}
             <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
               <div className="bg-orange-500 text-white px-4 py-3">
@@ -363,12 +398,12 @@ export default function DailyReport() {
           </div>
         </div>
 
-        {/* ── Detailed Records Table (Excel style) ── */}
+        {/* ── Detailed Records Table ── */}
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
           <div className="px-4 py-3 bg-gray-100 border-b border-gray-200 flex justify-between items-center">
             <h2 className="text-xs font-semibold text-gray-800 uppercase tracking-wider">📋 Detailed Records Verification</h2>
             <span className="text-[10px] bg-white border border-gray-300 text-gray-700 px-2.5 py-0.5 rounded-full font-medium">
-              {reportData.length} Vouchers
+              Showing {filteredReportData.length} of {reportData.length} Vouchers
             </span>
           </div>
 
@@ -387,15 +422,15 @@ export default function DailyReport() {
                   <th className={`${tableHeaderCell} text-right`}>COD</th>
                   <th className={`${tableHeaderCell} text-right`}>TOTAL</th>
                 </tr>
-                {/* Filter row (like OrderList) */}
+                {/* ✨ BUG 4 FIXED: Input ဘောက်စ်များတွင် Value နှင့် onChange များ ချိတ်ဆက်လိုက်ခြင်း */}
                 <tr className="bg-gray-50/80 border-b border-gray-200">
-                  <th className="px-2 py-1"><input className={filterInput} placeholder="Filter ID" /></th>
-                  <th className="px-2 py-1"><input className={filterInput} placeholder="Sender" /></th>
-                  <th className="px-2 py-1"><input className={filterInput} placeholder="Receiver" /></th>
-                  <th className="px-2 py-1"><input className={filterInput} placeholder="Status" /></th>
-                  <th className="px-2 py-1"><input className={filterInput} placeholder="Date" /></th>
-                  <th className="px-2 py-1"><input className={filterInput} placeholder="Date" /></th>
-                  <th className="px-2 py-1"><input className={filterInput} placeholder="Rider" /></th>
+                  <th className="px-2 py-1"><input className={filterInput} placeholder="Filter ID" value={filterId} onChange={(e) => setFilterId(e.target.value)} /></th>
+                  <th className="px-2 py-1"><input className={filterInput} placeholder="Sender" value={filterSender} onChange={(e) => setFilterSender(e.target.value)} /></th>
+                  <th className="px-2 py-1"><input className={filterInput} placeholder="Receiver" value={filterReceiver} onChange={(e) => setFilterReceiver(e.target.value)} /></th>
+                  <th className="px-2 py-1"><input className={filterInput} placeholder="Status" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} /></th>
+                  <th className="px-2 py-1"></th>
+                  <th className="px-2 py-1"></th>
+                  <th className="px-2 py-1"><input className={filterInput} placeholder="Rider" value={filterRider} onChange={(e) => setFilterRider(e.target.value)} /></th>
                   <th className="px-2 py-1"></th>
                   <th className="px-2 py-1"></th>
                   <th className="px-2 py-1"></th>
@@ -404,10 +439,10 @@ export default function DailyReport() {
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
                   <tr><td colSpan={10} className="p-12 text-center font-medium text-gray-400">Loading records...</td></tr>
-                ) : reportData.length === 0 ? (
-                  <tr><td colSpan={10} className="p-12 text-center text-gray-400 font-medium">No records found for this date.</td></tr>
+                ) : filteredReportData.length === 0 ? (
+                  <tr><td colSpan={10} className="p-12 text-center text-gray-400 font-medium">No matching records found.</td></tr>
                 ) : (
-                  reportData.map((o) => {
+                  filteredReportData.map((o) => {
                     const isDeliverMatch = o.deliver_date === selectedDate;
                     const isCashMatch = o.cash_added_date === selectedDate;
                     return (
@@ -424,6 +459,7 @@ export default function DailyReport() {
                         <td className="py-2 px-3 text-center">
                           <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
                             o.status === 'Delivered' ? 'bg-green-50 text-green-700 border-green-200' : 
+                            o.status === 'On-way' ? 'bg-orange-50 text-orange-700 border-orange-200' :
                             o.status === 'Pending' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
                             'bg-gray-100 text-gray-600 border-gray-200'
                           }`}>{o.status}</span>
@@ -448,7 +484,7 @@ export default function DailyReport() {
         </div>
       </div>
 
-      {/* ── Handover Modal (Windows 10 Dialog) ── */}
+      {/* ── Handover Modal ── */}
       {handoverModal.open && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-[1px] flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-2xl border border-gray-200 w-full max-w-md">
@@ -463,7 +499,7 @@ export default function DailyReport() {
                   type="number"
                   value={handoverAmounts.cash}
                   onChange={(e) => setHandoverAmounts({ ...handoverAmounts, cash: parseInt(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 shadow-sm"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:border-orange-500"
                   placeholder="0"
                 />
               </div>
@@ -473,7 +509,7 @@ export default function DailyReport() {
                   type="number"
                   value={handoverAmounts.kpay}
                   onChange={(e) => setHandoverAmounts({ ...handoverAmounts, kpay: parseInt(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 shadow-sm"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:border-orange-500"
                   placeholder="0"
                 />
               </div>
@@ -483,7 +519,7 @@ export default function DailyReport() {
                   type="number"
                   value={handoverAmounts.wave}
                   onChange={(e) => setHandoverAmounts({ ...handoverAmounts, wave: parseInt(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 shadow-sm"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:border-orange-500"
                   placeholder="0"
                 />
               </div>
