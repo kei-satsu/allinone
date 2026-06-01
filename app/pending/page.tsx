@@ -109,7 +109,7 @@ export default function PendingEntry() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [pendingItems, selectedItem])
+  }, [pendingItems, selectedItem])    
 
   // Divider resize
   useEffect(() => {
@@ -661,7 +661,8 @@ export default function PendingEntry() {
                     <label className={labelStyle}>Status</label>
                     <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className={winSelect} onKeyDown={handleSelectKeyDown} disabled={!selectedItem}>
                       <option value="At Office">📦 At Office</option>
-                      <option value="Pending">📦 Pending</option>
+                      <option value="On Way">🚵 On Way</option>
+                      <option value="Delivered">✅ Delivered</option>
                       <option value="In-Transit">🚚 In-Transit</option>
                     </select>
                   </div>

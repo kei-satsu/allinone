@@ -28,6 +28,23 @@ const COLUMN_DEFS = [
   { key: 'created_at', label: 'Created At', defaultVisible: false },
 ]
 
+/// 🌟 Cloudinary URL ထဲကနေ ပုံရဲ့ Public ID ကို ထုတ်ယူပေးမည့် Function
+const extractPublicId = (url: string) => {
+  try {
+    const parts = url.split('/upload/');
+    if (parts.length < 2) return null;
+    const rightPart = parts[1];
+    const pathParts = rightPart.split('/');
+    if (pathParts[0].startsWith('v')) {
+      pathParts.shift(); // v12345678 စာသားကို ဖယ်ထုတ်ခြင်း
+    }
+    return pathParts.join('/').split('.')[0]; // extension (.jpg/.png) ကို ဖြတ်ချပြီး publicId ယူခြင်း
+  } catch (error) {
+    return null;
+  }
+}
+
+
 export default function OrderList() {
   const router = useRouter()
   const [orders, setOrders] = useState<any[]>([])
@@ -64,6 +81,7 @@ export default function OrderList() {
         pickup_rider:riders!orders_pickup_rider_id_fkey(name),
         deliver_rider:riders!orders_deliver_rider_id_fkey(name)
       `)
+      .eq('is_deleted', false)
       .eq('branch', activeBranch)
       .order('created_at', { ascending: false })
 
@@ -123,14 +141,108 @@ export default function OrderList() {
     })
   }
 
-  const handleDeleteOrder = async (orderId: string) => {
-    if (confirm("ဒီမှတ်တမ်းကို ဖျက်ရန် သေချာပါသလား?")) {
-      const { error } = await supabase.from('orders').delete().eq('id', orderId)
-      if (error) alert(error.message)
-      else fetchData()
+ // ✅ အစားထိုးရမည့် ကုတ်အသစ် (Soft Delete စနစ်)
+const handleDeleteOrder = async (orderId: string) => {
+  if (confirm("ဒီမှတ်တမ်းကို အမှိုက်ပုံး (Recently Deleted) ထဲသို့ ထည့်ရန် သေချာပါသလား?")) {
+    // တကယ်မဖျက်တော့ဘဲ အမှတ်အသားပဲ လုပ်လိုက်ပါမယ်
+    const { error } = await supabase
+      .from('orders')
+      .update({ 
+        is_deleted: true, 
+        deleted_at: new Date().toISOString() 
+      })
+      .eq('id', orderId)
+
+    if (error) alert(error.message)
+    else fetchData() // စာရင်းကို Re-fresh ပြန်လုပ်မယ်
+  }
+}
+
+// 🌟 ပုံကိုပဲ သီးသန့် ဖျက်ထုတ်မည့် Function
+  const handleRemoveImageOnly = async (order: any) => {
+    if (!order.image_url) return;
+    if (confirm("ဒီပါဆယ်မှတ်တမ်းရဲ့ ပုံကိုပဲ သီးသန့် အပြီးဖျက်ရန် သေချာပါသလား?")) {
+      setLoading(true);
+      const publicId = extractPublicId(order.image_url);
+      
+      if (publicId) {
+        // ၁။ Cloudinary API Route ကို လှမ်းခေါ်ပြီး ပုံဖျက်မယ်
+        await fetch('/api/cloudinary/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ publicId })
+        });
+      }
+
+      // ၂။ Supabase ဒေတာဘေ့စ်ထဲမှာ image_url ကို null (ဘာမှမရှိ) ပြောင်းမယ်
+      const { error } = await supabase
+        .from('orders')
+        .update({ image_url: null })
+        .eq('id', order.id);
+
+      if (error) {
+        alert(error.message);
+      } else {
+        alert("ပုံကို အောင်မြင်စွာ ဖျက်ပြီးပါပြီ။");
+        setEditingOrder({ ...editingOrder, image_url: null });
+        fetchData();
+      }
+      setLoading(false);
     }
   }
 
+  // 🌟 ပုံဟောင်းကို ဖျက်ပြီး ပုံအသစ်နဲ့ လဲလှယ်မည့် Function
+  const handleReplaceImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !editingOrder) return;
+
+    if (confirm("ပုံဟောင်းကို ဖျက်ပြီး ပုံအသစ်နှင့် လဲလှယ်ရန် သေချာပါသလား?")) {
+      setLoading(true);
+      try {
+        // ၁။ ပုံအသစ်ကို Cloudinary ပေါ် တိုက်ရိုက် တင်မယ်
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', 'for_allinone'); // ⚠️ သင်၏ Upload Preset အမည် ပြင်ပေးပါ
+
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+        const uploadedData = await res.json();
+        if (uploadedData.error) throw new Error(uploadedData.error.message);
+
+        const newImageUrl = uploadedData.secure_url;
+
+        // ၂။ ပုံဟောင်း ရှိနေခဲ့ရင် Cloudinary ပေါ်က သွားဖျက်မယ်
+        if (editingOrder.image_url) {
+          const oldPublicId = extractPublicId(editingOrder.image_url);
+          if (oldPublicId) {
+            await fetch('/api/cloudinary/delete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ publicId: oldPublicId })
+            });
+          }
+        }
+
+        // ၃။ Supabase ထဲမှာ ပုံအသစ် URL နဲ့ သွားသိမ်းမယ်
+        const { error } = await supabase
+          .from('orders')
+          .update({ image_url: newImageUrl })
+          .eq('id', editingOrder.id);
+
+        if (error) throw error;
+
+        setEditingOrder({ ...editingOrder, image_url: newImageUrl });
+        alert("ပုံအသစ်ကို အောင်မြင်စွာ လဲလှယ်ပြီးပါပြီ။");
+        fetchData();
+      } catch (err: any) {
+        alert("Error: " + err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+  }
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     const { pickup_rider, deliver_rider, ...updateData } = editingOrder;
@@ -422,10 +534,10 @@ export default function OrderList() {
                       <div>
                         <label className={labelStyle}>Status</label>
                         <select className={winSelect} value={editingOrder.status} onChange={e => setEditingOrder({...editingOrder, status: e.target.value})}>
-                          <option value="At Office">At Office</option>
-                          <option value="Pending">Pending</option>
-                          <option value="In-Transit">In-Transit</option>
-                          <option value="Delivered">Delivered</option>
+                      <option value="At Office">📦 At Office</option>
+                      <option value="On Way">🚵 On Way</option>
+                      <option value="Delivered">✅ Delivered</option>
+                      <option value="In-Transit">🚚 In-Transit</option>
                         </select>
                       </div>
                       <div>
@@ -532,23 +644,52 @@ export default function OrderList() {
                       </div>
                   </form>
 
-                  {/* ညာဘက်ဘေးမှာ ပုံကိုပါတွဲမြင်ရမယ့် Sidebar Preview */}
-                  <div className="w-full lg:w-64 border border-gray-200 rounded-lg p-3 bg-gray-50 flex flex-col items-center justify-center">
+                  {/* ❌ ပြင်ဆင်ရမည့် ညာဘက်ဘေး ပုံ Preview Sidebar ကုတ်အသစ် */}
+                  <div className="w-full lg:w-64 border border-gray-200 rounded-lg p-4 bg-gray-50 flex flex-col items-center">
                     <span className={labelStyle + " w-full text-left mb-2"}>Attached Order Photo</span>
+                    
                     {editingOrder.image_url ? (
-                      <div className="relative w-full h-48 bg-white border border-gray-300 rounded overflow-hidden flex items-center justify-center group">
-                        <img src={editingOrder.image_url} alt="Order attachment" className="max-w-full max-h-full object-contain" />
-                        <div 
-                          onClick={() => setPreviewImage(editingOrder.image_url)}
-                          className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-medium cursor-pointer"
-                        >
-                          Click to enlarge
+                      <div className="w-full flex flex-col gap-3">
+                        {/* ပုံပြသသည့်နေရာ */}
+                        <div className="relative w-full h-44 bg-white border border-gray-300 rounded overflow-hidden flex items-center justify-center group shadow-sm">
+                          <img src={editingOrder.image_url} alt="Order attachment" className="max-w-full max-h-full object-contain" />
+                          <div 
+                            onClick={() => setPreviewImage(editingOrder.image_url)}
+                            className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-medium cursor-pointer"
+                          >
+                            Click to enlarge
+                          </div>
                         </div>
+
+                        {/* 🔄 ပုံအသစ်လဲရန် ခလုတ် */}
+                        <label className="w-full bg-white hover:bg-gray-50 text-gray-700 font-semibold py-1.5 px-3 border border-gray-300 rounded text-center text-xs cursor-pointer shadow-sm block transition-colors">
+                          📷 Replace New Photo
+                          <input type="file" accept="image/*" className="hidden" onChange={handleReplaceImage} disabled={loading} />
+                        </label>
+
+                        {/* 🗑️ ပုံချည်းပဲ ဖျက်ရန် ခလုတ် */}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImageOnly(editingOrder)}
+                          disabled={loading}
+                          className="w-full bg-red-50 hover:bg-red-100 text-red-600 font-semibold py-1.5 px-3 border border-red-200 rounded text-center text-xs shadow-sm transition-colors"
+                        >
+                          🗑️ Delete Photo Only
+                        </button>
                       </div>
                     ) : (
-                      <div className="w-full h-48 border border-dashed border-gray-300 rounded flex flex-col items-center justify-center text-gray-400 text-xs">
-                        <svg className="w-8 h-8 mb-2 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                        No image uploaded
+                      <div className="w-full flex flex-col gap-3">
+                        {/* ပုံမရှိသည့် အခြေအနေ */}
+                        <div className="w-full h-44 border border-dashed border-gray-300 rounded flex flex-col items-center justify-center text-gray-400 text-xs bg-white">
+                          <svg className="w-8 h-8 mb-2 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                          No image uploaded
+                        </div>
+
+                        {/* ပုံလုံးဝမရှိရာကနေ အသစ်တင်ချင်ရင်လည်း လှမ်းတင်လို့ရအောင် လုပ်ပေးထားပါတယ် */}
+                        <label className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-1.5 px-3 rounded text-center text-xs cursor-pointer shadow-sm block transition-all">
+                          ➕ Upload Photo
+                          <input type="file" accept="image/*" className="hidden" onChange={handleReplaceImage} disabled={loading} />
+                        </label>
                       </div>
                     )}
                   </div>

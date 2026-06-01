@@ -13,7 +13,7 @@ const ImageUploader = dynamic(
 
 interface QueueItem {
   local_id: string;
-  payload: any;
+  payload: any; 
 }
 
 export default function EntryForm() {
@@ -389,10 +389,10 @@ export default function EntryForm() {
                 <div>
                   <label className={labelStyle}>Dispatch Status</label>
                   <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className={winSelect}>
-                    <option value="At Office">📦 At Office</option>
-                    <option value="Pending">📦 Pending</option>
-                    <option value="In-Transit">🚚 In-Transit</option>
-                    <option value="Delivered">✅ Delivered</option>
+                     <option value="At Office">📦 At Office</option>
+                      <option value="On Way">🚵 On Way</option>
+                      <option value="Delivered">✅ Delivered</option>
+                      <option value="In-Transit">🚚 In-Transit</option>
                   </select>
                 </div>
                 <div>
