@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import EditOrderModal from '@/components/EditOrderModal'
 
 // ── Column အားလုံးသတ်မှတ်ချက် ──
 const COLUMN_DEFS = [
@@ -39,6 +40,14 @@ export default function DailyReport() {
   const [userBranch, setUserBranch] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
   const [handovers, setHandovers] = useState<any[]>([])
+  
+  // Mobile ပေါ်မှာ Summary ကတ်တွေကို ပိတ်/ဖွင့် လုပ်ဖို့ State (ဖုန်းမှာ နေရာမရှုပ်အောင် ပုံမှန်ကို Hidden ထားပါမည်)
+  const [showMobileSummary, setShowMobileSummary] = useState(false)
+  const [showMobileFilters, setShowMobileFilters] = useState(false)
+  const [expandedMobileCards, setExpandedMobileCards] = useState<Record<string, boolean>>({})
+  
+  // ── Right-Click Context Menu အတွက် State ──
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; order: any } | null>(null);
 
   // Column Toggle & Grid Filters
   const [visibleCols, setVisibleCols] = useState<Record<string, boolean>>(() => {
@@ -52,6 +61,7 @@ export default function DailyReport() {
   // Edit / Handover/ Image Preview States
   const [editingOrder, setEditingOrder] = useState<any>(null)
   const [previewImage, setPreviewImage] = useState<string | null>(null)
+  const [viewHandoverModal, setViewHandoverModal] = useState(false)
   
   // Handover States
   const [handoverModal, setHandoverModal] = useState<{ open: boolean; riderName: string }>({ open: false, riderName: '' })
@@ -67,17 +77,40 @@ export default function DailyReport() {
   const winSelect = "w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-gray-800 text-sm focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all appearance-none bg-no-repeat bg-[length:0.75rem_auto] bg-[right_1rem_center] cursor-pointer shadow-sm"
   const labelStyle = "block text-gray-600 font-semibold mb-1 uppercase text-[11px] tracking-wide"
 
-  // ── Auth & Data Loading ──
+  // ဘယ်နေရာပဲနှိပ်နှိပ် Context Menu ကို ပြန်ပိတ်ပေးမည့် Event
+  useEffect(() => {
+    const handleCloseMenu = () => setContextMenu(null);
+    window.addEventListener('click', handleCloseMenu);
+    return () => window.removeEventListener('click', handleCloseMenu);
+  }, []);
+
+  // ── 1. Initial Load (Auth, Riders နှင့် သိမ်းဆည်းထားသော ရက်စွဲအား ပြန်ထုတ်ခြင်း) ──
   useEffect(() => {
     const storedBranch = localStorage.getItem('user_branch')
     if (!storedBranch) {
       router.push('/login')
-    } else {
-      setUserBranch(storedBranch)
-      fetchData(storedBranch, selectedDate)
-      fetchRiders()
+      return
     }
-  }, [router, selectedDate])
+    
+    setUserBranch(storedBranch)
+    fetchRiders()
+
+    // LocalStorage ထဲတွင် ရွေးခဲ့ဖူးသော Date ရှိမရှိ စစ်ဆေးခြင်း
+    const savedDate = localStorage.getItem('report_selected_date')
+    const activeDate = savedDate || today
+    if (savedDate) {
+      setSelectedDate(savedDate)
+    }
+    
+    fetchData(storedBranch, activeDate)
+  }, [router])
+
+  // ── Date ပြောင်းလဲချိန်တွင် အသုံးပြုမည့် သီးသန့် Handler ──
+  const handleDateChange = (newDate: string) => {
+    setSelectedDate(newDate)
+    localStorage.setItem('report_selected_date', newDate) // LocalStorage ထဲသို့ အသစ်သိမ်းမည်
+    fetchData(userBranch, newDate)
+  }
 
   const fetchData = async (branchCode?: string, targetDate?: string) => {
     const activeBranch = branchCode || userBranch;
@@ -156,44 +189,7 @@ export default function DailyReport() {
     })
   })
 
-  // ── Edit & Update Handler ──
-  const handleUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const { pickup_rider, deliver_rider, ...updateData } = editingOrder;
-
-    if (updateData.pickup_rider_id === "") updateData.pickup_rider_id = null;
-    if (updateData.deliver_rider_id === "") updateData.deliver_rider_id = null;
-
-    let changes: string[] = [];
-    const originalOrder = reportData.find(o => o.id === editingOrder.id);
-    
-    if (originalOrder?.status !== editingOrder.status) {
-      changes.push(`Status ကို "${originalOrder?.status || 'At Office'}" မှ "${editingOrder.status}" Thို့ ပြောင်းလဲခဲ့သည်`);
-    }
-
-    if (changes.length === 0) {
-      changes.push("ပါဆယ်အချက်အလက်များကို Report စာမျက်နှာမှ အသေးစိတ် ပြင်ဆင်ခဲ့သည်");
-    }
-
-    const logNote = changes.join("၊ ");
-    const updatedHistory = appendLog(editingOrder.history, "Order Updated (Report)", logNote);
-
-    const { error } = await supabase
-      .from('orders')
-      .update({
-        ...updateData,
-        history: updatedHistory 
-      })
-      .eq('id', editingOrder.id);
-
-    if (error) {
-      alert("Error: " + error.message);
-    } else {
-      alert("အချက်အလက်များကို အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ!");
-      setEditingOrder(null);
-      fetchData();
-    }
-  }
+  
 
   // Handover Submission 
   const submitHandover = async () => {
@@ -214,7 +210,7 @@ export default function DailyReport() {
         }])
 
       if (error) throw error
-      alert(`${handoverModal.riderName} ၏ ငွေအပ်နှံမှုမှတ်တမ်း (${handoverForm.transaction_type}) ကို အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ।`)
+      alert(`${handoverModal.riderName} ၏ Ngwe အပ်နှံမှုမှတ်တမ်း (${handoverForm.transaction_type}) ကို အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ।`)
       setHandoverModal({ open: false, riderName: '' })
       setHandoverForm({ amount: 0, payment_method: 'Cash', transaction_type: 'Cash-in', note: '' })
       fetchData()
@@ -238,7 +234,7 @@ export default function DailyReport() {
       <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wide ${
         o.status === 'Delivered' ? 'bg-green-50 text-green-700 border border-green-200' : 
         o.status === 'Pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 
-        o.status === 'In-Transit' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-gray-100 text-gray-600 border border-gray-200'
+        o.status === 'On Way' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-gray-100 text-gray-600 border border-gray-200'
       }`}>{o.status}</span>
     )
     if (key === 'image_url') return o.image_url ? (
@@ -295,7 +291,7 @@ export default function DailyReport() {
             type="date" 
             className="px-2 py-1 bg-gray-50 border border-gray-300 rounded-md text-xs font-medium text-gray-700" 
             value={selectedDate} 
-            onChange={(e) => setSelectedDate(e.target.value)} 
+            onChange={(e) => handleDateChange(e.target.value)} 
           />
 
           <div className="relative">
@@ -328,124 +324,267 @@ export default function DailyReport() {
             )}
           </div>
 
-          <button onClick={() => fetchData()} className="bg-orange-500 hover:bg-orange-600 text-white font-medium px-3 py-1.5 rounded-md text-xs shadow-sm transition-all">
+          <button onClick={() => fetchData(userBranch, selectedDate)} className="bg-orange-500 hover:bg-orange-600 text-white font-medium px-3 py-1.5 rounded-md text-xs shadow-sm transition-all">
             🔄 Refresh
           </button>
         </div>
       </div>
 
-      {/* ── Mobile Search Bar ── */}
-      <div className="sm:hidden px-3 py-2 bg-white border-b border-gray-200">
-        <input 
-          type="text" 
-          placeholder="🔍 Global Search (ID၊ ဖုန်း၊ အမည်)..." 
-          className="w-full bg-gray-50 border border-gray-200 rounded-md px-3 py-1.5 text-xs focus:outline-none focus:border-orange-500"
-          value={colFilters['global_search'] || ''} 
-          onChange={e => setColFilters(prev => ({ ...prev, global_search: e.target.value }))}
-        />
-      </div>
-
-      {/* ── 💡 Rider ငွေရှင်းမှုမှတ်တမ်း Card များ ── */}
-      <div className="mx-4 mt-3 p-4 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col gap-3 shrink-0">
-        <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-          <h2 className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
-            🏍️ Rider Ngwe ရှင်းမှုမှတ်တမ်း (Delivered စာရင်းအနှစ်ချုပ်)
-          </h2>
-          <button 
-            onClick={() => setHandoverModal({ open: true, riderName: riders[0]?.name || '' })}
-            className="bg-green-600 hover:bg-green-700 text-white font-semibold px-3 py-1.5 rounded-md text-xs shadow-sm transition-all flex items-center gap-1"
+      {/* ── Mobile Global Search & Advanced Dropdown Filters ── */}
+      <div className="sm:hidden px-3 py-2 bg-white border-b border-gray-200 flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <input 
+            type="text" 
+            placeholder="🔍 Global Search (ID၊ ဖုန်း၊ အမည်)..." 
+            className="flex-1 bg-gray-50 border border-gray-200 rounded-md px-3 py-1.5 text-xs focus:outline-none focus:border-orange-500"
+            value={colFilters['global_search'] || ''} 
+            onChange={e => setColFilters(prev => ({ ...prev, global_search: e.target.value }))}
+          />
+          <button
+            onClick={() => setShowMobileFilters(!showMobileFilters)}
+            className={`px-2 py-1.5 border rounded-md text-xs font-semibold flex items-center gap-1 transition-colors ${showMobileFilters ? 'bg-orange-50 border-orange-300 text-orange-700' : 'bg-gray-50 border-gray-200 text-gray-700'}`}
           >
-            💵 Add Cash
+            ⚙️ Filter
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {riders.map(rider => {
-            const riderOrders = reportData.filter(o => o.deliver_rider_id === rider.id && o.status === 'Delivered');
-            const totalToPay = riderOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
-            const riderHandovers = handovers.filter(h => h.rider_name === rider.name);
-            const cashIn = riderHandovers.filter(h => h.transaction_type === 'Cash-in').reduce((sum, h) => sum + (h.amount || 0), 0);
-            const oop = riderHandovers.filter(h => h.transaction_type === 'OOP').reduce((sum, h) => sum + (h.amount || 0), 0);
-            const gap = totalToPay - (cashIn + oop);
-
-            if (totalToPay === 0 && cashIn === 0 && oop === 0) return null;
-
-            let statusStyle = "bg-green-50 text-green-700 border-green-200"; 
-            if (gap > 0) {
-              statusStyle = "bg-red-50 text-red-700 border-red-200"; 
-            } else if (gap < 0) {
-              statusStyle = "bg-yellow-50 text-yellow-700 border-yellow-200"; 
-            }
-
-            return (
-              <div key={rider.id} className="p-3 border border-gray-100 rounded-lg bg-gray-50/50 flex flex-col gap-2 shadow-sm">
-                <div className="font-bold text-gray-800 text-xs border-b border-gray-200/60 pb-1 flex items-center justify-between">
-                  <span>👤 Name: {rider.name}</span>
-                </div>
-                <div className="text-[11px] space-y-1 text-gray-600">
-                  <div className="flex justify-between">
-                    <span>Total (ရှင်းရမည့်ငွေ):</span>
-                    <span className="font-semibold text-gray-900">{totalToPay.toLocaleString()} Ks</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Cash-in (အပ်ငွေ):</span>
-                    <span className="font-semibold text-blue-600">{cashIn.toLocaleString()} Ks</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>OOP (စိုက်ငွေ):</span>
-                    <span className="font-semibold text-purple-600">{oop.toLocaleString()} Ks</span>
-                  </div>
-                  <div className={`flex justify-between p-1.5 rounded font-bold border mt-1.5 ${statusStyle}`}>
-                    <span>Gap:</span>
-                    <span>
-                      {gap > 0 ? `+${gap.toLocaleString()}` : gap.toLocaleString()} Ks
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── 💡နေရာဟောင်းမှ အပေါ်သို့ပြောင်းရွှေ့ထားသော နေရာသစ်: Sender အလိုက် ပြန်ပေးရမယ့် COD စာရင်း Cards ── */}
-      <div className="mx-4 mt-3 p-4 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col gap-3 shrink-0 max-h-64 overflow-y-auto">
-        <div className="border-b border-gray-100 pb-2">
-          <h2 className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
-            📦 Sender အလိုက် ပြန်ပေးရမယ့် COD စုစုပေါင်း (Delivered ပါဆယ်များ - LOC အလိုက်ခွဲထားပါသည်)
-          </h2>
-        </div>
-
-        {Object.keys(senderCodByLoc).length === 0 ? (
-          <p className="text-xs text-gray-400 font-medium py-2 text-center">ယနေ့အတွက် Delivered ဖြစ်ပြီးသား COD ပေးရန်ပုံစံမရှိသေးပါ။</p>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {Object.entries(senderCodByLoc).map(([loc, senders]) => {
-              const locTotal = Object.values(senders).reduce((a, b) => a + b, 0);
-              return (
-                <div key={loc} className="p-3 border border-orange-100 rounded-lg bg-orange-50/20 flex flex-col gap-2 shadow-sm">
-                  <div className="font-bold text-orange-800 text-xs border-b border-orange-200/60 pb-1 flex items-center justify-between">
-                    <span>📍 City/LOC: {loc}</span>
-                    <span className="text-[10px] bg-orange-100 px-1.5 py-0.5 rounded text-orange-700 font-bold">
-                      {locTotal.toLocaleString()} Ks
-                    </span>
-                  </div>
-                  <div className="text-[11px] space-y-1.5 max-h-32 overflow-y-auto pr-1">
-                    {Object.entries(senders).map(([senderName, totalCod]) => (
-                      <div key={senderName} className="flex justify-between items-center bg-white p-1.5 rounded border border-gray-100 shadow-xs">
-                        <span className="font-medium text-gray-700 truncate max-w-[120px]" title={senderName}>👤 {senderName}</span>
-                        <span className="font-bold text-gray-900">{totalCod.toLocaleString()} Ks</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+        {/* Mobile Advanced Dropdown Selection */}
+        {showMobileFilters && (
+          <div className="grid grid-cols-2 gap-2 p-2 bg-gray-50 rounded-lg border border-gray-100 animate-in slide-in-from-top-2 duration-100">
+            <div>
+              <label className="text-[10px] font-bold text-gray-400 uppercase block mb-0.5">Branch</label>
+              <select
+                className="w-full bg-white border border-gray-200 rounded p-1 text-xs font-medium text-gray-700 focus:outline-none focus:border-orange-500"
+                value={colFilters['branch'] || ''}
+                onChange={e => setColFilters(prev => ({ ...prev, branch: e.target.value }))}
+              >
+                <option value="">All Branch</option>
+                <option value="MDY">MDY</option>
+                <option value="YGN">YGN</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-gray-400 uppercase block mb-0.5">Type</label>
+              <select
+                className="w-full bg-white border border-gray-200 rounded p-1 text-xs font-medium text-gray-700 focus:outline-none focus:border-orange-500"
+                value={colFilters['fee_type'] || ''}
+                onChange={e => setColFilters(prev => ({ ...prev, fee_type: e.target.value }))}
+              >
+                <option value="">All Type</option>
+                 <option value="Deli">Deli</option>
+                          <option value="Kpay">Kpay</option>
+                          <option value="Cash">Cash</option>
+                          <option value="Bill">Bill</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-gray-400 uppercase block mb-0.5">Status</label>
+              <select
+                className="w-full bg-white border border-gray-200 rounded p-1 text-xs font-medium text-gray-700 focus:outline-none focus:border-orange-500"
+                value={colFilters['status'] || ''}
+                onChange={e => setColFilters(prev => ({ ...prev, status: e.target.value }))}
+              >
+                <option value="">All Status</option>
+                <option value="At Office">At Office</option>
+                <option value="On Way">On Way</option>
+                <option value="Delivered">Delivered</option>
+                <option value="In-Transit">In-Transit</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-gray-400 uppercase block mb-0.5">Deliver Rider</label>
+              <select
+                className="w-full bg-white border border-gray-200 rounded p-1 text-xs font-medium text-gray-700 focus:outline-none focus:border-orange-500"
+                value={colFilters['deliver_rider'] || ''}
+                onChange={e => setColFilters(prev => ({ ...prev, deliver_rider: e.target.value }))}
+              >
+                <option value="">All Rider</option>
+                {riders.map(r => (
+                  <option key={r.id} value={r.name}>{r.name}</option>
+                ))}
+              </select>
+            </div>
+            {Object.values(colFilters).some(v => v !== '') && (
+              <button 
+                onClick={() => setColFilters({})} 
+                className="col-span-2 text-center text-[11px] text-red-600 bg-red-50 py-1 rounded font-semibold border border-red-100 mt-1"
+              >
+                ❌ Clear All Filters
+              </button>
+            )}
           </div>
         )}
+
+        {/* Mobile Summary Show/Hide Toggle Button */}
+        <button
+          onClick={() => setShowMobileSummary(!showMobileSummary)}
+          className="w-full bg-orange-50 border border-orange-200 text-orange-700 font-bold px-3 py-1.5 rounded-md text-[11px] flex items-center justify-center gap-1.5 active:bg-orange-100 transition-all"
+        >
+          {showMobileSummary ? '🙈 Summary ကတ်များ ပြန်ဝှက်ရန်' : '📊 Rider / Sender စာရင်းချုပ်ကြည့်ရန်'}
+        </button>
       </div>
 
-      {/* ── Workspace Table Area ── */}
+      {/* ── Cards Layout Wrapper (Responsive managed with state) ── */}
+      <div className={`${showMobileSummary ? 'grid' : 'hidden sm:grid'} mx-4 mt-3 grid-cols-1 lg:grid-cols-2 gap-4 shrink-0 transition-all`}>
+        
+        {/* ကတ် (၁) - Rider Ngwe ရှင်းမှုမှတ်တမ်း Card */}
+        <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col gap-3 max-h-60 overflow-y-auto">
+          <div className="flex justify-between items-center border-b border-gray-100 pb-2 sticky top-0 bg-white z-10">
+            <h2 className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
+              🏍️ Rider Ngwe ရှင်းမှုမှတ်တမ်း (Delivered စာရင်းချုပ်)
+            </h2>
+            <div className="flex items-center gap-1.5">
+              {/* 📋 History ကြည့်ရန် ခလုတ်အသစ် */}
+              <button 
+                onClick={() => setViewHandoverModal(true)}
+                className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-2.5 py-1 rounded-md text-[11px] border border-gray-300 shadow-sm transition-all flex items-center gap-1"
+              >
+                📋 History
+              </button>
+              
+              <button 
+                onClick={() => setHandoverModal({ open: true, riderName: riders[0]?.name || '' })}
+                className="bg-green-600 hover:bg-green-700 text-white font-semibold px-2.5 py-1 rounded-md text-[11px] shadow-sm transition-all flex items-center gap-1"
+              >
+                💵 Add Cash
+              </button>
+            </div>
+          </div>
+
+          {/* Table Format ဖြင့် သပ်သပ်ရပ်ရပ် ပြောင်းလဲထားခြင်း */}
+          <div className="overflow-x-auto border border-gray-100 rounded-lg">
+            <table className="w-full text-left text-xs whitespace-nowrap">
+              <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] tracking-wider border-b border-gray-200 sticky top-0 z-10 shadow-xs">
+                <tr>
+                  <th className="px-3 py-2">Rider Name</th>
+                  <th className="px-3 py-2 text-right">Total (ရှင်းရန်)</th>
+                  <th className="px-3 py-2 text-right">Cash-in (အပ်ငွေ)</th>
+                  <th className="px-3 py-2 text-right">OOP (စိုက်ငွေ)</th>
+                  <th className="px-3 py-2 text-right">Gap</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 text-gray-700 font-medium">
+                {(() => {
+                  // စုစုပေါင်း Grand Total တွက်ချက်ရန် Variable များ
+                  let grandTotalToPay = 0;
+                  let grandTotalCashIn = 0;
+                  let grandTotalOop = 0;
+                  let grandTotalGap = 0;
+
+                  // Rider တစ်ဦးချင်းစီရဲ့ data ကို တွက်ချက်စစ်ဆေးပြီး Row များထုတ်ယူခြင်း
+                  const rows = riders.map(rider => {
+                    const riderOrders = reportData.filter(o => o.deliver_rider_id === rider.id && o.status === 'Delivered');
+                    const totalToPay = riderOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
+                    const riderHandovers = handovers.filter(h => h.rider_name === rider.name);
+                    const cashIn = riderHandovers.filter(h => h.transaction_type === 'Cash-in').reduce((sum, h) => sum + (h.amount || 0), 0);
+                    const oop = riderHandovers.filter(h => h.transaction_type === 'OOP').reduce((sum, h) => sum + (h.amount || 0), 0);
+                    const gap = totalToPay - (cashIn + oop);
+
+                    // စာရင်းမရှိသော Rider ဖြစ်ပါက ချန်လှပ်ခဲ့မည်
+                    if (totalToPay === 0 && cashIn === 0 && oop === 0) return null;
+
+                    // Grand Totals ထဲသို့ ပေါင်းထည့်ခြင်း
+                    grandTotalToPay += totalToPay;
+                    grandTotalCashIn += cashIn;
+                    grandTotalOop += oop;
+                    grandTotalGap += gap;
+
+                    let gapColor = "text-green-600";
+                    if (gap > 0) gapColor = "text-red-600 font-bold";
+                    else if (gap < 0) gapColor = "text-amber-600 font-bold";
+
+                    return (
+                      <tr key={rider.id} className="hover:bg-gray-50/60 transition-colors">
+                        <td className="px-3 py-2 font-semibold text-gray-900">👤 {rider.name}</td>
+                        <td className="px-3 py-2 text-right font-mono text-gray-900">{totalToPay.toLocaleString()} Ks</td>
+                        <td className="px-3 py-2 text-right font-mono text-blue-600">{cashIn.toLocaleString()} Ks</td>
+                        <td className="px-3 py-2 text-right font-mono text-purple-600">{oop.toLocaleString()} Ks</td>
+                        <td className={`px-3 py-2 text-right font-mono ${gapColor}`}>
+                          {gap > 0 ? `+${gap.toLocaleString()}` : gap.toLocaleString()} Ks
+                        </td>
+                      </tr>
+                    );
+                  }).filter(Boolean); // null များကို စစ်ထုတ်ပစ်ခြင်း
+
+                  // ပြစရာ စာရင်းမရှိပါက
+                  if (rows.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={5} className="text-center py-6 text-gray-400 font-medium">
+                          ယနေ့အတွက် Rider စာရင်းချုပ် မရှိသေးပါ။
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  // Total Gap အရောင် သတ်မှတ်ခြင်း
+                  let totalGapColor = "text-green-700";
+                  if (grandTotalGap > 0) totalGapColor = "text-red-700";
+                  else if (grandTotalGap < 0) totalGapColor = "text-amber-700";
+
+                  return (
+                    <>
+                      {/* Rider အားလုံးရဲ့ Row စာရင်း */}
+                      {rows}
+                      
+                      {/* 📊 အောက်ဆုံးမှ စုစုပေါင်း Total Row */}
+                      <tr className="bg-gray-100 border-t-2 border-gray-200 font-bold text-gray-950 sticky bottom-0 z-10 shadow-sm">
+                        <td className="px-3 py-2 text-gray-900 font-bold">📊 Total</td>
+                        <td className="px-3 py-2 text-right font-mono text-gray-900">{grandTotalToPay.toLocaleString()} Ks</td>
+                        <td className="px-3 py-2 text-right font-mono text-blue-700">{grandTotalCashIn.toLocaleString()} Ks</td>
+                        <td className="px-3 py-2 text-right font-mono text-purple-700">{grandTotalOop.toLocaleString()} Ks</td>
+                        <td className={`px-3 py-2 text-right font-mono ${totalGapColor}`}>
+                          {grandTotalGap > 0 ? `+${grandTotalGap.toLocaleString()}` : grandTotalGap.toLocaleString()} Ks
+                        </td>
+                      </tr>
+                    </>
+                  );
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* ကတ် (၂) - Sender အလိုက် ပြန်ပေးရမယ့် COD စာရင်း Card */}
+        <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col gap-3 max-h-60 overflow-y-auto">
+          <div className="border-b border-gray-100 pb-2 sticky top-0 bg-white z-10">
+            <h2 className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
+              📦 Sender အလိုက် ပြန်ပေးရမယ့် COD (Delivered - LOC အလိုက်ခွဲထုတ်မှု)
+            </h2>
+          </div>
+
+          {Object.keys(senderCodByLoc).length === 0 ? (
+            <p className="text-xs text-gray-400 font-medium py-2 text-center my-auto">ယနေ့အတွက် Delivered ဖြစ်ပြီးသား COD ပေးရန်မရှိသေးပါ။</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {Object.entries(senderCodByLoc).map(([loc, senders]) => {
+                const locTotal = Object.values(senders).reduce((a, b) => a + b, 0);
+                return (
+                  <div key={loc} className="p-3 border border-orange-100 rounded-lg bg-orange-50/20 flex flex-col gap-2 shadow-sm">
+                    <div className="font-bold text-orange-800 text-xs border-b border-orange-200/60 pb-1 flex items-center justify-between">
+                      <span>📍 City/LOC: {loc}</span>
+                      <span className="text-[10px] bg-orange-100 px-1.5 py-0.5 rounded text-orange-700 font-bold">
+                        {locTotal.toLocaleString()} Ks
+                      </span>
+                    </div>
+                    <div className="text-[11px] space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                      {Object.entries(senders).map(([senderName, totalCod]) => (
+                        <div key={senderName} className="flex justify-between items-center bg-white p-1.5 rounded border border-gray-100 shadow-xs">
+                          <span className="font-medium text-gray-700 truncate max-w-[100px]" title={senderName}>👤 {senderName}</span>
+                          <span className="font-bold text-gray-900">{totalCod.toLocaleString()} Ks</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+      </div>
+
+      {/* ── Workspace Table / List Area (Flex item optimized) ── */}
       <div className="flex-1 overflow-auto bg-white sm:mx-4 sm:my-3 sm:rounded-lg sm:border sm:border-gray-200 sm:shadow-sm">
         
         {/* Desktop View Table */}
@@ -458,48 +597,103 @@ export default function DailyReport() {
                     {col.label}
                   </th>
                 ))}
-                <th className="px-4 py-3 font-semibold text-center text-[11px] text-gray-500">Actions</th>
               </tr>
+              
+              {/* Filter Layout */}
               <tr>
-                {COLUMN_DEFS.map(col => visibleCols[col.key] && (
-                  <td key={col.key} className="px-3 py-1.5">
-                    <input 
-                      type="text" 
-                      placeholder={`Filter ${col.label}...`}
-                      className="w-full bg-transparent border-b border-gray-200 focus:border-orange-500 focus:outline-none py-0.5 text-[11px]"
-                      value={colFilters[col.key] || ''}
-                      onChange={e => setColFilters(prev => ({ ...prev, [col.key]: e.target.value }))}
-                      disabled={col.key === 'image_url'}
-                    />
-                  </td>
-                ))}
-                <td className="bg-gray-50/30"></td>
+                {COLUMN_DEFS.map(col => {
+                  if (!visibleCols[col.key]) return null;
+
+                  return (
+                    <td key={col.key} className="px-3 py-1.5">
+                      {col.key === 'image_url' ? (
+                        <div className="h-4"></div>
+                      ) : col.key === 'branch' ? (
+                        <select
+                          className="w-full bg-transparent border-b border-gray-200 focus:border-orange-500 focus:outline-none py-0.5 text-[11px] text-gray-700 font-medium cursor-pointer"
+                          value={colFilters[col.key] || ''}
+                          onChange={e => setColFilters(prev => ({ ...prev, [col.key]: e.target.value }))}
+                        >
+                          <option value="">All Branch</option>
+                          <option value="MDY">MDY</option>
+                          <option value="YGN">YGN</option>
+                        </select>
+                      ) : col.key === 'fee_type' ? (
+                        <select
+                          className="w-full bg-transparent border-b border-gray-200 focus:border-orange-500 focus:outline-none py-0.5 text-[11px] text-gray-700 font-medium cursor-pointer"
+                          value={colFilters[col.key] || ''}
+                          onChange={e => setColFilters(prev => ({ ...prev, [col.key]: e.target.value }))}
+                        >
+                          <option value="">All Type</option>
+                          <option value="Deli">Deli</option>
+                          <option value="Kpay">Kpay</option>
+                          <option value="Cash">Cash</option>
+                          <option value="Bill">Bill</option>
+                        </select>
+                      ) : col.key === 'status' ? (
+                        <select
+                          className="w-full bg-transparent border-b border-gray-200 focus:border-orange-500 focus:outline-none py-0.5 text-[11px] text-gray-700 font-medium cursor-pointer"
+                          value={colFilters[col.key] || ''}
+                          onChange={e => setColFilters(prev => ({ ...prev, [col.key]: e.target.value }))}
+                        >
+                          <option value="">All Status</option>
+                          <option value="At Office">At Office</option>
+                          <option value="On Way">On Way</option>
+                          <option value="Delivered">Delivered</option>
+                          <option value="In-Transit">In-Transit</option>
+                        </select>
+                      ) : col.key === 'pickup_rider' || col.key === 'deliver_rider' ? (
+                        <select
+                          className="w-full bg-transparent border-b border-gray-200 focus:border-orange-500 focus:outline-none py-0.5 text-[11px] text-gray-700 font-medium cursor-pointer"
+                          value={colFilters[col.key] || ''}
+                          onChange={e => setColFilters(prev => ({ ...prev, [col.key]: e.target.value }))}
+                        >
+                          <option value="">All Rider</option>
+                          {riders.map(r => (
+                            <option key={r.id} value={r.name}>{r.name}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input 
+                          type="text" 
+                          placeholder={`Filter ${col.label}...`}
+                          className="w-full bg-transparent border-b border-gray-200 focus:border-orange-500 focus:outline-none py-0.5 text-[11px]"
+                          value={colFilters[col.key] || ''}
+                          onChange={e => setColFilters(prev => ({ ...prev, [col.key]: e.target.value }))}
+                        />
+                      )}
+                    </td>
+                  );
+                })}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-gray-700">
               {loading ? (
                 <tr>
-                  <td colSpan={COLUMN_DEFS.length + 1} className="text-center py-10 font-medium text-gray-400">Loading Report Logs...</td>
+                  <td colSpan={COLUMN_DEFS.length} className="text-center py-10 font-medium text-gray-400">Loading Report Logs...</td>
                 </tr>
               ) : filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={COLUMN_DEFS.length + 1} className="text-center py-10 font-medium text-gray-400">ယနေ့ရက်စွဲအတွက် ပါဆယ်မှတ်တမ်း မရှိသေးပါ။</td>
+                  <td colSpan={COLUMN_DEFS.length} className="text-center py-10 font-medium text-gray-400">ယနေ့ရက်စွဲအတွက် ပါဆယ်မှတ်တမ်း မရှိသေးပါ။</td>
                 </tr>
               ) : filteredOrders.map(o => (
-                <tr key={o.id} className="hover:bg-gray-50/80 transition-colors">
+                <tr 
+                  key={o.id} 
+                  className="hover:bg-gray-50/80 transition-colors cursor-context-menu"
+                  onContextMenu={(e) => {
+                    e.preventDefault(); 
+                    setContextMenu({
+                      x: e.clientX,
+                      y: e.clientY,
+                      order: o
+                    });
+                  }}
+                >
                   {COLUMN_DEFS.map(col => visibleCols[col.key] && (
                     <td key={col.key} className="px-4 py-2.5 font-medium">
                       {renderCell(o, col.key)}
                     </td>
                   ))}
-                  <td className="px-4 py-2.5 text-center">
-                    <button 
-                      onClick={() => setEditingOrder(o)}
-                      className="px-2.5 py-1 bg-orange-500 hover:bg-orange-600 text-white rounded text-[11px] font-semibold transition-all"
-                    >
-                      ✏️ Edit
-                    </button>
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -508,173 +702,80 @@ export default function DailyReport() {
 
         {/* Mobile View Responsive Cards */}
         <div className="sm:hidden flex flex-col divide-y divide-gray-100">
-          {filteredOrders.map(o => (
-            <div key={o.id} className="p-3 bg-white flex flex-col gap-2">
+          {loading ? (
+            <p className="text-center py-8 text-xs text-gray-400 font-medium">Loading Report Logs...</p>
+          ) : filteredOrders.length === 0 ? (
+            <p className="text-center py-8 text-xs text-gray-400 font-medium">ယနေ့ရက်စွဲအတွက် ပါဆယ်မှတ်တမ်း မရှိသေးပါ။</p>
+          ) : filteredOrders.map(o => (
+            <div key={o.id} className="p-4 bg-white flex flex-col gap-2">
               <div className="flex justify-between items-center">
-                <span className="font-mono font-bold text-gray-900">{o.item_id}</span>
-                <div className="flex gap-1 items-center">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-bold text-gray-900 text-sm">{o.item_id}</span>
+                  {o.image_url && (
+                    <span 
+                      onClick={() => setPreviewImage(o.image_url)} 
+                      className="cursor-pointer text-xs bg-gray-100 p-0.5 px-1.5 rounded border border-gray-200 text-gray-500 font-medium"
+                    >
+                      🖼️ Photo
+                    </span>
+                  )}
+                </div>
+                <div className="flex gap-1.5 items-center">
                   {renderCell(o, 'status')}
                   <button 
                     onClick={() => setEditingOrder(o)}
-                    className="p-1 px-2 bg-orange-50 border border-orange-200 text-orange-600 rounded text-xs"
+                    className="p-1 px-2.5 bg-orange-50 border border-orange-200 text-orange-600 rounded font-semibold text-[11px]"
                   >
                     Edit
                   </button>
                 </div>
               </div>
-              <div className="text-xs text-gray-600 space-y-1">
-                <p><strong>Sender:</strong> {o.sender_name} ({o.sender_loc})</p>
-                <p><strong>Receiver:</strong> {o.receiver_name} - {o.receiver_phone}</p>
-                <p><strong>Total Amount:</strong> {o.total_amount?.toLocaleString()} Ks</p>
+              <div className="text-xs text-gray-600 space-y-1 mt-0.5">
+                <p><span className="text-gray-400">Sender:</span> <strong className="text-gray-700">{o.sender_name}</strong> ({o.sender_loc})</p>
+                <p><span className="text-gray-400">Receiver:</span> <strong className="text-gray-700">{o.receiver_name}</strong> - {o.receiver_phone}</p>
+                <p><span className="text-gray-400">Total Amount:</span> <strong className="text-gray-900">{o.total_amount?.toLocaleString()} Ks</strong> ({o.fee_type})</p>
+                {o.note && <p className="text-[11px] text-amber-600 font-medium bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 w-fit mt-1">⚠️ {o.note === 'RT' ? 'Return Item' : o.note}</p>}
               </div>
+
+              {/* Expand Toggle Button */}
+              <div className="pt-1.5 border-t border-dashed border-gray-100 mt-1 flex justify-between items-center">
+                <button 
+                  onClick={() => setExpandedMobileCards(prev => ({ ...prev, [o.id]: !prev[o.id] }))}
+                  className="text-[11px] font-bold text-orange-500 hover:text-orange-600 flex items-center gap-0.5"
+                >
+                  {expandedMobileCards[o.id] ? "🔼 အချက်အလက်များ သိမ်းရန်" : "🔽 အချက်အလက်အားလုံး ပြရန်"}
+                </button>
+              </div>
+
+              {/* Expanded All Fields Details View */}
+              {expandedMobileCards[o.id] && (
+                <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px] bg-gray-50 p-2.5 rounded-lg border border-gray-100 mt-1 animate-in fade-in duration-100">
+                  <div><span className="text-gray-400 block">Received Date:</span> <span className="text-gray-800 font-semibold">{o.received_date || '-'}</span></div>
+                  <div><span className="text-gray-400 block">Branch:</span> <span className="text-gray-800 font-semibold">{o.branch || '-'}</span></div>
+                  <div><span className="text-gray-400 block">COD Amount:</span> <span className="text-gray-800 font-semibold">{o.cod_amount?.toLocaleString() || 0} Ks</span></div>
+                  <div><span className="text-gray-400 block">Deli Fee:</span> <span className="text-gray-800 font-semibold">{o.deli_fee?.toLocaleString() || 0} Ks</span></div>
+                  <div><span className="text-gray-400 block">Pickup By:</span> <span className="text-gray-800 font-semibold">{o.pickup_rider?.name || '-'}</span></div>
+                  <div><span className="text-gray-400 block">Deliver By:</span> <span className="text-gray-800 font-semibold">{o.deliver_rider?.name || '-'}</span></div>
+                  <div><span className="text-gray-400 block">Deliver Date:</span> <span className="text-gray-800 font-semibold">{o.deliver_date || '-'}</span></div>
+                  <div><span className="text-gray-400 block">Cash Add Date:</span> <span className="text-gray-800 font-semibold">{o.cash_added_date || '-'}</span></div>
+                  <div className="col-span-2"><span className="text-gray-400 block">Full Address:</span> <span className="text-gray-800 font-semibold break-words">{o.receiver_address || '-'}</span></div>
+                </div>
+              )}
             </div>
           ))}
         </div>
 
       </div>
 
-      {/* ── Advanced Edit Order Modal ── */}
-      {editingOrder && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="bg-gray-50 border-b border-gray-200 px-5 py-3.5 flex justify-between items-center">
-              <div>
-                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Edit Order Fields (Report Mode)</h3>
-                <h2 className="text-base font-mono font-bold text-gray-900 mt-0.5">ID: {editingOrder.item_id}</h2>
-              </div>
-              <button onClick={() => setEditingOrder(null)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">×</button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-5">
-              <form id="report-edit-form" onSubmit={handleUpdate} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-                <div>
-                  <label className={labelStyle}>Received Date</label>
-                  <input type="date" className={winInput} value={editingOrder.received_date || ''} onChange={e => setEditingOrder({...editingOrder, received_date: e.target.value})}/>
-                </div>
-                <div>
-                  <label className={labelStyle}>Branch</label>
-                  <select className={winSelect} value={editingOrder.branch || ''} onChange={e => setEditingOrder({...editingOrder, branch: e.target.value})}>
-                    <option value="MDY">MANDALAY (MDY)</option>
-                    <option value="YGN">YANGON (YGN)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className={labelStyle}>Status</label>
-                  <select className={winSelect} value={editingOrder.status} onChange={e => setEditingOrder({...editingOrder, status: e.target.value})}>
-                    <option value="At Office">📦 At Office</option>
-                    <option value="On Way">🚵 On Way</option>
-                    <option value="Delivered">✅ Delivered</option>
-                    <option value="In-Transit">🚚 In-Transit</option>
-                  </select>
-                </div>
-                <div>
-                  <label className={labelStyle}>Pick Up Rider</label>
-                  <select className={winSelect} value={editingOrder.pickup_rider_id || ''} onChange={e => setEditingOrder({...editingOrder, pickup_rider_id: e.target.value})}>
-                    <option value="">Select...</option>
-                    {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                  </select>
-                </div>
-
-                <div className="sm:col-span-2 lg:col-span-4 grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-gray-100">
-                  <div>
-                    <label className={labelStyle}>Sender Name</label>
-                    <input className={winInput} value={editingOrder.sender_name || ''} onChange={e => setEditingOrder({...editingOrder, sender_name: e.target.value})}/>
-                  </div>
-                  <div>
-                    <label className={labelStyle}>Sender Phone</label>
-                    <input className={winInput} value={editingOrder.sender_phone || ''} onChange={e => setEditingOrder({...editingOrder, sender_phone: e.target.value})}/>
-                  </div>
-                  <div>
-                    <label className={labelStyle}>Sender City</label>
-                    <input className={winInput} value={editingOrder.sender_loc || ''} onChange={e => setEditingOrder({...editingOrder, sender_loc: e.target.value})}/>
-                  </div>
-                </div>
-
-                <div className="sm:col-span-2 lg:col-span-4 grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-gray-100">
-                  <div>
-                    <label className={labelStyle}>Receiver Name</label>
-                    <input className={winInput} value={editingOrder.receiver_name || ''} onChange={e => setEditingOrder({...editingOrder, receiver_name: e.target.value})}/>
-                  </div>
-                  <div>
-                    <label className={labelStyle}>Receiver Phone</label>
-                    <input className={winInput} value={editingOrder.receiver_phone || ''} onChange={e => setEditingOrder({...editingOrder, receiver_phone: e.target.value})}/>
-                  </div>
-                  <div>
-                    <label className={labelStyle}>Receiver City</label>
-                    <input className={winInput} value={editingOrder.receiver_loc || ''} onChange={e => setEditingOrder({...editingOrder, receiver_loc: e.target.value})}/>
-                  </div>
-                  <div className="sm:col-span-3 lg:col-span-4">
-                    <label className={labelStyle}>Full Address</label>
-                    <input className={winInput} value={editingOrder.receiver_address || ''} onChange={e => setEditingOrder({...editingOrder, receiver_address: e.target.value})}/>
-                  </div>
-                </div>
-
-                <div className="sm:col-span-2 lg:col-span-4 grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2 border-t border-gray-100">
-                  <div>
-                    <label className={labelStyle}>Fee Type</label>
-                    <select className={winSelect} value={editingOrder.fee_type || ''} onChange={e => setEditingOrder({...editingOrder, fee_type: e.target.value})}>
-                      <option value="Prepaid">Prepaid (Paid Delivery)</option>
-                      <option value="COD">COD (Cash on Delivery)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className={labelStyle}>COD Amount (Ks)</label>
-                    <input type="number" className={winInput} value={editingOrder.cod_amount || 0} onChange={e => {
-                      const cod = Number(e.target.value);
-                      setEditingOrder({...editingOrder, cod_amount: cod, total_amount: cod + (editingOrder.deli_fee || 0)});
-                    }}/>
-                  </div>
-                  <div>
-                    <label className={labelStyle}>Deli Fee (Ks)</label>
-                    <input type="number" className={winInput} value={editingOrder.deli_fee || 0} onChange={e => {
-                      const deli = Number(e.target.value);
-                      setEditingOrder({...editingOrder, deli_fee: deli, total_amount: (editingOrder.cod_amount || 0) + deli});
-                    }}/>
-                  </div>
-                  <div>
-                    <label className={labelStyle}>Total Amount (Ks)</label>
-                    <input type="number" className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-gray-500 font-bold text-sm outline-none" value={editingOrder.total_amount || 0} readOnly />
-                  </div>
-                </div>
-
-                <div className="sm:col-span-2 lg:col-span-4 grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2 border-t border-gray-100">
-                  <div>
-                    <label className={labelStyle}>Deliver Rider</label>
-                    <select className={winSelect} value={editingOrder.deliver_rider_id || ''} onChange={e => setEditingOrder({...editingOrder, deliver_rider_id: e.target.value})}>
-                      <option value="">Select...</option>
-                      {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className={labelStyle}>Deliver Date</label>
-                    <input type="date" className={winInput} value={editingOrder.deliver_date || ''} onChange={e => setEditingOrder({...editingOrder, deliver_date: e.target.value})}/>
-                  </div>
-                  <div>
-                    <label className={labelStyle}>Cash Added Date</label>
-                    <input type="date" className={winInput} value={editingOrder.cash_added_date || ''} onChange={e => setEditingOrder({...editingOrder, cash_added_date: e.target.value})}/>
-                  </div>
-                  <div>
-                    <label className={labelStyle}>Note / Remarks</label>
-                    <select className={winSelect} value={editingOrder.note || ''} onChange={e => setEditingOrder({...editingOrder, note: e.target.value})}>
-                      <option value="">Normal Delivery</option>
-                      <option value="RT">Return Item (RT)</option>
-                    </select>
-                  </div>
-                </div>
-              </form>
-            </div>
-
-            <div className="px-5 py-3.5 bg-gray-50 border-t border-gray-200 flex justify-end gap-2 shrink-0">
-              <button type="button" onClick={() => setEditingOrder(null)} className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-100 transition shadow-sm">
-                Cancel
-              </button>
-              <button type="submit" form="report-edit-form" className="px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-md text-sm font-medium shadow-sm transition-colors">
-                Save Changes
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── ပြင်ပမှ ခေါ်သုံးထားသော Edit Order Modal ── */}
+<EditOrderModal 
+  isOpen={editingOrder !== null} 
+  onClose={() => setEditingOrder(null)} 
+  orderData={editingOrder} 
+  onSaveSuccess={() => {
+    fetchData(); // Update အောင်မြင်သွားရင် Report စာရင်းထဲမှာ Data ချက်ချင်း Refresh ဖြစ်သွားအောင် ပြန်ခေါ်ပေးခြင်း
+  }} 
+/>
 
       {/* ── Add Cash / Handover Modal ── */}
       {handoverModal.open && (
@@ -762,6 +863,131 @@ export default function DailyReport() {
         </div>
       )}
 
+      {/* ── View Cash Handovers History Popup Modal (Split Tables View) ── */}
+      {viewHandoverModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh]">
+            {/* Modal Header */}
+            <div className="bg-gray-50 border-b border-gray-200 px-5 py-3.5 flex justify-between items-center shrink-0">
+              <div>
+                <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">📋 ငွေအပ်နှံမှုနှင့် အသုံးစရိတ်မှတ်တမ်းများ</h3>
+                <p className="text-[11px] text-gray-500 mt-0.5">ရက်စွဲ - {selectedDate} · ရုံးခွဲ - {userBranch === 'MDY' ? 'Mandalay' : 'Yangon'}</p>
+              </div>
+              <button onClick={() => setViewHandoverModal(false)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">×</button>
+            </div>
+
+            {/* Modal Body / Split Table Comparative View */}
+            <div className="flex-1 overflow-auto p-5">
+              {handovers.length === 0 ? (
+                <p className="text-center py-12 text-xs text-gray-400 font-medium">ယနေ့ရက်စွဲအတွက် စာရင်းမှတ်တမ်း မရှိသေးပါ။</p>
+              ) : (
+                (() => {
+                  // Transaction Type အလိုက် စာရင်းခွဲထုတ်ခြင်း
+                  const cashInItems = handovers.filter(h => h.transaction_type !== 'OOP');
+                  const oppItems = handovers.filter(h => h.transaction_type === 'OOP');
+                  
+                  // စုစုပေါင်း ငွေပမာဏတွက်ချက်ခြင်း
+                  const totalCashIn = cashInItems.reduce((sum, h) => sum + (h.amount || 0), 0);
+                  const totalOpp = oppItems.reduce((sum, h) => sum + (h.amount || 0), 0);
+
+                  return (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      
+                      {/* 💰 TABLE 1: CASH IN (ငွေဝင်စာရင်း) */}
+                      <div className="flex flex-col gap-2">
+                        <div className="flex justify-between items-center bg-green-50 p-2 rounded-lg border border-green-100 px-3">
+                          <span className="text-xs font-bold text-green-800">💵 Cash In (ငွေဝင်စာရင်း)</span>
+                          <span className="text-xs font-mono font-bold text-green-700">Total: {totalCashIn.toLocaleString()} Ks</span>
+                        </div>
+                        <div className="overflow-x-auto border border-gray-100 rounded-lg max-h-[50vh]">
+                          <table className="w-full text-left whitespace-nowrap text-xs">
+                            <thead className="sticky top-0 bg-gray-100 text-gray-500 font-bold uppercase text-[10px] tracking-wider border-b border-gray-200 shadow-sm">
+                              <tr>
+                                <th className="px-3 py-2">Rider Name</th>
+                                <th className="px-3 py-2 text-right">Amount</th>
+                                <th className="px-3 py-2">Method</th>
+                                <th className="px-3 py-2">Note</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 text-gray-700">
+                              {cashInItems.length === 0 ? (
+                                <tr><td colSpan={4} className="text-center py-6 text-gray-400 text-[11px]">Cash In စာရင်းမရှိပါ။</td></tr>
+                              ) : (
+                                cashInItems.map((h) => (
+                                  <tr key={h.id} className="hover:bg-gray-50/60 transition-colors">
+                                    <td className="px-3 py-2 text-gray-900 font-semibold">👤 {h.rider_name}</td>
+                                    <td className="px-3 py-2 text-right font-bold text-green-600">{h.amount?.toLocaleString()} Ks</td>
+                                    <td className="px-3 py-2">
+                                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${h.payment_method === 'Kpay' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'bg-gray-100 text-gray-700 border border-gray-200'}`}>
+                                        {h.payment_method}
+                                      </span>
+                                    </td>
+                                    <td className="px-3 py-2 text-gray-500 max-w-[120px] truncate" title={h.note}>{h.note || '-'}</td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      {/* 💸 TABLE 2: OPP (အထွေထွေအသုံးစရိတ်စာရင်း) */}
+                      <div className="flex flex-col gap-2">
+                        <div className="flex justify-between items-center bg-purple-50 p-2 rounded-lg border border-purple-100 px-3">
+                          <span className="text-xs font-bold text-purple-800">💸 OPP (အသုံးစရိတ်စာရင်း)</span>
+                          <span className="text-xs font-mono font-bold text-purple-700">Total: {totalOpp.toLocaleString()} Ks</span>
+                        </div>
+                        <div className="overflow-x-auto border border-gray-100 rounded-lg max-h-[50vh]">
+                          <table className="w-full text-left whitespace-nowrap text-xs">
+                            <thead className="sticky top-0 bg-gray-100 text-gray-500 font-bold uppercase text-[10px] tracking-wider border-b border-gray-200 shadow-sm">
+                              <tr>
+                                <th className="px-3 py-2">Rider Name</th>
+                                <th className="px-3 py-2 text-right">Amount</th>
+                                <th className="px-3 py-2">Method</th>
+                                <th className="px-3 py-2">Note</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 text-gray-700">
+                              {oppItems.length === 0 ? (
+                                <tr><td colSpan={4} className="text-center py-6 text-gray-400 text-[11px]">OPP စာရင်းမရှိပါ။</td></tr>
+                              ) : (
+                                oppItems.map((h) => (
+                                  <tr key={h.id} className="hover:bg-gray-50/60 transition-colors">
+                                    <td className="px-3 py-2 text-gray-900 font-semibold">👤 {h.rider_name}</td>
+                                    <td className="px-3 py-2 text-right font-bold text-purple-600">{h.amount?.toLocaleString()} Ks</td>
+                                    <td className="px-3 py-2">
+                                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${h.payment_method === 'Kpay' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'bg-gray-100 text-gray-700 border border-gray-200'}`}>
+                                        {h.payment_method}
+                                      </span>
+                                    </td>
+                                    <td className="px-3 py-2 text-gray-500 max-w-[120px] truncate" title={h.note}>{h.note || '-'}</td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-5 py-3.5 bg-gray-50 border-t border-gray-200 flex justify-end shrink-0">
+              <button 
+                onClick={() => setViewHandoverModal(false)} 
+                className="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 rounded-md text-xs font-semibold text-gray-700 transition shadow-sm"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Photo Preview Modal ── */}
       {previewImage && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex flex-col items-center justify-center z-[60]" onClick={() => setPreviewImage(null)}>
@@ -769,6 +995,28 @@ export default function DailyReport() {
             <img src={previewImage} alt="Preview" className="max-w-full max-h-[80vh] object-contain rounded shadow-2xl" />
             <button onClick={() => setPreviewImage(null)} className="absolute -top-10 right-0 text-white font-bold bg-black/50 px-3 py-1 rounded-full">Close ×</button>
           </div>
+        </div>
+      )}
+
+      {/* ── Custom Right-Click Context Menu ── */}
+      {contextMenu && (
+        <div 
+          className="fixed bg-white border border-gray-200 rounded-lg shadow-xl py-1.5 z-[100] w-40 text-xs font-semibold text-gray-700 border-l-4 border-l-orange-500"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 mb-1">
+            Options
+          </div>
+          <button 
+            onClick={() => {
+              setEditingOrder(contextMenu.order);
+              setContextMenu(null);
+            }}
+            className="w-full text-left px-3 py-2 hover:bg-orange-50 hover:text-orange-600 flex items-center gap-2 transition-colors"
+          >
+            ✏️ Edit Order
+          </button>
         </div>
       )}
 

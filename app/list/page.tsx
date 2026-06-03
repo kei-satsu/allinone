@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import EditOrderModal from '@/components/EditOrderModal' // သင့် Component တည်နေရာလမ်းကြောင်းအတိုင်း ချိန်ပေးပါ
 
 const COLUMN_DEFS = [
   { key: 'item_id', label: 'Item ID', defaultVisible: true },
@@ -55,6 +56,8 @@ export default function OrderList() {
   const [previewImage, setPreviewImage] = useState<string | null>(null) 
   const [viewingHistoryOrder, setViewingHistoryOrder] = useState<any | null>(null)
   const [viewingDetailOrder, setViewingDetailOrder] = useState<any | null>(null);
+  const [showMobileFilters, setShowMobileFilters] = useState(false)
+  const [expandedMobileCards, setExpandedMobileCards] = useState<Record<string, boolean>>({})
 
   const [imgScale, setImgScale] = useState<number>(1)
   const [imgRotation, setImgRotation] = useState<number>(0)
@@ -205,126 +208,11 @@ export default function OrderList() {
     }
   }
 
-  const handleRemoveImageOnly = async (order: any) => {
-    if (!order.image_url) return;
-    if (confirm("ဒီပါဆယ်မှတ်တမ်းရဲ့ ပုံကိုပဲ သီးသန့် အပြီးဖျက်ရန် သေချာပါသလား?")) {
-      setLoading(true);
-      const publicId = extractPublicId(order.image_url);
-      
-      if (publicId) {
-        await fetch('/api/cloudinary/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ publicId })
-        });
-      }
+  
 
-      const { error } = await supabase
-        .from('orders')
-        .update({ image_url: null })
-        .eq('id', order.id);
+  
 
-      if (error) {
-        alert(error.message);
-      } else {
-        alert("ပုံကို အောင်မြင်စွာ ဖျက်ပြီးပါပြီ။");
-        setEditingOrder({ ...editingOrder, image_url: null });
-        fetchData();
-      }
-      setLoading(false);
-    }
-  }
-
-  const handleReplaceImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !editingOrder) return;
-
-    if (confirm("ပုံဟောင်းကို ဖျက်ပြီး ပုံအသစ်နှင့် လဲလှယ်ရန် သေချာပါသလား?")) {
-      setLoading(true);
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('upload_preset', 'for_allinone'); 
-
-        const res = await fetch(`https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`, {
-          method: 'POST',
-          body: formData,
-        });
-        const uploadedData = await res.json();
-        if (uploadedData.error) throw new Error(uploadedData.error.message);
-
-        const newImageUrl = uploadedData.secure_url;
-
-        if (editingOrder.image_url) {
-          const oldPublicId = extractPublicId(editingOrder.image_url);
-          if (oldPublicId) {
-            await fetch('/api/cloudinary/delete', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ publicId: oldPublicId })
-            });
-          }
-        }
-
-        const { error } = await supabase
-          .from('orders')
-          .update({ image_url: newImageUrl })
-          .eq('id', editingOrder.id);
-
-        if (error) throw error;
-
-        setEditingOrder({ ...editingOrder, image_url: newImageUrl });
-        alert("ပုံအသစ်ကို အောင်မြင်စွာ လဲလှယ်ပြီးပါပြီ။");
-        fetchData();
-      } catch (err: any) {
-        alert("Error: " + err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-  }
-
-  const handleUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const { pickup_rider, deliver_rider, ...updateData } = editingOrder;
-
-    if (updateData.pickup_rider_id === "") updateData.pickup_rider_id = null;
-    if (updateData.deliver_rider_id === "") updateData.deliver_rider_id = null;
-
-    let changes: string[] = [];
-    
-    if (contextMenu?.order?.status !== editingOrder.status) {
-      changes.push(`Status ကို "${contextMenu?.order?.status || 'At Office'}" မှ "${editingOrder.status}" သို့ ပြောင်းလဲခဲ့သည်`);
-    }
-    
-    if (contextMenu?.order?.deliver_rider_id !== editingOrder.deliver_rider_id) {
-      const selectedRider = riders.find(r => r.id === editingOrder.deliver_rider_id);
-      changes.push(`Rider ကို "${selectedRider ? selectedRider.name : 'ဖြုတ်လိုက်သည်'}" သို့ တာဝန်ပေးခဲ့သည်`);
-    }
-
-    if (changes.length === 0) {
-      changes.push("ပါဆယ်အချက်အလက်များကို အသေးစိတ် ပြင်ဆင်ခဲ့သည်");
-    }
-
-    const logNote = changes.join("၊ ");
-    const updatedHistory = appendLog(editingOrder.history, "Order Updated", logNote);
-
-    const { error } = await supabase
-      .from('orders')
-      .update({
-        ...updateData,
-        history: updatedHistory 
-      })
-      .eq('id', editingOrder.id);
-
-    if (error) {
-      alert("Error: " + error.message);
-    } else {
-      alert("အချက်အလက်များနှင့် လှုပ်ရှားမှုမှတ်တမ်းကို အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ!");
-      setEditingOrder(null);
-      fetchData();
-    }
-  }
+  
 
   const renderCell = (o: any, key: string) => {
     if (key === 'branch') return (
@@ -440,27 +328,74 @@ export default function OrderList() {
         </div>
       </div>
 
-      {/* 📱 Mobile Only Quick Filter (ID/Phone Bar) */}
-      <div className="sm:hidden px-3 py-2 bg-white border-b border-gray-200 flex items-center gap-2">
-        <div className="relative flex-1">
-          <input 
-            type="text" 
-            placeholder="🔍 ID၊ ဖုန်း သို့မဟုတ် အမည်ဖြင့် ရှာရန်..." 
-            className="w-full bg-gray-50 border border-gray-200 rounded-md pl-8 pr-3 py-1.5 text-xs text-gray-700 placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:bg-white"
-            value={colFilters['global_search'] || ''}
-            onChange={e => setColFilters(prev => ({ ...prev, global_search: e.target.value }))}
-          />
-          <span className="absolute left-2.5 top-2 text-gray-400 text-[10px]" />
-        </div>
-        {colFilters['global_search'] && (
-          <button 
-            onClick={() => setColFilters(prev => ({ ...prev, global_search: '' }))}
-            className="text-xs text-gray-500 font-medium px-2 py-1 bg-gray-100 rounded hover:bg-gray-200"
-          >
-            Clear
-          </button>
-        )}
+      {/* 📱 Mobile Only Enhanced Filter Panel */}
+<div className="sm:hidden bg-white border-b border-gray-200 flex flex-col transition-all">
+  <div className="px-3 py-2 flex items-center gap-2">
+    <div className="relative flex-1">
+      <input 
+        type="text" 
+        placeholder="🔍 ID၊ ဖုန်း၊ အမည်ဖြင့် ရှာရန်..." 
+        className="w-full bg-gray-50 border border-gray-200 rounded-md pl-8 pr-3 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-orange-500 focus:bg-white"
+        value={colFilters['global_search'] || ''}
+        onChange={e => setColFilters(prev => ({ ...prev, global_search: e.target.value }))}
+      />
+    </div>
+    <button 
+      onClick={() => setShowMobileFilters(!showMobileFilters)}
+      className={`p-1.5 border rounded-md text-xs font-medium flex items-center gap-1 transition-colors ${showMobileFilters ? 'bg-orange-50 border-orange-300 text-orange-600' : 'bg-gray-50 border-gray-200 text-gray-600'}`}
+    >
+      ⚙️ Filter
+    </button>
+    {Object.values(colFilters).some(v => v !== '') && (
+      <button 
+        onClick={() => setColFilters({})}
+        className="text-xs text-red-500 font-medium px-2 py-1.5 bg-red-50 rounded border border-red-100"
+      >
+        Reset
+      </button>
+    )}
+  </div>
+
+  {showMobileFilters && (
+    <div className="px-3 pb-3 pt-1 grid grid-cols-2 gap-2 bg-gray-50 border-t border-gray-100 animate-in slide-in-from-top-2 duration-150">
+      <div>
+        <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Branch</label>
+        <select className="w-full text-xs p-1.5 bg-white border border-gray-200 rounded-md" value={colFilters['branch'] || ''} onChange={e => handleFilterChange('branch', e.target.value)}>
+          <option value="">All Branches</option>
+          <option value="MDY">Mandalay</option>
+          <option value="YGN">Yangon</option>
+        </select>
       </div>
+      <div>
+        <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Status</label>
+        <select className="w-full text-xs p-1.5 bg-white border border-gray-200 rounded-md" value={colFilters['status'] || ''} onChange={e => handleFilterChange('status', e.target.value)}>
+          <option value="">All Status</option>
+          <option value="At Office">At Office</option>
+          <option value="On Way">On Way</option>
+          <option value="Delivered">Delivered</option>
+          <option value="In-Transit">In-Transit</option>
+        </select>
+      </div>
+      <div>
+        <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Payment Type</label>
+        <select className="w-full text-xs p-1.5 bg-white border border-gray-200 rounded-md" value={colFilters['fee_type'] || ''} onChange={e => handleFilterChange('fee_type', e.target.value)}>
+          <option value="">All Types</option>
+          <option value="Deli">Deli</option>
+          <option value="Kpay">Kpay</option>
+          <option value="Cash">Cash</option>
+          <option value="Bill">Bill</option>
+        </select>
+      </div>
+      <div>
+        <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Deliver Rider</label>
+        <select className="w-full text-xs p-1.5 bg-white border border-gray-200 rounded-md" value={colFilters['deliver_rider'] || ''} onChange={e => handleFilterChange('deliver_rider', e.target.value)}>
+          <option value="">All Riders</option>
+          {riders.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+        </select>
+      </div>
+    </div>
+  )}
+</div>
 
       {/* ── Container Workspace Area ── */}
       <div className="flex-1 overflow-auto bg-white sm:mx-5 sm:my-3 sm:rounded-lg sm:border sm:border-gray-200 sm:shadow-sm">
@@ -476,22 +411,63 @@ export default function OrderList() {
                   </th>
                 ))}
               </tr>
-              <tr className="bg-gray-50/80 border-b border-gray-200">
-                {COLUMN_DEFS.map(col => visibleCols[col.key] && (
-                  <th key={`filter-${col.key}`} className="px-2 py-1.5 font-normal">
-                    {col.key !== 'image_url' ? (
-                      <input 
-                        className={filterInputCls} 
-                        placeholder="Filter..." 
-                        value={colFilters[col.key] || ''}
-                        onChange={e => handleFilterChange(col.key, e.target.value)} 
-                      />
-                    ) : (
-                      <div className="h-5" /> 
-                    )}
-                  </th>
-                ))}
-              </tr>
+             <tr className="bg-gray-50/80 border-b border-gray-200">
+  {COLUMN_DEFS.map(col => visibleCols[col.key] && (
+    <th key={`filter-${col.key}`} className="px-2 py-1.5 font-normal">
+      {col.key === 'image_url' ? (
+        <div className="h-5" />
+      ) : ['branch', 'status', 'fee_type'].includes(col.key) ? (
+        <select
+          className="w-full bg-transparent border-b border-gray-300 focus:border-orange-500 focus:outline-none py-1 text-[11px] text-gray-700 font-medium cursor-pointer"
+          value={colFilters[col.key] || ''}
+          onChange={e => handleFilterChange(col.key, e.target.value)}
+        >
+          <option value="">All</option>
+          {col.key === 'branch' && (
+            <>
+              <option value="MDY">MDY</option>
+              <option value="YGN">YGN</option>
+            </>
+          )}
+          {col.key === 'status' && (
+            <>
+              <option value="At Office">At Office</option>
+              <option value="On Way">On Way</option>
+              <option value="Delivered">Delivered</option>
+              <option value="In-Transit">In-Transit</option>
+            </>
+          )}
+          {col.key === 'fee_type' && (
+            <>
+              <option value="Deli">Deli</option>
+              <option value="Kpay">Kpay</option>
+              <option value="Cash">Cash</option>
+              <option value="Bill">Bill</option>
+            </>
+          )}
+        </select>
+      ) : ['pickup_rider', 'deliver_rider'].includes(col.key) ? (
+        <select
+          className="w-full bg-transparent border-b border-gray-300 focus:border-orange-500 focus:outline-none py-1 text-[11px] text-gray-700 font-medium cursor-pointer"
+          value={colFilters[col.key] || ''}
+          onChange={e => handleFilterChange(col.key, e.target.value)}
+        >
+          <option value="">All Riders</option>
+          {riders.map(r => (
+            <option key={r.id} value={r.name}>{r.name}</option>
+          ))}
+        </select>
+      ) : (
+        <input 
+          className={filterInputCls} 
+          placeholder="Filter..." 
+          value={colFilters[col.key] || ''}
+          onChange={e => handleFilterChange(col.key, e.target.value)} 
+        />
+      )}
+    </th>
+  ))}
+</tr> 
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
@@ -585,24 +561,50 @@ export default function OrderList() {
                 </div>
 
                 {/* Pricing & Fees Grid */}
-                <div className="flex items-center justify-between text-xs pt-1">
-                  <div className="flex gap-4 text-gray-500 text-[11px]">
-                    <span>COD: <strong className="text-gray-700">{o.cod_amount?.toLocaleString() || 0} Ks</strong></span>
-                    <span>Deli: <strong className="text-gray-700">{o.deli_fee?.toLocaleString() || 0} Ks</strong></span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-900 font-bold text-xs">Total: {o.total_amount?.toLocaleString() || 0} Ks</span>
-                    {o.image_url && (
-                      <img 
-                        src={o.image_url} 
-                        alt="Parcel" 
-                        onClick={(e) => { e.stopPropagation(); setPreviewImage(o.image_url); }}
-                        className="w-6 h-6 object-cover rounded border border-gray-200"
-                      />
-                    )}
-                  </div>
-                </div>
-              </div>
+          <div className="flex items-center justify-between text-xs pt-1">
+            <div className="flex gap-4 text-gray-500 text-[11px]">
+              <span>COD: <strong className="text-gray-700">{o.cod_amount?.toLocaleString() || 0} Ks</strong></span>
+              <span>Deli: <strong className="text-gray-700">{o.deli_fee?.toLocaleString() || 0} Ks</strong></span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-900 font-bold text-xs">Total: {o.total_amount?.toLocaleString() || 0} Ks</span>
+              {o.image_url && (
+                <img 
+                  src={o.image_url} 
+                  alt="Parcel" 
+                  onClick={(e) => { e.stopPropagation(); setPreviewImage(o.image_url); }}
+                  className="w-6 h-6 object-cover rounded border border-gray-200"
+                />
+              )}
+            </div>
+          </div>
+
+          {/* ➕ Collapsible More Fields for Mobile View */}
+          <div className="pt-2 border-t border-dashed border-gray-100 mt-1 flex justify-between items-center">
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                setExpandedMobileCards(prev => ({ ...prev, [o.id]: !prev[o.id] }));
+              }}
+              className="text-[11px] font-semibold text-orange-500 hover:text-orange-600 transition-colors flex items-center gap-1"
+            >
+              {expandedMobileCards[o.id] ? "🔼 အချက်အလက်များ သိမ်းရန်" : "🔽 အချက်အလက်အားလုံး ပြရန်"}
+            </button>
+          </div>
+
+          {expandedMobileCards[o.id] && (
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-[11px] bg-gray-50 p-2.5 rounded-lg border border-gray-100 mt-2 animate-in fade-in duration-150" onClick={(e) => e.stopPropagation()}>
+              <div><span className="text-gray-400 block">Type:</span> <span className="text-gray-800 font-semibold">{o.fee_type || '-'}</span></div>
+              <div><span className="text-gray-400 block">Pickup By:</span> <span className="text-gray-800 font-semibold">{o.pickup_rider?.name || '-'}</span></div>
+              <div><span className="text-gray-400 block">Deliver By:</span> <span className="text-gray-800 font-semibold">{o.deliver_rider?.name || '-'}</span></div>
+              <div><span className="text-gray-400 block">Deliver Date:</span> <span className="text-gray-800 font-semibold">{o.deliver_date || '-'}</span></div>
+              <div><span className="text-gray-400 block">Cash Add Date:</span> <span className="text-gray-800 font-semibold">{o.cash_added_date || '-'}</span></div>
+              <div><span className="text-gray-400 block">Note:</span> <span className="text-gray-800 font-semibold">{o.note || '-'}</span></div>
+              <div className="col-span-2"><span className="text-gray-400 block">Full Address:</span> <span className="text-gray-800 font-semibold break-words">{o.receiver_address || '-'}</span></div>
+            </div>
+          )}
+
+        </div>   
             ))
           )}
         </div>
@@ -674,172 +676,94 @@ export default function OrderList() {
       )}
 
       {/* ── Edit Modal Form ── */}
-      {editingOrder && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
-            <div className="bg-white rounded-xl w-full max-w-5xl my-auto max-h-[92vh] overflow-y-auto shadow-2xl border border-gray-200">
-                <div className="flex justify-between items-center px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-200 bg-gray-50/50 rounded-t-xl">
-                    <div>
-                      <h2 className="text-sm sm:text-base font-semibold text-gray-900">Update Order</h2>
-                      <p className="text-[10px] sm:text-[11px] text-gray-500 mt-0.5">Item ID: <span className="font-mono text-gray-700">{editingOrder.item_id}</span></p>
-                    </div>
-                    <button onClick={() => setEditingOrder(null)} className="w-8 h-8 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition-colors">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
-                </div>
+      {/* ── ပြင်ပမှ ခေါ်သုံးထားသော Edit Order Modal ── */}
+<EditOrderModal 
+  isOpen={editingOrder !== null} 
+  onClose={() => setEditingOrder(null)} 
+  orderData={editingOrder} 
+  onSaveSuccess={() => {
+    fetchData(); // Update အောင်မြင်သွားရင် List ထဲမှာ Data ချက်ချင်း Refresh ဖြစ်အောင် ပြန်ခေါ်ပေးခြင်း
+  }} 
+/>
+
+{/* ── 📜 View History Log Modal ── */}
+{viewingHistoryOrder && (
+  <div 
+    className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200"
+    onClick={() => setViewingHistoryOrder(null)}
+  >
+    <div 
+      className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+      onClick={e => e.stopPropagation()}
+    >
+      {/* Modal Header */}
+      <div className="px-5 py-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+        <div>
+          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide flex items-center gap-1.5">
+            📜 Activity History Log
+          </h3>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Item ID: <span className="font-mono font-semibold text-orange-600">{viewingHistoryOrder.item_id}</span>
+          </p>
+        </div>
+        <button 
+          onClick={() => setViewingHistoryOrder(null)}
+          className="text-gray-400 hover:text-gray-600 bg-gray-100 hover:bg-gray-200 w-7 h-7 flex items-center justify-center rounded-full transition-colors text-xs font-bold"
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Modal Body (Timeline View) */}
+      <div className="p-5 overflow-y-auto flex-1 space-y-4 bg-gray-50/50">
+        {!viewingHistoryOrder.history || viewingHistoryOrder.history.length === 0 ? (
+          <div className="text-center py-8 text-gray-400 text-xs font-medium">
+            လှုပ်ရှားမှုမှတ်တမ်း (Log) မရှိသေးပါ။
+          </div>
+        ) : (
+          <div className="relative border-l-2 border-orange-200 pl-4 ml-2 space-y-5 my-2">
+            {viewingHistoryOrder.history.map((log: any, index: number) => (
+              <div key={index} className="relative">
+                {/* Timeline Dot */}
+                <span className="absolute -left-[21px] top-1 bg-orange-500 w-2.5 h-2.5 rounded-full ring-4 ring-white shadow-sm" />
                 
-                <div className="flex flex-col lg:flex-row gap-5 p-4 sm:p-6">
-                  <form className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm" onSubmit={handleUpdate}>
-                      <div>
-                        <label className={labelStyle}>Received Date</label>
-                        <input type="date" className={winInput} value={editingOrder.received_date || ''} onChange={e => setEditingOrder({...editingOrder, received_date: e.target.value})}/>
-                      </div>
-                      <div>
-                        <label className={labelStyle}>Branch</label>
-                        <select className={winSelect} value={editingOrder.branch || ''} onChange={e => setEditingOrder({...editingOrder, branch: e.target.value})}>
-                          <option value="MDY">MANDALAY (MDY)</option>
-                          <option value="YGN">YANGON (YGN)</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className={labelStyle}>Status</label>
-                        <select className={winSelect} value={editingOrder.status} onChange={e => setEditingOrder({...editingOrder, status: e.target.value})}>
-                          <option value="At Office">📦 At Office</option>
-                          <option value="On Way">🚵 On Way</option>
-                          <option value="Delivered">✅ Delivered</option>
-                          <option value="In-Transit">🚚 In-Transit</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className={labelStyle}>Pick Up Rider</label>
-                        <select className={winSelect} value={editingOrder.pickup_rider_id || ''} onChange={e => setEditingOrder({...editingOrder, pickup_rider_id: e.target.value})}>
-                          <option value="">Select...</option>
-                          {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                        </select>
-                      </div>
-
-                      <div className="sm:col-span-2 lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-gray-100">
-                        <div>
-                          <label className={labelStyle}>Sender Name</label>
-                          <input className={winInput} value={editingOrder.sender_name || ''} onChange={e => setEditingOrder({...editingOrder, sender_name: e.target.value})}/>
-                        </div>
-                        <div>
-                          <label className={labelStyle}>Sender City</label>
-                          <select className={winSelect} value={editingOrder.sender_loc || ''} onChange={e => setEditingOrder({...editingOrder, sender_loc: e.target.value})}>
-                            <option value="MDY">MANDALAY</option>
-                            <option value="YGN">YANGON</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="sm:col-span-2 lg:col-span-4 grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-gray-100">
-                        <div>
-                          <label className={labelStyle}>Receiver Name</label>
-                          <input className={winInput} value={editingOrder.receiver_name || ''} onChange={e => setEditingOrder({...editingOrder, receiver_name: e.target.value})}/>
-                        </div>
-                        <div>
-                          <label className={labelStyle}>Receiver Phone</label>
-                          <input className={winInput} value={editingOrder.receiver_phone || ''} onChange={e => setEditingOrder({...editingOrder, receiver_phone: e.target.value})}/>
-                        </div>
-                        <div>
-                          <label className={labelStyle}>Destination City</label>
-                          <select className={winSelect} value={editingOrder.receiver_loc || ''} onChange={e => setEditingOrder({...editingOrder, receiver_loc: e.target.value})}>
-                            <option value="MDY">Mandalay (MDY)</option>
-                            <option value="YGN">Yangon (YGN)</option>
-                            <option value="NPT">Nay Pyi Taw (NPT)</option>
-                          </select>
-                        </div>
-                        <div className="sm:col-span-3">
-                          <label className={labelStyle}>Full Delivery Address</label>
-                          <textarea rows={2} className={winInput} value={editingOrder.receiver_address || ''} onChange={e => setEditingOrder({...editingOrder, receiver_address: e.target.value})}/>
-                        </div>
-                      </div>
-
-                      <div className="sm:col-span-2 lg:col-span-4 grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-gray-100 bg-gray-50/50 -mx-4 px-4 sm:-mx-6 sm:px-6 py-4">
-                        <div>
-                          <label className={labelStyle}>Payment Type</label>
-                          <select className={winSelect} value={editingOrder.fee_type || ''} onChange={e => setEditingOrder({...editingOrder, fee_type: e.target.value})}>
-                            <option value="Deli">Deli (+)</option>
-                            <option value="Kpay">Kpay (Prepaid)</option>
-                            <option value="Cash">Cash (Prepaid)</option>
-                            <option value="Bill">Bill (-)</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className={labelStyle}>COD Amount</label>
-                          <input type="number" className={winInput} value={editingOrder.cod_amount || 0} onChange={e => setEditingOrder({...editingOrder, cod_amount: Number(e.target.value)})}/>
-                        </div>
-                        <div>
-                          <label className={labelStyle}>Deli Fee</label>
-                          <input type="number" className={winInput} value={editingOrder.deli_fee || 0} onChange={e => setEditingOrder({...editingOrder, deli_fee: Number(e.target.value)})}/>
-                        </div>
-                        <div>
-                          <label className="block text-orange-600 font-semibold mb-1 uppercase text-[11px] tracking-wide">Total Amount</label>
-                          <input type="number" className="w-full px-3 py-2 bg-orange-50 border border-orange-200 rounded-md text-orange-800 text-lg font-bold focus:outline-none focus:ring-2 focus:ring-orange-100" value={editingOrder.total_amount || 0} onChange={e => setEditingOrder({...editingOrder, total_amount: Number(e.target.value)})}/>
-                        </div>
-                      </div>
-
-                      <div className="sm:col-span-2 lg:col-span-4 grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2 border-t border-gray-100">
-                        <div>
-                          <label className={labelStyle}>Deliver Rider</label>
-                          <select className={winSelect} value={editingOrder.deliver_rider_id || ''} onChange={e => setEditingOrder({...editingOrder, deliver_rider_id: e.target.value})}>
-                            <option value="">Select...</option>
-                            {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label className={labelStyle}>Deliver Date</label>
-                          <input type="date" className={winInput} value={editingOrder.deliver_date || ''} onChange={e => setEditingOrder({...editingOrder, deliver_date: e.target.value})}/>
-                        </div>
-                        <div>
-                          <label className={labelStyle}>Cash Added Date</label>
-                          <input type="date" className={winInput} value={editingOrder.cash_added_date || ''} onChange={e => setEditingOrder({...editingOrder, cash_added_date: e.target.value})}/>
-                        </div>
-                        <div>
-                          <label className={labelStyle}>Note / Remarks</label>
-                          <select className={winSelect} value={editingOrder.note || ''} onChange={e => setEditingOrder({...editingOrder, note: e.target.value})}>
-                            <option value="">Normal Delivery</option>
-                            <option value="RT">Return Item (RT)</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="sm:col-span-2 lg:col-span-4 flex justify-end gap-2 pt-3 border-t border-gray-100">
-                        <button type="button" onClick={() => setEditingOrder(null)} className="px-5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-md border border-gray-200">Cancel</button>
-                        <button type="submit" className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-md shadow-sm transition-all">Save Changes</button>
-                      </div>
-                  </form>
-
-                  {/* Sidebar Photo Area */}
-                  <div className="w-full lg:w-64 border border-gray-200 rounded-lg p-4 bg-gray-50 flex flex-col items-center">
-                    <span className={labelStyle + " w-full text-left mb-2"}>Attached Order Photo</span>
-                    {editingOrder.image_url ? (
-                      <div className="w-full flex flex-col gap-3">
-                        <div className="relative w-full h-44 bg-white border border-gray-300 rounded overflow-hidden flex items-center justify-center group shadow-sm">
-                          <img src={editingOrder.image_url} alt="Order attachment" className="max-w-full max-h-full object-contain" />
-                          <div onClick={() => setPreviewImage(editingOrder.image_url)} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-medium cursor-pointer">Click to enlarge</div>
-                        </div>
-                        <label className="w-full bg-white hover:bg-gray-50 text-gray-700 font-semibold py-1.5 px-3 border border-gray-300 rounded text-center text-xs cursor-pointer shadow-sm block transition-colors">
-                          📷 Replace New Photo
-                          <input type="file" accept="image/*" className="hidden" onChange={handleReplaceImage} disabled={loading} />
-                        </label>
-                        <button type="button" onClick={() => handleRemoveImageOnly(editingOrder)} disabled={loading} className="w-full bg-red-50 hover:bg-red-100 text-red-600 font-semibold py-1.5 px-3 border border-red-200 rounded text-center text-xs shadow-sm transition-colors">🗑️ Delete Photo Only</button>
-                      </div>
-                    ) : (
-                      <div className="w-full flex flex-col gap-3">
-                        <div className="w-full h-44 border border-dashed border-gray-300 rounded flex flex-col items-center justify-center text-gray-400 text-xs bg-white">
-                          <svg className="w-8 h-8 mb-2 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                          No image uploaded
-                        </div>
-                        <label className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-1.5 px-3 rounded text-center text-xs cursor-pointer shadow-sm block transition-all">➕ Upload Photo
-                          <input type="file" accept="image/*" className="hidden" onChange={handleReplaceImage} disabled={loading} />
-                        </label>
-                      </div>
-                    )}
+                {/* Log Card */}
+                <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                  <div className="flex justify-between items-start gap-2 mb-1.5">
+                    <span className="text-[11px] font-bold text-gray-800 bg-gray-100 px-2 py-0.5 rounded">
+                      {log.action || 'Updated'}
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-medium font-mono">
+                      {log.timestamp ? new Date(log.timestamp).toLocaleString('en-GB', { hour12: true }) : '-'}
+                    </span>
+                  </div>
+                  
+                  <p className="text-xs text-gray-600 font-medium leading-relaxed break-words">
+                    {log.note || '-'}
+                  </p>
+                  
+                  <div className="mt-2 pt-1.5 border-t border-gray-100 flex items-center justify-end text-[10px] text-gray-400 font-semibold uppercase tracking-wide">
+                    👤 Operator: <span className="text-orange-600 ml-1">{log.operator || 'Unknown'}</span>
                   </div>
                 </div>
-            </div>
-        </div>
-      )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Modal Footer */}
+      <div className="p-3 bg-gray-50 border-t border-gray-200 flex justify-end">
+        <button 
+          onClick={() => setViewingHistoryOrder(null)}
+          className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold px-4 py-2 rounded-lg text-xs transition-colors"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* ── Telegram Style Image Viewer ── */}
       {previewImage && (
