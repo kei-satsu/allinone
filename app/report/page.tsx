@@ -119,33 +119,46 @@ export default function DailyReport() {
 
     setLoading(true)
 
-    // ၁။ Orders များအားဆွဲထုတ်ခြင်း
-    const { data: ordersData, error: ordersError } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        pickup_rider:riders!orders_pickup_rider_id_fkey(name),
-        deliver_rider:riders!orders_deliver_rider_id_fkey(name)
-      `)
-      .eq('is_deleted', false)
-      .eq('branch', activeBranch)
-      .or(`received_date.eq.${activeDate},deliver_date.eq.${activeDate}`)
-      .order('created_at', { ascending: false })
+    try {
+      // ၁။ Orders များအားဆွဲထုတ်ခြင်း
+      const { data: ordersData, error: ordersError } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          pickup_rider:riders!orders_pickup_rider_id_fkey(name),
+          deliver_rider:riders!orders_deliver_rider_id_fkey(name)
+        `)
+        .eq('is_deleted', false)
+        .eq('branch', activeBranch)
+        .or(`received_date.eq.${activeDate},deliver_date.eq.${activeDate}`)
+        .order('created_at', { ascending: false })
 
-    if (ordersError) console.error("Orders Error:", ordersError)
-    else setReportData(ordersData || [])
+      if (ordersError) {
+        console.error('Orders Error:', ordersError)
+        alert(`Orders fetch failed: ${ordersError.message || ordersError}`)
+      } else {
+        setReportData(ordersData || [])
+      }
 
-    // ၂။ Handovers စာရင်းဆွဲထုတ်ခြင်း
-    const { data: handoversData, error: handoversError } = await supabase
-      .from('cash_handovers')
-      .select('*')
-      .eq('branch', activeBranch)
-      .eq('date', activeDate)
+      // ၂။ Handovers စာရင်းဆွဲထုတ်ခြင်း
+      const { data: handoversData, error: handoversError } = await supabase
+        .from('cash_handovers')
+        .select('*')
+        .eq('branch', activeBranch)
+        .eq('date', activeDate)
 
-    if (handoversError) console.error("Handovers Error:", handoversError)
-    else setHandovers(handoversData || [])
-
-    setLoading(false)
+      if (handoversError) {
+        console.error('Handovers Error:', handoversError)
+        alert(`Handovers fetch failed: ${handoversError.message || handoversError}`)
+      } else {
+        setHandovers(handoversData || [])
+      }
+    } catch (error: any) {
+      console.error('Network fetch failed:', error)
+      alert(`Network request failed: ${error.message || error}`)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const fetchRiders = async () => {
@@ -272,6 +285,24 @@ export default function DailyReport() {
       acc[loc][sender] += cod;
       return acc;
     }, {});
+
+  const deliveredOrders = reportData.filter(o => o.status === 'Delivered');
+  const riderSummaryTotal = deliveredOrders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+  const riderSummaryCashIn = handovers.filter(h => h.transaction_type === 'Cash-in').reduce((sum, h) => sum + (Number(h.amount) || 0), 0);
+  const riderSummaryOop = handovers.filter(h => h.transaction_type === 'OOP').reduce((sum, h) => sum + (Number(h.amount) || 0), 0);
+  const riderSummaryGap = riderSummaryTotal - (riderSummaryCashIn + riderSummaryOop);
+
+  const tableTotalAmount = reportData.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+  const tableDeliFeeTotal = reportData.reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
+  const oppositeCity = userBranch === 'MDY' ? 'YGN' : 'MDY';
+  const oppositeCityDeliTotal = reportData
+    .filter(o => o.sender_loc === oppositeCity)
+    .reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
+  const oppositeCityDeliHalf = oppositeCityDeliTotal / 2;
+  const oppositeCityDeliRemaining = tableDeliFeeTotal - oppositeCityDeliHalf;
+
+  const senderLocCount = Object.keys(senderCodByLoc).length;
+  const senderCodTotal = Object.values(senderCodByLoc).reduce((acc, senders) => acc + Object.values(senders).reduce((sum, amount) => sum + amount, 0), 0);
 
   return (
     <div className="w-full h-full flex flex-col bg-[#f3f3f3] font-[system-ui] overflow-hidden select-none">
@@ -428,28 +459,59 @@ export default function DailyReport() {
       <div className={`${showMobileSummary ? 'grid' : 'hidden sm:grid'} mx-4 mt-3 grid-cols-1 lg:grid-cols-2 gap-4 shrink-0 transition-all`}>
         
         {/* ကတ် (၁) - Rider Ngwe ရှင်းမှုမှတ်တမ်း Card */}
-        <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col gap-3 max-h-60 overflow-y-auto">
-          <div className="flex justify-between items-center border-b border-gray-100 pb-2 sticky top-0 bg-white z-10">
-            <h2 className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
-              🏍️ Rider Ngwe ရှင်းမှုမှတ်တမ်း (Delivered စာရင်းချုပ်)
-            </h2>
-            <div className="flex items-center gap-1.5">
-              {/* 📋 History ကြည့်ရန် ခလုတ်အသစ် */}
-              <button 
-                onClick={() => setViewHandoverModal(true)}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-2.5 py-1 rounded-md text-[11px] border border-gray-300 shadow-sm transition-all flex items-center gap-1"
-              >
-                📋 History
-              </button>
-              
-              <button 
-                onClick={() => setHandoverModal({ open: true, riderName: riders[0]?.name || '' })}
-                className="bg-green-600 hover:bg-green-700 text-white font-semibold px-2.5 py-1 rounded-md text-[11px] shadow-sm transition-all flex items-center gap-1"
-              >
-                💵 Add Cash
-              </button>
+        <div className="flex flex-col gap-3 h-full">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+            <div className="rounded-lg bg-orange-50 border border-orange-100 px-3 py-3 text-xs font-semibold text-orange-900 flex flex-col justify-between shadow-sm">
+              <span className="text-[10px] uppercase tracking-wide text-orange-600">Total Total</span>
+              <span className="text-right text-sm font-bold">{tableTotalAmount.toLocaleString()} Ks</span>
+            </div>
+            <div className="rounded-lg bg-indigo-50 border border-indigo-100 px-3 py-3 text-xs font-semibold text-indigo-900 flex flex-col justify-between shadow-sm">
+              <span className="text-[10px] uppercase tracking-wide text-indigo-600">Total Deli Fee</span>
+              <span className="text-right text-sm font-bold">{tableDeliFeeTotal.toLocaleString()} Ks</span>
+            </div>
+            <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-3 text-xs font-semibold text-emerald-900 flex flex-col justify-between shadow-sm">
+              <span className="text-[10px] uppercase tracking-wide text-emerald-600">{oppositeCity} Sender Deli / 2</span>
+              <span className="text-right text-sm font-bold">{oppositeCityDeliHalf.toLocaleString()} Ks</span>
+            </div>
+            <div className="rounded-lg bg-purple-50 border border-purple-100 px-3 py-3 text-xs font-semibold text-purple-900 flex flex-col justify-between shadow-sm">
+              <span className="text-[10px] uppercase tracking-wide text-purple-600">Remaining Deli Fee</span>
+              <span className="text-right text-sm font-bold">{oppositeCityDeliRemaining.toLocaleString()} Ks</span>
             </div>
           </div>
+
+          <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col gap-3 h-full overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-2 sticky top-0 bg-white z-10">
+              <h2 className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
+                🏍️ Rider Ngwe ရှင်းမှုမှတ်တမ်း (Delivered စာရင်းချုပ်)
+              </h2>
+              <div className="flex items-center gap-1.5">
+                {/* 📋 History ကြည့်ရန် ခလုတ်အသစ် */}
+                <button 
+                  onClick={() => setViewHandoverModal(true)}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-2.5 py-1 rounded-md text-[11px] border border-gray-300 shadow-sm transition-all flex items-center gap-1"
+                >
+                  📋 History
+                </button>
+                
+                <button 
+                  onClick={() => setHandoverModal({ open: true, riderName: riders[0]?.name || '' })}
+                  className="bg-green-600 hover:bg-green-700 text-white font-semibold px-2.5 py-1 rounded-md text-[11px] shadow-sm transition-all flex items-center gap-1"
+                >
+                  💵 Add Cash
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 mb-2">
+              <div className="rounded-full bg-orange-50 border border-orange-100 px-3 py-1 text-[11px] font-semibold text-orange-800 flex items-center justify-between shadow-sm">
+                <span>စုစုပေါင်း ငွေရှင်းရန်</span>
+                <span>{riderSummaryTotal.toLocaleString()} Ks</span>
+              </div>
+              <div className="rounded-full bg-sky-50 border border-sky-100 px-3 py-1 text-[11px] font-semibold text-sky-800 flex items-center justify-between shadow-sm">
+                <span>Cash-in</span>
+                <span>{riderSummaryCashIn.toLocaleString()} Ks</span>
+              </div>
+            </div>
 
           {/* Table Format ဖြင့် သပ်သပ်ရပ်ရပ် ပြောင်းလဲထားခြင်း */}
           <div className="overflow-x-auto border border-gray-100 rounded-lg">
@@ -544,13 +606,25 @@ export default function DailyReport() {
             </table>
           </div>
         </div>
+      </div>
 
         {/* ကတ် (၂) - Sender အလိုက် ပြန်ပေးရမယ့် COD စာရင်း Card */}
-        <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col gap-3 max-h-60 overflow-y-auto">
+        <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col gap-3 h-full overflow-y-auto">
           <div className="border-b border-gray-100 pb-2 sticky top-0 bg-white z-10">
             <h2 className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
               📦 Sender အလိုက် ပြန်ပေးရမယ့် COD (Delivered - LOC အလိုက်ခွဲထုတ်မှု)
             </h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 mb-2">
+            <div className="rounded-full bg-emerald-50 border border-emerald-100 px-3 py-1 text-[11px] font-semibold text-emerald-800 flex items-center justify-between shadow-sm">
+              <span>LOC အရ ကဏ္ဍ</span>
+              <span>{senderLocCount}</span>
+            </div>
+            <div className="rounded-full bg-purple-50 border border-purple-100 px-3 py-1 text-[11px] font-semibold text-purple-800 flex items-center justify-between shadow-sm">
+              <span>စုစုပေါင်း COD</span>
+              <span>{senderCodTotal.toLocaleString()} Ks</span>
+            </div>
           </div>
 
           {Object.keys(senderCodByLoc).length === 0 ? (

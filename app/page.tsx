@@ -150,32 +150,19 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* COD Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div className={excelCard}>
-              <div className="flex justify-between items-start">
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-700 uppercase">စုစုပေါင်း COD</h4>
-                  <p className="text-3xl font-bold text-gray-900 mt-2">
-                    {stats.totalCod.toLocaleString()} <span className="text-xl text-orange-600 font-medium">Ks</span>
-                  </p>
-                </div>
-                <span className="text-2xl">💰</span>
-              </div>
-              <p className="text-xs text-gray-400 mt-3">အော်ဒါအားလုံး၏ ကောက်ခံရမည့်ငွေ</p>
-            </div>
-
+          {/* Unpaid COD Card */}
+          <div className="grid grid-cols-1 gap-5 mb-6">
             <div className={excelCard}>
               <div className="flex justify-between items-start">
                 <div>
                   <h4 className="text-sm font-semibold text-gray-700 uppercase">မရသေးသောငွေ (UNPAID)</h4>
-                  <p className="text-3xl font-bold text-red-600 mt-2">
-                    {stats.unpaidCod.toLocaleString()} <span className="text-xl text-red-500 font-medium">Ks</span>
+                  <p className="text-2xl font-bold text-red-600 mt-2">
+                    {stats.unpaidCod.toLocaleString()} <span className="text-lg text-red-500 font-medium">Ks</span>
                   </p>
                 </div>
                 <span className="text-2xl">⚠️</span>
               </div>
-              <p className="text-xs text-gray-400 mt-3">Cash Added မလုပ်ရသေးသော ရရန်ကျန်ငွေ</p>
+              <p className="text-sm text-gray-500 mt-3">Cash Added မလုပ်ရသေးသော ရရန်ကျန်ငွေ</p>
             </div>
           </div>
         </>
