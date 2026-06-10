@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { useMobileDockVisibility } from '@/components/AppLayout';
 import Konva from 'konva';
 import { Stage, Layer, Image as KonvaImage, Text as KonvaText } from 'react-konva';
 import useImage from 'use-image';
@@ -43,6 +44,7 @@ export default function IntakePage() {
   
   // UI Flow
   const [flowMode, setFlowMode] = useState<'camera' | 'preview'>('camera');
+  const { setHideMobileDock } = useMobileDockVisibility();
   
   // Text Annotation States
   const [drawingText, setDrawingText] = useState(false);
@@ -95,6 +97,11 @@ export default function IntakePage() {
     startCamera();
     return () => stopCamera();
   }, []);
+
+  // Hide mobile dock during camera mode so camera UI remains unobstructed
+  useEffect(() => {
+    setHideMobileDock(flowMode === 'camera');
+  }, [flowMode, setHideMobileDock]);
 
   // Shutter Sound
   const playShutterSound = () => {

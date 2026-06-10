@@ -54,18 +54,23 @@ export default function OrderList() {
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; order: any } | null>(null)
   const [previewImage, setPreviewImage] = useState<string | null>(null) 
+  const [imgScale, setImgScale] = useState<number>(1)
+  const [imgRotation, setImgRotation] = useState<number>(0)
+  const [imgTranslate, setImgTranslate] = useState({ x: 0, y: 0 })
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
   const [viewingHistoryOrder, setViewingHistoryOrder] = useState<any | null>(null)
   const [viewingDetailOrder, setViewingDetailOrder] = useState<any | null>(null);
   const [showMobileFilters, setShowMobileFilters] = useState(false)
   const [expandedMobileCards, setExpandedMobileCards] = useState<Record<string, boolean>>({})
 
-  const [imgScale, setImgScale] = useState<number>(1)
-  const [imgRotation, setImgRotation] = useState<number>(0)
-
   useEffect(() => {
     if (!previewImage) {
       setImgScale(1)
       setImgRotation(0)
+      setImgTranslate({ x: 0, y: 0 })
+      setDragStart(null)
+      setIsDragging(false)
     }
   }, [previewImage])
 
@@ -771,8 +776,25 @@ export default function OrderList() {
           <button onClick={() => setPreviewImage(null)} className="absolute top-6 right-6 text-gray-200 hover:text-white bg-black/40 hover:bg-black/60 backdrop-blur-sm rounded-full p-2 transition-all z-20 shadow-lg border border-white/10">
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
-          <div className="w-full h-full flex items-center justify-center overflow-hidden cursor-grab active:cursor-grabbing" onWheel={(e) => { e.preventDefault(); if (e.deltaY < 0) { setImgScale(prev => Math.min(prev + 0.2, 5)); } else { setImgScale(prev => Math.max(prev - 0.2, 0.5)); } }} onClick={(e) => e.stopPropagation()}>
-            <img src={previewImage} alt="Preview" className="max-w-[95vw] max-h-[92vh] object-contain drop-shadow-[0_25px_25px_rgba(0,0,0,0.45)] pointer-events-none" style={{ transform: `scale(${imgScale}) rotate(${imgRotation}deg)`, transition: 'transform 0.12s ease-out' }} />
+          <div
+            className="w-full h-full flex items-center justify-center overflow-hidden cursor-grab active:cursor-grabbing"
+            onWheel={(e) => { e.preventDefault(); if (e.deltaY < 0) { setImgScale(prev => Math.min(prev + 0.2, 5)); } else { setImgScale(prev => Math.max(prev - 0.2, 0.5)); } }}
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => {
+              if (e.button !== 0) return
+              setIsDragging(true)
+              setDragStart({ x: e.clientX - imgTranslate.x, y: e.clientY - imgTranslate.y })
+              ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+            }}
+            onPointerMove={(e) => {
+              if (!isDragging || !dragStart) return
+              setImgTranslate({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y })
+            }}
+            onPointerUp={() => setIsDragging(false)}
+            onPointerCancel={() => setIsDragging(false)}
+            onPointerLeave={() => setIsDragging(false)}
+          >
+            <img src={previewImage} alt="Preview" className="max-w-[95vw] max-h-[92vh] object-contain drop-shadow-[0_25px_25px_rgba(0,0,0,0.45)] pointer-events-none" style={{ transform: `translate(${imgTranslate.x}px, ${imgTranslate.y}px) scale(${imgScale}) rotate(${imgRotation}deg)`, transition: isDragging ? 'none' : 'transform 0.12s ease-out' }} />
           </div>
           <div className="absolute bottom-8 bg-zinc-900/80 backdrop-blur-md text-gray-300 rounded-full flex items-center justify-center gap-4 px-6 py-2 z-20 shadow-2xl border border-white/10" onClick={(e) => e.stopPropagation()}>
             <button onClick={() => setImgScale(prev => Math.max(prev - 0.2, 0.5))} className="p-1.5 hover:text-white hover:bg-white/10 rounded-full transition-colors"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M18 12H6" /></svg></button>
