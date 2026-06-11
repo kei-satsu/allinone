@@ -3,16 +3,31 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 
+interface QueueItem {
+  local_id: string;
+  payload: any;
+}
+
 export default function PendingEntry() {
   const router = useRouter()
   const senderInputRef = useRef<HTMLInputElement>(null)
+  const receiverNameRef = useRef<HTMLInputElement>(null)
   
   const [pendingItems, setPendingItems] = useState<any[]>([])
   const [selectedItem, setSelectedItem] = useState<any>(null)
   const [riders, setRiders] = useState<any[]>([])
+  const [senders, setSenders] = useState<any[]>([])
+  const [selectedSenderId, setSelectedSenderId] = useState<string>('')
+  const [searchQuery, setSearchQuery] = useState<string>('')
+  const [showSenderDropdown, setShowSenderDropdown] = useState<boolean>(false)
+  const [showAllSuggestions, setShowAllSuggestions] = useState<boolean>(false)
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState<number>(0)
   const [userBranch, setUserBranch] = useState<string>('')
   const [originalCod, setOriginalCod] = useState<number>(0)
   const [loading, setLoading] = useState(false)
+  const [syncQueue, setSyncQueue] = useState<QueueItem[]>([])
+  const [isOnline, setIsOnline] = useState(true)
+  const [syncing, setSyncing] = useState(false)
 
   // ── Persisted fields across items ──
   const [persistSenderName, setPersistSenderName] = useState('')
@@ -41,7 +56,9 @@ export default function PendingEntry() {
 
   const [formData, setFormData] = useState({
     received_date: today,
+    sender_id: null as string | null,
     sender_name: '',
+    sender_phone: '',
     sender_loc: 'MDY', 
     receiver_name: '',
     receiver_phone: '',
@@ -72,10 +89,26 @@ export default function PendingEntry() {
     fetchRiders(storedBranch)
     fetchPendingItems(storedBranch)
 
+    const storedQueue = localStorage.getItem('offline_orders_queue')
+    if (storedQueue) {
+      try { setSyncQueue(JSON.parse(storedQueue)) } catch (e) {}
+    }
+
+    setIsOnline(navigator.onLine)
+    const goOnline = () => setIsOnline(true)
+    const goOffline = () => setIsOnline(false)
+    window.addEventListener('online', goOnline)
+    window.addEventListener('offline', goOffline)
+
     const checkMobile = () => setIsMobile(window.innerWidth < 1024)
     checkMobile()
     window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
+
+    return () => {
+      window.removeEventListener('resize', checkMobile)
+      window.removeEventListener('online', goOnline)
+      window.removeEventListener('offline', goOffline)
+    }
   }, [router])
 
   // ✨ Keyboard Arrow Key Navigation Handler (Shift + Arrow Key for Inputs)
@@ -134,6 +167,15 @@ export default function PendingEntry() {
     if (data) setRiders(data)
   }
 
+  useEffect(() => {
+    if (!userBranch) return
+    async function fetchSenders() {
+      const { data, error } = await supabase.from('senders').select('*').order('name', { ascending: true })
+      if (!error && data) setSenders(data)
+    }
+    fetchSenders()
+  }, [userBranch])
+
   async function fetchPendingItems(branch: string) {
     const { data, error } = await supabase
       .from('orders')
@@ -150,14 +192,69 @@ export default function PendingEntry() {
     }
   }
 
+  const filteredSenders = (() => {
+    const q = (searchQuery || '').trim().toLowerCase()
+    if (showAllSuggestions && showSenderDropdown) return senders
+    if (!q) return []
+    return senders.filter(s => String(s.name || '').toLowerCase().startsWith(q))
+  })()
+
+  useEffect(() => {
+    if (!isOnline || syncQueue.length === 0 || syncing) return
+
+    async function processQueue() {
+      setSyncing(true)
+      const currentQueue = [...syncQueue]
+      const itemToSync = currentQueue[0]
+
+      try {
+        const payload = itemToSync.payload
+        if (payload && payload.type === 'update_order') {
+          const { error } = await supabase.from('orders').update(payload.order).eq('id', payload.order.id)
+          if (error) throw error
+        } else if (payload && payload.type === 'order') {
+          const { error } = await supabase.from('orders').insert([payload.order || payload])
+          if (error) throw error
+        } else {
+          const { error } = await supabase.from('orders').insert([itemToSync.payload])
+          if (error) throw error
+        }
+
+        const updatedQueue = currentQueue.slice(1)
+        setSyncQueue(updatedQueue)
+        localStorage.setItem('offline_orders_queue', JSON.stringify(updatedQueue))
+      } catch (err: any) {
+        console.error('Sync error, retrying later:', err?.message || err)
+        if (String(err?.message || '').toLowerCase().includes('fetch')) {
+          setSyncing(false)
+          return
+        }
+        const updatedQueue = currentQueue.slice(1)
+        setSyncQueue(updatedQueue)
+        localStorage.setItem('offline_orders_queue', JSON.stringify(updatedQueue))
+      }
+
+      setSyncing(false)
+    }
+
+    const timer = setTimeout(() => {
+      processQueue()
+    }, 1000)
+
+    return () => clearTimeout(timer)
+  }, [syncQueue, isOnline, syncing])
+
   const handleSelectItem = (item: any, shouldFocusInput = true) => {
     setSelectedItem(item)
     setOriginalCod(item.cod_amount || 0)
     setZoomScale(1); setRotation(0); setPosition({ x: 0, y: 0 })
 
+    setSelectedSenderId(item.sender_id ? String(item.sender_id) : '')
+    setSearchQuery(item.sender_name || '')
     setFormData(prev => ({
       received_date: item.received_date || today,
       sender_name: persistSenderName || item.sender_name || '',
+      sender_phone: item.sender_phone || '',
       sender_loc: persistSenderLoc || item.sender_loc || userBranch,
       receiver_name: item.receiver_name || '',
       receiver_phone: item.receiver_phone || '',
@@ -173,6 +270,7 @@ export default function PendingEntry() {
       deliver_date: item.deliver_date || '',
       note: item.note || '',
       cash_added_date: item.cash_added_date || '',
+      sender_id: item.sender_id || null,
       branch: item.branch || userBranch,
       image_url: item.image_url || ''
     }))
@@ -226,6 +324,48 @@ export default function PendingEntry() {
     setFormData(prev => ({ ...prev, receiver_phone: formatted }))
   }
 
+  const handleStatusChange = (status: string) => {
+    const nextDeliverDate = (status === 'On Way' || status === 'Delivered')
+      ? formData.deliver_date || today
+      : ''
+
+    setFormData(prev => ({ ...prev, status, deliver_date: nextDeliverDate }))
+  }
+
+  const handleSenderPhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let s = e.target.value.replace(/-/g, '').replace(/\D/g, '')
+    let formatted = s;
+    if (s.length >= 2 && s.length < 5) formatted = `${s.slice(0, 2)}-${s.slice(2)}`
+    else if (s.length >= 5 && s.length < 8) formatted = `${s.slice(0, 2)}-${s.slice(2, 5)}-${s.slice(5)}`
+    else if (s.length >= 8) formatted = `${s.slice(0, 2)}-${s.slice(2, 5)}-${s.slice(5, 8)}-${s.slice(8, 11)}`
+    setSelectedSenderId('')
+    setFormData(prev => ({ ...prev, sender_id: null, sender_phone: formatted }))
+  }
+
+  const handleSenderSelection = (senderId: string) => {
+    if (!senderId) {
+      setSelectedSenderId('')
+      setFormData(prev => ({ ...prev, sender_id: null, sender_name: '', sender_phone: '' }))
+      return
+    }
+
+    const selected = senders.find(sender => String(sender.id) === senderId)
+    if (!selected) return
+
+    setSelectedSenderId(senderId)
+    setSearchQuery(selected.name || '')
+    setActiveSuggestionIndex(-1)
+    setShowSenderDropdown(false)
+    setFormData(prev => ({
+      ...prev,
+      sender_id: selected.id,
+      sender_name: selected.name ?? '',
+      sender_phone: selected.phone ?? '',
+      sender_loc: selected.LOC ?? (prev.sender_loc || 'MDY')
+    }))
+    setTimeout(() => receiverNameRef.current?.focus(), 30)
+  }
+
   const handleSelectKeyDown = (e: React.KeyboardEvent<HTMLSelectElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault()
@@ -252,15 +392,43 @@ export default function PendingEntry() {
       return alert("လိုအပ်သောအချက်အလက်များ ပြည့်စုံစွာဖြည့်ပါ!")
     }
     setLoading(true)
-    const payload = {
+    const payload: any = {
       ...formData,
       pickup_rider_id: formData.pickup_rider_id || null,
       deliver_rider_id: formData.deliver_rider_id || null,
-      deliver_date: formData.deliver_date || null,
       cash_added_date: formData.cash_added_date || null,
     }
-    const { error } = await supabase.from('orders').update(payload).eq('id', selectedItem.id)
-    if (!error) {
+
+    if (formData.status === 'On Way' || formData.status === 'Delivered') {
+      payload.deliver_date = formData.deliver_date || null
+    } else {
+      delete payload.deliver_date
+    }
+
+    const isOnlineNow = navigator.onLine
+
+    if (isOnlineNow) {
+      const { error } = await supabase.from('orders').update(payload).eq('id', selectedItem.id)
+      if (!error) {
+        setProcessedStack(prev => [...prev, selectedItem.id])
+        const updatedPending = pendingItems.filter(item => item.id !== selectedItem.id)
+        setPendingItems(updatedPending)
+        if (updatedPending.length > 0) {
+          handleSelectItem(updatedPending[0])
+        } else {
+          setSelectedItem(null)
+        }
+      } else {
+        alert("Error: ဒေတာသိမ်းဆည်းမှု မအောင်မြင်ပါ။")
+      }
+    } else {
+      const newItem: QueueItem = {
+        local_id: `local_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        payload: { type: 'update_order', order: { ...payload, id: selectedItem.id } }
+      }
+      const updatedQueue = [...syncQueue, newItem]
+      setSyncQueue(updatedQueue)
+      localStorage.setItem('offline_orders_queue', JSON.stringify(updatedQueue))
       setProcessedStack(prev => [...prev, selectedItem.id])
       const updatedPending = pendingItems.filter(item => item.id !== selectedItem.id)
       setPendingItems(updatedPending)
@@ -269,9 +437,8 @@ export default function PendingEntry() {
       } else {
         setSelectedItem(null)
       }
-    } else {
-      alert("Error: ဒေတာသိမ်းဆည်းမှု မအောင်မြင်ပါ။")
     }
+
     setLoading(false)
   }
 
@@ -558,14 +725,93 @@ export default function PendingEntry() {
                 <div className="space-y-3">
                   <div>
                     <label className={labelStyle}>Name <span className="text-red-500">*</span></label>
-                    <input 
-                      ref={senderInputRef} 
-                      type="text" 
-                      value={formData.sender_name} 
-                      onChange={e => handlePersistChange('sender_name', e.target.value)} 
-                      className={winInput} 
-                      required 
-                      disabled={!selectedItem} 
+                    <div className="relative">
+                      <input
+                        ref={senderInputRef}
+                        type="text"
+                        value={searchQuery || formData.sender_name}
+                        onChange={e => {
+                          const v = e.target.value
+                          setShowAllSuggestions(false)
+                          setSearchQuery(v)
+                          const q = v.trim().toLowerCase()
+                          const matches = q ? senders.filter(s => String(s.name || '').toLowerCase().startsWith(q)) : []
+                          setShowSenderDropdown(Boolean(matches.length && q.length > 0))
+                          setSelectedSenderId('')
+                          setFormData(prev => ({ ...prev, sender_id: null, sender_name: v }))
+                        }}
+                        onKeyDown={(e) => {
+                          if (filteredSenders.length === 0) return
+                          if (e.key === 'ArrowDown') {
+                            e.preventDefault()
+                            setActiveSuggestionIndex(prev => Math.min(prev + 1, filteredSenders.length - 1))
+                            setShowSenderDropdown(true)
+                          }
+                          if (e.key === 'ArrowUp') {
+                            e.preventDefault()
+                            setActiveSuggestionIndex(prev => Math.max(prev - 1, 0))
+                            setShowSenderDropdown(true)
+                          }
+                          if ((e.key === 'Enter' || e.key === 'Tab') && showSenderDropdown) {
+                            e.preventDefault()
+                            const selected = filteredSenders[activeSuggestionIndex >= 0 ? activeSuggestionIndex : 0]
+                            if (selected) handleSenderSelection(String(selected.id))
+                          }
+                          if (e.key === 'Escape') {
+                            setShowSenderDropdown(false)
+                          }
+                        }}
+                        className={winInput}
+                        required
+                        disabled={!selectedItem}
+                      />
+                      <button
+                        type="button"
+                        aria-label="Toggle sender suggestions"
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          if (!showSenderDropdown) {
+                            setShowAllSuggestions(true)
+                            setShowSenderDropdown(true)
+                            setActiveSuggestionIndex(0)
+                          } else {
+                            setShowAllSuggestions(false)
+                            setShowSenderDropdown(false)
+                          }
+                          senderInputRef.current?.focus()
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-white border border-gray-200 p-1 text-gray-600 hover:bg-gray-50"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                      {showSenderDropdown && filteredSenders.length > 0 && (
+                        <div className="absolute z-40 mt-1 max-h-52 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                          {filteredSenders.map((s, index) => (
+                            <button
+                              key={s.id}
+                              type="button"
+                              onMouseDown={() => handleSenderSelection(String(s.id))}
+                              className={`w-full text-left px-4 py-2 ${index === activeSuggestionIndex ? 'bg-orange-50' : 'hover:bg-gray-50'}`}
+                            >
+                              <div className="font-semibold">{s.name}</div>
+                              <div className="text-xs text-gray-500">{s.phone} — {s.LOC}</div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelStyle}>Phone</label>
+                    <input
+                      type="text"
+                      value={formData.sender_phone}
+                      onChange={handleSenderPhoneChange}
+                      className={`${winInput} font-mono`}
+                      placeholder="09-xxx-xxx-xxx"
+                      disabled={!selectedItem}
                     />
                   </div>
                   <div>
@@ -659,14 +905,60 @@ export default function PendingEntry() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={labelStyle}>Status</label>
-                    <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className={winSelect} onKeyDown={handleSelectKeyDown} disabled={!selectedItem}>
+                    <select value={formData.status} onChange={e => handleStatusChange(e.target.value)} className={winSelect} onKeyDown={handleSelectKeyDown} disabled={!selectedItem}>
                       <option value="At Office">📦 At Office</option>
                       <option value="On Way">🚵 On Way</option>
                       <option value="Delivered">✅ Delivered</option>
                       <option value="In-Transit">🚚 In-Transit</option>
                     </select>
                   </div>
+                  <div>
+                    <label className={labelStyle}>Deliver Date</label>
+                    <input
+                      type="date"
+                      value={formData.deliver_date}
+                      onChange={e => setFormData({...formData, deliver_date: e.target.value})}
+                      className={`${winInput} font-mono ${formData.status !== 'On Way' && formData.status !== 'Delivered' ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      disabled={!selectedItem || (formData.status !== 'On Way' && formData.status !== 'Delivered')}
+                    />
+                  </div>
                 </div>
+                <div>
+                  <label className={labelStyle}>Delivery Rider</label>
+                  <select value={formData.deliver_rider_id} onChange={e => setFormData({...formData, deliver_rider_id: e.target.value})} className={winSelect} disabled={!selectedItem}>
+                    <option value="">Select delivery rider...</option>
+                    {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                  </select>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelStyle}>Return Utility</label>
+                    <select value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} className={winSelect} disabled={!selectedItem}>
+                      <option value="">Normal Delivery</option>
+                      <option value="RT">Return Item (RT)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelStyle}>Cash Event</label>
+                    <select value={formData.cash_added_date ? 'yes' : 'no'} onChange={e => setFormData({...formData, cash_added_date: e.target.value === 'yes' ? today : ''})} className={winSelect} disabled={!selectedItem}>
+                      <option value="no">No Cash Added</option>
+                      <option value="yes">Cash Added Event</option>
+                    </select>
+                  </div>
+                </div>
+                {formData.cash_added_date && (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                    <label className="block text-emerald-700 font-semibold mb-1.5 uppercase text-xs tracking-wide">Cash Added Date</label>
+                    <input
+                      type="date"
+                      value={formData.cash_added_date}
+                      onChange={e => setFormData({...formData, cash_added_date: e.target.value})}
+                      className={`${winInput} border-emerald-200 focus:border-emerald-500`}
+                      required
+                      disabled={!selectedItem}
+                    />
+                  </div>
+                )}
                 <button 
                   type="submit" 
                   disabled={!selectedItem || loading}
