@@ -790,7 +790,7 @@ export default function DailyReport() {
         </div>
 
         {/* Mobile View Responsive Cards */}
-        <div className="sm:hidden flex flex-col divide-y divide-gray-100">
+        <div className="sm:hidden flex flex-col divide-y divide-gray-100 pb-20">
           {loading ? (
             <p className="text-center py-8 text-xs text-gray-400 font-medium">Loading Report Logs...</p>
           ) : filteredOrders.length === 0 ? (

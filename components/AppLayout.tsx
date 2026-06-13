@@ -308,171 +308,251 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      {/* Sidebar / Mobile bottom drawer */}
-      <aside
-        ref={sidebarRef}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        className={`flex flex-col bg-white/88 backdrop-blur-3xl border border-white/60 shadow-[0_22px_60px_-28px_rgba(15,23,42,0.65)] z-50 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
-          isMobile
-            ? `fixed inset-x-0 bottom-0 ${mobileSidebarOpen ? "translate-y-0" : "translate-y-full"} w-full max-h-[85vh] rounded-t-[28px] overflow-hidden`
-            : `relative ${collapsed ? "w-[68px]" : "w-60"}`
-        }`}
-      >
-        {/* Mobile drag handle */}
-        {isMobile && (
-          <div className="flex justify-center px-4 py-3">
-            <div className="h-1.5 w-16 rounded-full bg-slate-300/70" />
-          </div>
-        )}
+      {/* ── 📱💻 iOS Premium Sidebar / Mobile Bottom Sheet ── */}
+<aside
+  ref={sidebarRef}
+  onMouseEnter={handleMouseEnter}
+  onMouseLeave={handleMouseLeave}
+  className={`flex flex-col bg-white/75 backdrop-blur-2xl border border-slate-200/40 shadow-[0_25px_50px_-12px_rgba(15,23,42,0.08)] z-50 transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] ${
+    isMobile
+      ? `fixed inset-x-0 bottom-0 ${mobileSidebarOpen ? "translate-y-0" : "translate-y-full"} w-full max-h-[82vh] rounded-t-[32px] border-t border-x border-slate-200/60 shadow-[0_-15px_40px_-15px_rgba(0,0,0,0.12)] overflow-hidden`
+      : `relative ${collapsed ? "w-[68px]" : "w-64"}`
+  }`}
+>
+  {/* 📱 iOS Mobile Sheet Drag Handle */}
+  {isMobile && (
+    <div className="flex justify-center pt-3 pb-1 shrink-0">
+      <div className="h-1.2 w-12 rounded-full bg-slate-300/60" />
+    </div>
+  )}
 
-        {/* Sidebar header */}
-        <div className={`flex flex-col border-b border-gray-100 flex-shrink-0 transition-all duration-300 ${
-          collapsed && !isMobile ? "h-14 justify-center items-center px-2" : "min-h-[80px] justify-center px-4 py-3"
+  {/* 🏢 Header Section */}
+  <div className={`flex flex-col border-b border-slate-100/70 flex-shrink-0 transition-all duration-300 ${
+    collapsed && !isMobile ? "h-16 justify-center items-center px-2" : "min-h-[84px] justify-center px-5 py-4"
+  }`}>
+    
+    {/* Top Row: Logo, Brand Text and Action Buttons */}
+    <div className="flex items-center w-full justify-between">
+      
+      {/* 🖼️ Logo & Brand Name */}
+      <div className="flex items-center gap-2.5">
+        <img
+          src="/logo.png" 
+          alt="All In One Logo"
+          className="w-7.5 h-7.5 object-contain rounded-xl shadow-sm"
+        />
+        <div className={`flex flex-col transition-all duration-200 ${
+          collapsed && !isMobile ? "w-0 opacity-0 overflow-hidden" : "w-auto opacity-100"
         }`}>
-          
-          {/* Top Row: Logo, Brand Text and Action Buttons */}
-          <div className="flex items-center w-full justify-between">
-            
-            {/* 🖼️ Logo & Brand Name Section */}
-            <div className="flex items-center gap-2">
-              <img
-                src="/logo.png" 
-                alt="All In One Logo"
-                className="w-7 h-7 object-contain rounded"
-              />
-              <span className={`font-bold text-base tracking-tight text-orange-600 uppercase whitespace-nowrap transition-all duration-200 ${
-                collapsed && !isMobile ? "w-0 opacity-0 overflow-hidden" : "w-auto opacity-100"
-              }`}>
-                ALL IN ONE
-              </span>
-            </div>
-
-            {/* Pin / Close Button Section */}
-            <div className="flex items-center gap-1">
-              {!isMobile && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setSidebarLocked(!sidebarLocked)
-                    if (!sidebarLocked) setSidebarExpanded(true)
-                    else setSidebarExpanded(false)
-                  }}
-                  title={sidebarLocked ? "Unpin sidebar" : "Pin sidebar"}
-                  className={`flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center transition-all duration-150 ${
-                    sidebarLocked ? "bg-orange-100 text-orange-600" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-                  } ${collapsed ? "hidden" : ""}`}
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                  </svg>
-                </button>
-              )}
-              {isMobile && (
-                <button onClick={() => setMobileSidebarOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* 📍 Bottom Row: Branch Info (MDY, YGN, etc.) - Only shows when expanded */}
-          <div className={`flex items-center gap-2 mt-2 transition-all duration-200 ${
-            collapsed && !isMobile ? "hidden" : "flex"
-          }`}>
-            <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse flex-shrink-0" />
-            <span className="font-bold text-xs tracking-wider text-gray-500 uppercase whitespace-nowrap">
-              {branchInfo.code}
+          <span className="font-extrabold text-[15px] tracking-tight text-slate-800 uppercase whitespace-nowrap">
+            ALL IN ONE
+          </span>
+          {/* 📍 Branch Info Status Badge inside Title */}
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+            <span className="font-mono text-[9px] font-bold tracking-wider text-slate-400 uppercase">
+              {branchInfo.code} NODE
             </span>
           </div>
-
         </div>
+      </div>
 
-        {/* Navigation */}
-        <nav className={`flex-1 mt-4 overflow-y-auto ${isMobile ? "space-y-3 px-4 pb-4" : collapsed ? "space-y-1 px-2" : "space-y-1 px-3"}`}>
-          {MENU_ITEMS.map(item => (
-            <SidebarMenuItem
-              key={item.path}
-              item={item}
-              isActive={pathname === item.path}
-              collapsed={collapsed && !isMobile}
-              isMobile={isMobile}
-              onClick={() => { if (isMobile) setMobileSidebarOpen(false) }}
-            />
-          ))}
-        </nav>
-
-        {/* User & Sign Out */}
-        <div className={`border-t border-gray-100 flex-shrink-0 ${collapsed && !isMobile ? "px-2 py-3" : "px-4 py-3"}`}>
-          <div className={`flex items-center ${collapsed && !isMobile ? "justify-center" : "gap-3"}`}>
-            <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${branchInfo.color} flex items-center justify-center text-white font-bold text-xs shadow-sm flex-shrink-0`}>
-              {branchInfo.code.substring(0, 2)}
-            </div>
-            <div className={`flex flex-col min-w-0 transition-all duration-200 ${collapsed && !isMobile ? "w-0 opacity-0 overflow-hidden" : "w-auto opacity-100"}`}>
-              <span className="text-xs font-semibold text-gray-800 truncate">Staff Active</span>
-              <span className="text-[10px] text-gray-500 font-mono uppercase truncate">{branchInfo.displayName}</span>
-            </div>
-          </div>
-          <button onClick={logout} className={`mt-2 w-full flex items-center justify-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 font-medium text-xs py-2 rounded-lg transition-colors border border-red-100 ${collapsed && !isMobile ? "p-2 aspect-square" : "px-3"}`}>
-            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-            <span className={`whitespace-nowrap transition-all duration-200 ${collapsed && !isMobile ? "w-0 opacity-0 overflow-hidden" : "w-auto opacity-100"}`}>Sign Out</span>
+      {/* iOS Round Action Buttons (Pin / Close) */}
+      <div className="flex items-center gap-1">
+        {!isMobile && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setSidebarLocked(!sidebarLocked)
+              if (!sidebarLocked) setSidebarExpanded(true)
+              else setSidebarExpanded(false)
+            }}
+            title={sidebarLocked ? "Unpin sidebar" : "Pin sidebar"}
+            className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition-all ${
+              sidebarLocked 
+                ? "bg-orange-500 text-white shadow-sm shadow-orange-500/20" 
+                : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+            } ${collapsed ? "hidden" : ""}`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+            </svg>
           </button>
-        </div>
-        <div className={`pb-4 text-center text-[10px] text-gray-400 font-medium uppercase tracking-wider transition-all duration-200 ${collapsed && !isMobile ? "opacity-0" : "opacity-100"}`}>v1.0</div>
-      </aside>
+        )}
+        {isMobile && (
+          <button 
+            onClick={() => setMobileSidebarOpen(false)} 
+            className="w-7 h-7 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200/70 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+      </div>
+    </div>
+  </div>
+
+  {/* 🧭 iOS Navigation List */}
+  <nav className={`flex-1 mt-3 overflow-y-auto custom-scrollbar ${
+    isMobile 
+      ? "space-y-1.5 px-4 pb-6" 
+      : collapsed 
+        ? "space-y-1 px-2" 
+        : "space-y-1 px-3"
+  }`}>
+    {MENU_ITEMS.map(item => (
+      <SidebarMenuItem
+        key={item.path}
+        item={item}
+        isActive={pathname === item.path}
+        collapsed={collapsed && !isMobile}
+        isMobile={isMobile}
+        onClick={() => { if (isMobile) setMobileSidebarOpen(false) }}
+      />
+    ))}
+  </nav>
+
+  {/* 👤 User Card & Sign Out Footer */}
+  <div className={`border-t border-slate-100 flex-shrink-0 bg-slate-50/50 ${
+    collapsed && !isMobile ? "p-2" : "px-4 py-3.5"
+  }`}>
+    {/* Profile Card Block */}
+    <div className={`flex items-center bg-white/60 border border-slate-100 p-2 rounded-2xl shadow-sm ${
+      collapsed && !isMobile ? "justify-center border-none bg-transparent shadow-none p-0" : "gap-3"
+    }`}>
+      <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${branchInfo.color} flex items-center justify-center text-white font-extrabold text-xs shadow-sm flex-shrink-0`}>
+        {branchInfo.code.substring(0, 2)}
+      </div>
+      <div className={`flex flex-col min-w-0 transition-all duration-200 ${
+        collapsed && !isMobile ? "w-0 opacity-0 overflow-hidden" : "w-auto opacity-100"
+      }`}>
+        <span className="text-xs font-bold text-slate-800 truncate">Staff Active</span>
+        <span className="text-[10px] text-slate-400 font-medium uppercase truncate tracking-tight">{branchInfo.displayName}</span>
+      </div>
+    </div>
+    
+    {/* iOS Style Destructive Logout Button */}
+    <button 
+      onClick={logout} 
+      className={`mt-2.5 w-full flex items-center justify-center gap-2 bg-red-50/60 hover:bg-red-50 text-red-600 font-semibold text-xs py-2.5 rounded-xl transition-all active:scale-[0.98] border border-red-100/50 ${
+        collapsed && !isMobile ? "p-2 aspect-square mt-3" : "px-3"
+      }`}
+    >
+      <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+      </svg>
+      <span className={`transition-all duration-200 ${
+        collapsed && !isMobile ? "w-0 opacity-0 overflow-hidden" : "w-auto opacity-100"
+      }`}>
+        Sign Out
+      </span>
+    </button>
+  </div>
+
+  {/* System Version Tag */}
+  <div className={`pb-4 pt-1 text-center text-[9px] text-slate-400 font-bold tracking-widest transition-all duration-200 ${
+    collapsed && !isMobile ? "opacity-0 h-0 overflow-hidden" : "opacity-100"
+  }`}>
+    VERSION 1.0
+  </div>
+</aside>
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
         <MobileDockContext.Provider value={{ hideMobileDock, setHideMobileDock }}>
           {/* Page content */}
-          <main className="flex-1 overflow-y-auto bg-[#f3f3f3] pb-28 md:pb-0">
+          <main className={`flex-1 overflow-y-auto bg-[#f3f3f3] ${isIntakePage ? 'pb-0' : 'pb-0'} md:pb-0`}>
             {children}
           </main>
 
-          {/* Mobile bottom dock */}
-          {isMobile && !isLoginPage && !hideMobileDock && !mobileSidebarOpen && (
-          <div className="fixed inset-x-4 bottom-4 z-50">
-            <div className="rounded-[30px] bg-white/18 border border-white/20 shadow-[0_18px_40px_-22px_rgba(15,23,42,0.55)] backdrop-blur-2xl ring-1 ring-white/20 px-3 py-2">
-              <div className="flex items-center justify-between gap-2">
-                <Link
-                  href="/"
-                  title="Home"
-                  className="flex items-center justify-center gap-1 rounded-2xl px-3 py-2 text-slate-700 hover:text-orange-600 transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l7-7 7 7m-7-7v14" />
-                  </svg>
-                  <span className="text-[9px] font-semibold tracking-wider">Home</span>
-                </Link>
+          {/* ── Mobile Dock ── */}
+{/* ── 📱 iOS Mobile Dock with Tuned Ambient Bottom Fade ── */}
+{isMobile && !isLoginPage && !hideMobileDock && !mobileSidebarOpen && !isIntakePage && (
+  <>
+    {/* 🌫️ iOS Bottom Gradient Sheet Mask (အောက်ဆုံးအနားသတ်ကို Solid မဟုတ်ဘဲ ၈၀% Opacity ဖြင့် ဝါးပေးထားသော Mask) */}
+    <div className="fixed inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#f4f6f9]/80 via-[#f4f6f9]/40 to-transparent pointer-events-none z-40 md:hidden backdrop-blur-[1px]" />
 
-                <Link
-                  href="/intake"
-                  title="Intake"
-                  className="flex items-center justify-center rounded-[28px] bg-gradient-to-br from-orange-500 to-amber-500 text-white px-4 py-2.5 shadow-lg shadow-orange-500/30 border border-white/25 transition-transform hover:-translate-y-0.5 active:scale-95"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
-                  <span className="ml-2 text-[10px] font-semibold uppercase tracking-[0.08em]">Intake</span>
-                </Link>
+    {/* 🚀 Floating Premium Dock Container (Moved down to bottom-4) */}
+    <div className="fixed inset-x-0 bottom-4 z-50 flex justify-center px-4 md:hidden animate-in fade-in slide-in-from-bottom-5 duration-300 ease-[cubic-bezier(0.25,1,0.5,1)]">
+      <div className="w-full max-w-sm flex items-center justify-between bg-white/75 backdrop-blur-2xl border border-slate-200/40 shadow-[0_12px_32px_-8px_rgba(15,23,42,0.12)] rounded-[24px] px-2.5 py-2 relative">
+        
+        {/* 🏠 Home Button */}
+        <Link
+          href="/"
+          className={`flex flex-col items-center justify-center gap-1.5 flex-1 py-1 rounded-xl transition-all active:scale-95 duration-200 ${
+            pathname === "/" 
+              ? "text-orange-500 font-bold" 
+              : "text-slate-400 hover:text-slate-600"
+          }`}
+          title="Home"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={pathname === "/" ? 2.4 : 2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+          </svg>
+          <span className="text-[9px] font-extrabold tracking-tight">Home</span>
+        </Link>
 
-                <button
-                  type="button"
-                  onClick={() => setMobileSidebarOpen(true)}
-                  title="Menu"
-                  className="flex items-center justify-center gap-1 rounded-2xl px-3 py-2 text-slate-700 hover:text-orange-600 transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
-                  <span className="text-[9px] font-semibold tracking-wider">Menu</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* 📦 Orders Button */}
+        <Link
+          href="/list"
+          className={`flex flex-col items-center justify-center gap-1.5 flex-1 py-1 rounded-xl transition-all active:scale-95 duration-200 ${
+            pathname === "/list" 
+              ? "text-orange-500 font-bold" 
+              : "text-slate-400 hover:text-slate-600"
+          }`}
+          title="Orders"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={pathname === "/list" ? 2.4 : 2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+          </svg>
+          <span className="text-[9px] font-extrabold tracking-tight">Orders</span>
+        </Link>
+
+        {/* ➕ Central Intake Circle Button */}
+        <Link
+          href="/intake"
+          className="relative -mt-9 flex items-center justify-center bg-gradient-to-br from-orange-500 to-amber-500 text-white w-12 h-12 rounded-full shadow-[0_8px_20px_rgba(249,115,22,0.35)] active:scale-90 transition-all duration-200 border-[3px] border-white shrink-0 mx-1.5 group"
+          title="Intake"
+        >
+          <svg className="w-5.5 h-5.5 transition-transform group-hover:rotate-90 duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.6}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+        </Link>
+
+        {/* 📝 New Entry Button */}
+        <Link
+          href="/entry"
+          className={`flex flex-col items-center justify-center gap-1.5 flex-1 py-1 rounded-xl transition-all active:scale-95 duration-200 ${
+            pathname === "/entry" 
+              ? "text-orange-500 font-bold" 
+              : "text-slate-400 hover:text-slate-600"
+          }`}
+          title="New Entry"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={pathname === "/entry" ? 2.4 : 2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.852l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+          </svg>
+          <span className="text-[9px] font-extrabold tracking-tight whitespace-nowrap">New Entry</span>
+        </Link>
+
+        {/* 🍔 Menu Button */}
+        <button
+          type="button"
+          onClick={() => setMobileSidebarOpen(true)}
+          className="flex flex-col items-center justify-center gap-1.5 flex-1 py-1 text-slate-400 hover:text-slate-600 transition-all active:scale-95 rounded-xl"
+          title="Menu"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+          </svg>
+          <span className="text-[9px] font-extrabold tracking-tight">Menu</span>
+        </button>
+
+      </div>
+    </div>
+  </>
+)}
         </MobileDockContext.Provider>
 
         {/* Floating Action Button (bottom-right for desktop) */}

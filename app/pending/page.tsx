@@ -78,6 +78,18 @@ export default function PendingEntry() {
     image_url: ''
   })
 
+  // 🌟 Tab နှိပ်ပြီး Select Box ပေါ်ရောက်တာနဲ့ Dropdown ကို Auto ဖြည်ချပေးမယ့် စနစ်
+  const handleSelectFocus = (e: React.FocusEvent<HTMLSelectElement>) => {
+    try {
+      // Modern Browser တွေမှာ Select အကွက်ကို အလိုအလျောက် ပွင့်လာစေမယ့် showPicker စနစ် ဖြစ်ပါတယ်
+      if (typeof e.target.showPicker === 'function') {
+        e.target.showPicker();
+      }
+    } catch (error) {
+      console.log("Dropdown open error:", error);
+    }
+  };
+
   // ── Initialize ──
   useEffect(() => {
     const storedBranch = localStorage.getItem('user_branch')
@@ -192,6 +204,27 @@ export default function PendingEntry() {
     }
   }
 
+  // 🌟 ဘယ်နေရာမှာပဲဖြစ်ဖြစ် Enter နှိပ်လိုက်ရင် Update & Next ကို တန်းနှိပ်ပေးမယ့် စနစ်
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        // အကယ်၍ Textarea ထဲမှာ စာရိုက်နေလို့ Line Break ဆင်းချင်တာမျိုးဆိုရင်တော့ Enter ကို ခွင့်ပြုမယ်
+        if ((e.target as HTMLElement).tagName === 'TEXTAREA') return;
+
+        // Form ထဲက "Update & Next" Submit ခလုတ်ကို လှမ်းရှာမယ်
+        const submitButton = document.querySelector('button[type=\"submit\"]') as HTMLButtonElement;
+        
+        if (submitButton && !submitButton.disabled) {
+          e.preventDefault();   // Enter ရဲ့ ပုံမှန်အလုပ်လုပ်ပုံကို ခေတ္တပိတ်မယ်
+          submitButton.click();  // "Update & Next" ခလုတ်ကို Programmatically လှမ်းနှိပ်လိုက်မယ်
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [selectedItem, loading]); // Item ပြောင်းလဲမှုနဲ့ Loading စတိတ်တွေကို စောင့်ကြည့်ဖို့ Dependency ထည့်ထားပါတယ်
+
   const filteredSenders = (() => {
     const q = (searchQuery || '').trim().toLowerCase()
     if (showAllSuggestions && showSenderDropdown) return senders
@@ -209,7 +242,28 @@ export default function PendingEntry() {
 
       try {
         const payload = itemToSync.payload
-        if (payload && payload.type === 'update_order') {
+        
+        // 🌟 ၁။ အော့ဖ်လိုင်းတုန်းက Sender အသစ်ပါ တွဲရိုက်ခဲ့တဲ့ Payload ဖြစ်နေရင်
+        if (payload && payload.type === 'update_order_with_new_sender') {
+          // (က) Sender အသစ်ကို Database ထဲ အရင် Insert လုပ်ပြီး ID အသစ် ယူမယ်
+          const { data: newSender, error: sErr } = await supabase
+            .from('senders')
+            .insert([{ name: payload.sender.name, phone: payload.sender.phone, LOC: payload.sender.LOC }])
+            .select()
+            .single()
+          
+          if (sErr) throw sErr
+
+          // (ခ) ရလာတဲ့ Sender ID အသစ်ကို Order Payload ထဲ တွဲထည့်ပြီးမှ အော်ဒါကို Update လုပ်မယ်
+          const finalOrder = { ...payload.order, sender_id: newSender.id }
+          const { error: oErr } = await supabase.from('orders').update(finalOrder).eq('id', finalOrder.id)
+          if (oErr) throw oErr
+
+          // Dropdown state ထဲကိုပါ အသစ်တိုးပေးထားမယ် (ရွေးစရာထဲ တန်းပေါ်အောင်)
+          setSenders(prev => [...prev, newSender])
+        } 
+        // 🌟 ၂။ ပုံမှန် ရှိပြီးသား Sender မို့ အော်ဒါတစ်ခုတည်း Update လုပ်မည့်အပိုင်း
+        else if (payload && payload.type === 'update_order') {
           const { error } = await supabase.from('orders').update(payload.order).eq('id', payload.order.id)
           if (error) throw error
         } else if (payload && payload.type === 'order') {
@@ -366,24 +420,8 @@ export default function PendingEntry() {
     setTimeout(() => receiverNameRef.current?.focus(), 30)
   }
 
-  const handleSelectKeyDown = (e: React.KeyboardEvent<HTMLSelectElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      const form = e.currentTarget.form
-      if (!form) return
-      const elements = Array.from(form.elements) as HTMLElement[]
-      const index = elements.indexOf(e.currentTarget)
-      for (let i = index + 1; i < elements.length; i++) {
-        const el = elements[i] as HTMLElement
-        if (el && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' || el.tagName === 'BUTTON')) {
-          if (!el.hasAttribute('disabled')) {
-            el.focus()
-            break
-          }
-        }
-      }
-    }
-  }
+  
+  
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -392,7 +430,12 @@ export default function PendingEntry() {
       return alert("လိုအပ်သောအချက်အလက်များ ပြည့်စုံစွာဖြည့်ပါ!")
     }
     setLoading(true)
-    const payload: any = {
+
+    let finalSenderId = formData.sender_id
+    const isOnlineNow = navigator.onLine
+
+    // Base Order Payload ပြင်ဆင်ခြင်း
+    const baseOrderPayload: any = {
       ...formData,
       pickup_rider_id: formData.pickup_rider_id || null,
       deliver_rider_id: formData.deliver_rider_id || null,
@@ -400,16 +443,37 @@ export default function PendingEntry() {
     }
 
     if (formData.status === 'On Way' || formData.status === 'Delivered') {
-      payload.deliver_date = formData.deliver_date || null
+      baseOrderPayload.deliver_date = formData.deliver_date || null
     } else {
-      delete payload.deliver_date
+      delete baseOrderPayload.deliver_date
     }
 
-    const isOnlineNow = navigator.onLine
+    try {
+      if (isOnlineNow) {
+        // 🟢 အွန်လိုင်းဖြစ်နေချိန် လုပ်ဆောင်ချက် Flow
+        // အကယ်၍ finalSenderId က null ဖြစ်နေရင် (လူအသစ်ရိုက်ထားတာဆိုရင်) အရင်ဆောက်မယ်
+        if (!finalSenderId) {
+          const { data: newSender, error: senderError } = await supabase
+            .from('senders')
+            .insert([{ name: formData.sender_name, phone: formData.sender_phone, LOC: formData.sender_loc }])
+            .select()
+            .single()
 
-    if (isOnlineNow) {
-      const { error } = await supabase.from('orders').update(payload).eq('id', selectedItem.id)
-      if (!error) {
+          if (senderError) throw new Error("Sender အသစ်သိမ်းဆည်းမှု မအောင်မြင်ပါ: " + senderError.message)
+          
+          if (newSender) {
+            finalSenderId = newSender.id
+            baseOrderPayload.sender_id = newSender.id
+            // Local state ထဲပါ တန်းထည့်ပေးထားမယ် နောက်တစ်ခါ Dropdown မှာ တန်းပေါ်အောင်လို့
+            setSenders(prev => [...prev, newSender])
+          }
+        }
+
+        // ပြီးမှ Order ကို Update လုပ်မယ်
+        const { error: orderError } = await supabase.from('orders').update(baseOrderPayload).eq('id', selectedItem.id)
+        if (orderError) throw orderError
+
+        // UI ကို Next Item သို့ ရွှေ့ပေးခြင်း
         setProcessedStack(prev => [...prev, selectedItem.id])
         const updatedPending = pendingItems.filter(item => item.id !== selectedItem.id)
         setPendingItems(updatedPending)
@@ -418,28 +482,48 @@ export default function PendingEntry() {
         } else {
           setSelectedItem(null)
         }
-      } else {
-        alert("Error: ဒေတာသိမ်းဆည်းမှု မအောင်မြင်ပါ။")
-      }
-    } else {
-      const newItem: QueueItem = {
-        local_id: `local_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-        payload: { type: 'update_order', order: { ...payload, id: selectedItem.id } }
-      }
-      const updatedQueue = [...syncQueue, newItem]
-      setSyncQueue(updatedQueue)
-      localStorage.setItem('offline_orders_queue', JSON.stringify(updatedQueue))
-      setProcessedStack(prev => [...prev, selectedItem.id])
-      const updatedPending = pendingItems.filter(item => item.id !== selectedItem.id)
-      setPendingItems(updatedPending)
-      if (updatedPending.length > 0) {
-        handleSelectItem(updatedPending[0])
-      } else {
-        setSelectedItem(null)
-      }
-    }
 
-    setLoading(false)
+      } else {
+        // 🔴 အော့ဖ်လိုင်းဖြစ်နေချိန် လုပ်ဆောင်ချက် Flow (Queue ထဲ ပစ်ထည့်မည့်စနစ်)
+        let newItem: QueueItem;
+
+        if (!finalSenderId) {
+          // Sender အသစ်ကော Order ကောကို တွဲရက် Payload နဲ့ Queue ထဲထည့်မယ်
+          newItem = {
+            local_id: `local_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            payload: {
+              type: 'update_order_with_new_sender',
+              sender: { name: formData.sender_name, phone: formData.sender_phone, LOC: formData.sender_loc },
+              order: { ...baseOrderPayload, id: selectedItem.id }
+            }
+          }
+        } else {
+          // ရှိပြီးသား Sender မို့ ပုံမှန်အတိုင်း အော်ဒါပဲ Queue ထဲ ထည့်မယ်
+          newItem = {
+            local_id: `local_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            payload: { type: 'update_order', order: { ...baseOrderPayload, id: selectedItem.id } }
+          }
+        }
+
+        const updatedQueue = [...syncQueue, newItem]
+        setSyncQueue(updatedQueue)
+        localStorage.setItem('offline_orders_queue', JSON.stringify(updatedQueue))
+        
+        // အော့ဖ်လိုင်းဖြစ်နေလည်း UI မှာ ပြီးသွားသလိုမျိုး Next Item ကို တန်းကျော်ပေးမယ်
+        setProcessedStack(prev => [...prev, selectedItem.id])
+        const updatedPending = pendingItems.filter(item => item.id !== selectedItem.id)
+        setPendingItems(updatedPending)
+        if (updatedPending.length > 0) {
+          handleSelectItem(updatedPending[0])
+        } else {
+          setSelectedItem(null)
+        }
+      }
+    } catch (err: any) {
+      alert("Error ဖြစ်ပွားခဲ့သည်: " + err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleZoomIn = () => setZoomScale(prev => Math.min(prev + 0.25, 4))
@@ -703,8 +787,8 @@ export default function PendingEntry() {
                   value={formData.pickup_rider_id} 
                   onChange={e => handlePersistChange('pickup_rider_id', e.target.value)} 
                   className={winSelect}
-                  onKeyDown={handleSelectKeyDown}
                   disabled={!selectedItem}
+                  onFocus={handleSelectFocus}
                 >
                   <option value="">Select rider</option>
                   {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
@@ -820,8 +904,8 @@ export default function PendingEntry() {
                       value={formData.sender_loc} 
                       onChange={e => handlePersistChange('sender_loc', e.target.value)} 
                       className={winSelect} 
-                      onKeyDown={handleSelectKeyDown}
                       disabled={!selectedItem}
+                      onFocus={handleSelectFocus}
                     >
                       <option value="MDY">MANDALAY</option>
                       <option value="YGN">YANGON</option>
@@ -841,7 +925,7 @@ export default function PendingEntry() {
                 <div className="space-y-3">
                   <div>
                     <label className={labelStyle}>Name <span className="text-red-500">*</span></label>
-                    <input type="text" value={formData.receiver_name} onChange={e => setFormData({...formData, receiver_name: e.target.value})} className={winInput} required disabled={!selectedItem} />
+                    <input ref={receiverNameRef} type="text" value={formData.receiver_name} onChange={e => setFormData({...formData, receiver_name: e.target.value})} className={winInput} required disabled={!selectedItem} />
                   </div>
                   <div>
                     <label className={labelStyle}>Phone <span className="text-red-500">*</span></label>
@@ -850,7 +934,7 @@ export default function PendingEntry() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className={labelStyle}>City</label>
-                      <select value={formData.receiver_loc} onChange={e => setFormData({...formData, receiver_loc: e.target.value})} className={winSelect} onKeyDown={handleSelectKeyDown} disabled={!selectedItem}>
+                     <select value={formData.receiver_loc} onChange={e => setFormData({...formData, receiver_loc: e.target.value})} className={winSelect}  disabled={!selectedItem} onFocus={handleSelectFocus}>
                         <option value="MDY">Mandalay</option>
                         <option value="YGN">Yangon</option>
                       </select>
@@ -885,7 +969,7 @@ export default function PendingEntry() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={labelStyle}>Type</label>
-                    <select value={formData.fee_type} onChange={e => setFormData({...formData, fee_type: e.target.value})} className={winSelect} onKeyDown={handleSelectKeyDown} disabled={!selectedItem}>
+                    <select value={formData.fee_type} onChange={e => setFormData({...formData, fee_type: e.target.value})} className={winSelect}  disabled={!selectedItem} onFocus={handleSelectFocus}>
                       <option value="Deli">Deli (+)</option>
                       <option value="Kpay">Kpay</option>
                       <option value="Cash">Cash</option>
@@ -905,7 +989,7 @@ export default function PendingEntry() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={labelStyle}>Status</label>
-                    <select value={formData.status} onChange={e => handleStatusChange(e.target.value)} className={winSelect} onKeyDown={handleSelectKeyDown} disabled={!selectedItem}>
+                    <select value={formData.status} onChange={e => handleStatusChange(e.target.value)} className={winSelect}  disabled={!selectedItem} onFocus={handleSelectFocus}>
                       <option value="At Office">📦 At Office</option>
                       <option value="On Way">🚵 On Way</option>
                       <option value="Delivered">✅ Delivered</option>
@@ -925,7 +1009,7 @@ export default function PendingEntry() {
                 </div>
                 <div>
                   <label className={labelStyle}>Delivery Rider</label>
-                  <select value={formData.deliver_rider_id} onChange={e => setFormData({...formData, deliver_rider_id: e.target.value})} className={winSelect} disabled={!selectedItem}>
+                  <select value={formData.deliver_rider_id} onChange={e => setFormData({...formData, deliver_rider_id: e.target.value})} className={winSelect} disabled={!selectedItem} onFocus={handleSelectFocus}>
                     <option value="">Select delivery rider...</option>
                     {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                   </select>
@@ -933,14 +1017,14 @@ export default function PendingEntry() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className={labelStyle}>Return Utility</label>
-                    <select value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} className={winSelect} disabled={!selectedItem}>
+                    <select value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} className={winSelect} disabled={!selectedItem} onFocus={handleSelectFocus}>
                       <option value="">Normal Delivery</option>
                       <option value="RT">Return Item (RT)</option>
                     </select>
                   </div>
                   <div>
                     <label className={labelStyle}>Cash Event</label>
-                    <select value={formData.cash_added_date ? 'yes' : 'no'} onChange={e => setFormData({...formData, cash_added_date: e.target.value === 'yes' ? today : ''})} className={winSelect} disabled={!selectedItem}>
+                    <select value={formData.cash_added_date ? 'yes' : 'no'} onChange={e => setFormData({...formData, cash_added_date: e.target.value === 'yes' ? today : ''})} className={winSelect} disabled={!selectedItem} onFocus={handleSelectFocus}>
                       <option value="no">No Cash Added</option>
                       <option value="yes">Cash Added Event</option>
                     </select>
