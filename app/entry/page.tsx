@@ -267,7 +267,7 @@ export default function EntryForm() {
       sender_phone: newSender.phone || '',
       sender_loc: newSender.LOC || prev.sender_loc
     }))
-    setSenderModalOpen(false)
+    
   }
 
   // 5. Submit Mechanism
