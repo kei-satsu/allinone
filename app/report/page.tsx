@@ -24,7 +24,6 @@ const COLUMN_DEFS = [
   { key: 'pickup_rider', label: 'Pickup By', defaultVisible: true },
   { key: 'deliver_rider', label: 'Deliver By', defaultVisible: true },
   { key: 'deliver_date', label: 'Deliver Date', defaultVisible: false },
-  { key: 'cash_added_date', label: 'Cash Add Date', defaultVisible: false },
   { key: 'note', label: 'Note', defaultVisible: false },
 ]
 
@@ -67,6 +66,7 @@ export default function DailyReport() {
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [viewHandoverModal, setViewHandoverModal] = useState(false)
+  const [handoverContextMenu, setHandoverContextMenu] = useState<{ x: number; y: number; handoverId: string } | null>(null)
   
   // Handover States
   const [handoverModal, setHandoverModal] = useState<{ open: boolean; riderName: string }>({ open: false, riderName: '' })
@@ -84,10 +84,13 @@ export default function DailyReport() {
 
   // ဘယ်နေရာပဲနှိပ်နှိပ် Context Menu ကို ပြန်ပိတ်ပေးမည့် Event
   useEffect(() => {
-    const handleCloseMenu = () => setContextMenu(null);
-    window.addEventListener('click', handleCloseMenu);
-    return () => window.removeEventListener('click', handleCloseMenu);
-  }, []);
+    const handleCloseMenu = () => {
+      setContextMenu(null)
+      setHandoverContextMenu(null)
+    }
+    window.addEventListener('click', handleCloseMenu)
+    return () => window.removeEventListener('click', handleCloseMenu)
+  }, [])
 
   useEffect(() => {
     if (!previewImage) {
@@ -219,6 +222,25 @@ export default function DailyReport() {
 
   
 
+  // Handover အမှတ်တမ်းတစ်ခု ဖျက်ခြင်း
+  const deleteHandover = async (handoverId: string) => {
+    if (!confirm('ဤ ငွေအပ်နှံမှုမှတ်တမ်းကို ဖျက်လိုပါသလား?')) return
+    
+    try {
+      const { error } = await supabase
+        .from('cash_handovers')
+        .delete()
+        .eq('id', handoverId)
+      
+      if (error) throw error
+      alert('အောင်မြင်စွာ ဖျက်ပြီးပါပြီ။')
+      fetchData(userBranch, selectedDate)
+      setHandoverContextMenu(null)
+    } catch (err: any) {
+      alert('Error: ' + err.message)
+    }
+  }
+
   // Handover Submission 
   const submitHandover = async () => {
     if (!handoverModal.riderName) return
@@ -318,6 +340,14 @@ export default function DailyReport() {
 
   const senderLocCount = Object.keys(senderCodByLoc).length;
   const senderCodTotal = Object.values(senderCodByLoc).reduce((acc, senders) => acc + Object.values(senders).reduce((sum, amount) => sum + amount, 0), 0);
+
+  const officePaidTotal = reportData
+    .filter(o => 
+      o.received_date === selectedDate && 
+      (o.fee_type === 'Cash' || o.fee_type === 'Kpay') && 
+      o.sender_loc === userBranch
+    )
+    .reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
 
   return (
     <div className="w-full h-full flex flex-col bg-[#f3f3f3] font-[system-ui] overflow-hidden select-none">
@@ -472,6 +502,8 @@ export default function DailyReport() {
 
       {/* ── Cards Layout Wrapper (Responsive managed with state) ── */}
       <div className={`${showMobileSummary ? 'grid' : 'hidden sm:grid'} mx-4 mt-3 grid-cols-1 lg:grid-cols-2 gap-4 shrink-0 transition-all`}>
+
+        
         
         {/* ကတ် (၁) - Rider Ngwe ရှင်းမှုမှတ်တမ်း Card */}
         <div className="flex flex-col gap-3 h-full">
@@ -846,7 +878,7 @@ export default function DailyReport() {
                   <div><span className="text-gray-400 block">Pickup By:</span> <span className="text-gray-800 font-semibold">{o.pickup_rider?.name || '-'}</span></div>
                   <div><span className="text-gray-400 block">Deliver By:</span> <span className="text-gray-800 font-semibold">{o.deliver_rider?.name || '-'}</span></div>
                   <div><span className="text-gray-400 block">Deliver Date:</span> <span className="text-gray-800 font-semibold">{o.deliver_date || '-'}</span></div>
-                  <div><span className="text-gray-400 block">Cash Add Date:</span> <span className="text-gray-800 font-semibold">{o.cash_added_date || '-'}</span></div>
+                  <div><span className="text-gray-400 block">Cleared Date:</span> <span className="text-gray-800 font-semibold">{o.cleared_date || '-'}</span></div>
                   <div className="col-span-2"><span className="text-gray-400 block">Full Address:</span> <span className="text-gray-800 font-semibold break-words">{o.receiver_address || '-'}</span></div>
                 </div>
               )}
@@ -1003,7 +1035,18 @@ export default function DailyReport() {
                                 <tr><td colSpan={4} className="text-center py-6 text-gray-400 text-[11px]">Cash In စာရင်းမရှိပါ။</td></tr>
                               ) : (
                                 cashInItems.map((h) => (
-                                  <tr key={h.id} className="hover:bg-gray-50/60 transition-colors">
+                                  <tr 
+                                    key={h.id} 
+                                    className="hover:bg-gray-50/60 transition-colors cursor-context-menu"
+                                    onContextMenu={(e) => {
+                                      e.preventDefault()
+                                      setHandoverContextMenu({
+                                        x: e.clientX,
+                                        y: e.clientY,
+                                        handoverId: h.id
+                                      })
+                                    }}
+                                  >
                                     <td className="px-3 py-2 text-gray-900 font-semibold">👤 {h.rider_name}</td>
                                     <td className="px-3 py-2 text-right font-bold text-green-600">{h.amount?.toLocaleString()} Ks</td>
                                     <td className="px-3 py-2">
@@ -1041,7 +1084,18 @@ export default function DailyReport() {
                                 <tr><td colSpan={4} className="text-center py-6 text-gray-400 text-[11px]">OPP စာရင်းမရှိပါ။</td></tr>
                               ) : (
                                 oppItems.map((h) => (
-                                  <tr key={h.id} className="hover:bg-gray-50/60 transition-colors">
+                                  <tr 
+                                    key={h.id} 
+                                    className="hover:bg-gray-50/60 transition-colors cursor-context-menu"
+                                    onContextMenu={(e) => {
+                                      e.preventDefault()
+                                      setHandoverContextMenu({
+                                        x: e.clientX,
+                                        y: e.clientY,
+                                        handoverId: h.id
+                                      })
+                                    }}
+                                  >
                                     <td className="px-3 py-2 text-gray-900 font-semibold">👤 {h.rider_name}</td>
                                     <td className="px-3 py-2 text-right font-bold text-purple-600">{h.amount?.toLocaleString()} Ks</td>
                                     <td className="px-3 py-2">
@@ -1134,6 +1188,25 @@ export default function DailyReport() {
             className="w-full text-left px-3 py-2 hover:bg-orange-50 hover:text-orange-600 flex items-center gap-2 transition-colors"
           >
             ✏️ Edit Order
+          </button>
+        </div>
+      )}
+
+      {/* ── Cash Handover Context Menu ── */}
+      {handoverContextMenu && (
+        <div 
+          className="fixed bg-white border border-gray-200 rounded-lg shadow-xl py-1.5 z-[100] w-40 text-xs font-semibold text-gray-700 border-l-4 border-l-red-500"
+          style={{ top: handoverContextMenu.y, left: handoverContextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 mb-1">
+            Actions
+          </div>
+          <button 
+            onClick={() => deleteHandover(handoverContextMenu.handoverId)}
+            className="w-full text-left px-3 py-2 hover:bg-red-50 hover:text-red-600 flex items-center gap-2 transition-colors text-red-600 font-semibold"
+          >
+            🗑️ Delete Record
           </button>
         </div>
       )}

@@ -231,7 +231,7 @@ export default function RiderDetailPage() {
                     <th className={tableTh}>Total</th>
                     <th className={tableTh}>Status</th>
                     <th className={tableTh}>Deliver Date</th>
-                    <th className={tableTh}>Cash Added</th>
+                    <th className={tableTh}>Cleared</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -254,7 +254,7 @@ export default function RiderDetailPage() {
                         </span>
                       </td>
                       <td className="py-2.5 px-3 text-xs text-gray-500">{o.deliver_date || '-'}</td>
-                      <td className="py-2.5 px-3 text-xs text-gray-500">{o.cash_added_date || '-'}</td>
+                      <td className="py-2.5 px-3 text-xs text-gray-500">{o.cleard_date || '-'}</td>
                     </tr>
                   ))}
                 </tbody>

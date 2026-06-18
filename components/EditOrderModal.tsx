@@ -39,7 +39,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     deliver_rider_id: '',
     deliver_date: '',
     note: '',
-    cash_added_date: '',
+    cleared_date: '',
     branch: '',
     image_url: ''
   })
@@ -64,7 +64,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
         deliver_rider_id: orderData.deliver_rider_id || '',
         deliver_date: orderData.deliver_date || '',
         note: orderData.note || '',
-        cash_added_date: orderData.cash_added_date || '',
+        cleared_date: orderData.cleared_date || '',
         branch: orderData.branch || '',
         image_url: orderData.image_url || ''
       })
@@ -128,36 +128,96 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
 
     setLoading(true)
 
-    // ── 🔥 HISTORY LOG GENERATION 🔥 ──
+    // ── 🔥 PROFESSIONAL AUDIT LOG GENERATION (Clean & Scannable) 🔥 ──
     let changes: string[] = [];
 
-    // (က) Status စစ်ဆေးခြင်း
-    if (orderData.status !== formData.status) {
-      changes.push(`Status ကို "${orderData.status || 'At Office'}" မှ "${formData.status}" သို့ ပြောင်းလဲခဲ့သည်`);
+    // Utility helper for currency formatting inside logs
+    const fmtKg = (val: any) => `${(Number(val) || 0).toLocaleString()} Ks`;
+
+    // (၁) ရက်စွဲနှင့် ရုံးခွဲများ
+    if (orderData.received_date !== formData.received_date) {
+      changes.push(`📅 Arrival Date: "${orderData.received_date || 'N/A'}" ➔ "${formData.received_date}"`);
+    }
+    if (orderData.branch !== formData.branch) {
+      changes.push(`🏢 Branch: "${orderData.branch || 'N/A'}" ➔ "${formData.branch}"`);
     }
 
-    // (ခ) Rider စစ်ဆေးခြင်း
+    // (၂) Rider များ
+    if (orderData.pickup_rider_id !== formData.pickup_rider_id) {
+      const oldRider = riders.find(r => r.id === orderData.pickup_rider_id)?.name || 'N/A';
+      const newRider = riders.find(r => r.id === formData.pickup_rider_id)?.name || 'Removed';
+      changes.push(`🚴 Pick Up Rider: "${oldRider}" ➔ "${newRider}"`);
+    }
     if (orderData.deliver_rider_id !== formData.deliver_rider_id) {
-      const oldRiderName = riders.find(r => r.id === orderData.deliver_rider_id)?.name || 'မရှိပါ';
-      const newRiderName = riders.find(r => r.id === formData.deliver_rider_id)?.name || 'ဖြုတ်လိုက်သည်';
-      changes.push(`Rider ကို "${oldRiderName}" မှ "${newRiderName}" သို့ ပြောင်းလဲခဲ့သည်`);
+      const oldRider = riders.find(r => r.id === orderData.deliver_rider_id)?.name || 'N/A';
+      const newRider = riders.find(r => r.id === formData.deliver_rider_id)?.name || 'Removed';
+      changes.push(`🚴 Delivery Rider: "${oldRider}" ➔ "${newRider}"`);
     }
 
-    // (ဂ) ★ ပုံပြောင်းလဲမှု/ပုံဖျက်မှု ရှိမရှိ စစ်ဆေးခြင်း ★
+    // (၃) ပေးပို့သူ (Sender) အချက်အလက်
+    if (orderData.sender_name !== formData.sender_name) {
+      changes.push(`📤 Sender Name: "${orderData.sender_name}" ➔ "${formData.sender_name}"`);
+    }
+    if (orderData.sender_loc !== formData.sender_loc) {
+      changes.push(`📍 Sender Loc: "${orderData.sender_loc}" ➔ "${formData.sender_loc}"`);
+    }
+
+    // (၄) လက်ခံသူ (Receiver) အချက်အလက်
+    if (orderData.receiver_name !== formData.receiver_name) {
+      changes.push(`📥 Receiver Name: "${orderData.receiver_name}" ➔ "${formData.receiver_name}"`);
+    }
+    if (orderData.receiver_phone !== formData.receiver_phone) {
+      changes.push(`📞 Receiver Phone: "${orderData.receiver_phone}" ➔ "${formData.receiver_phone}"`);
+    }
+    if ((orderData.receiver_address || '') !== (formData.receiver_address || '')) {
+      changes.push(`🏠 Address: "${orderData.receiver_address || 'N/A'}" ➔ "${formData.receiver_address || 'Deleted'}"`);
+    }
+    if (orderData.receiver_loc !== formData.receiver_loc) {
+      changes.push(`🏙️ Destination City: "${orderData.receiver_loc}" ➔ "${formData.receiver_loc}"`);
+    }
+
+    // (၅) ငွေကြေးပိုင်းဆိုင်ရာ
+    if (Number(orderData.cod_amount || 0) !== Number(formData.cod_amount || 0)) {
+      changes.push(`💰 COD Amount: ${fmtKg(orderData.cod_amount)} ➔ ${fmtKg(formData.cod_amount)}`);
+    }
+    if (Number(orderData.deli_fee || 0) !== Number(formData.deli_fee || 0)) {
+      changes.push(`💵 Deli Fee: ${fmtKg(orderData.deli_fee)} ➔ ${fmtKg(formData.deli_fee)}`);
+    }
+    if (orderData.fee_type !== formData.fee_type) {
+      changes.push(`💳 Pay Type: "${orderData.fee_type || 'Deli'}" ➔ "${formData.fee_type}"`);
+    }
+
+    // (၆) အခြေအနေနှင့် အခြား Utility များ
+    if (orderData.status !== formData.status) {
+      changes.push(`📦 Status: "${orderData.status || 'At Office'}" ➔ "${formData.status}"`);
+    }
+    if ((orderData.deliver_date || '') !== (formData.deliver_date || '')) {
+      changes.push(`📆 Deliver Date: "${orderData.deliver_date || 'N/A'}" ➔ "${formData.deliver_date || 'Deleted'}"`);
+    }
+    if ((orderData.note || '') !== (formData.note || '')) {
+      const oldNote = orderData.note === 'RT' ? 'Return (RT)' : (orderData.note || 'Normal');
+      const newNote = formData.note === 'RT' ? 'Return (RT)' : (formData.note || 'Normal');
+      changes.push(`⚠️ Note Utility: "${oldNote}" ➔ "${newNote}"`);
+    }
+    if ((orderData.cleared_date || '') !== (formData.cleared_date || '')) {
+      const oldClear = orderData.cleared_date ? 'Cleared' : 'Uncleared';
+      const newClear = formData.cleared_date ? 'Cleared' : 'Uncleared';
+      changes.push(`💸 Cash Event: "${oldClear}" ➔ "${newClear}"`);
+    }
+
+    // (၇) Voucher ပုံပြောင်းလဲမှု
     if (orderData.image_url !== formData.image_url) {
-      if (!formData.image_url) {
-        changes.push("Voucher ပုံဟောင်းကို ဖျက်ပယ်ခဲ့သည်");
-      } else {
-        changes.push("Voucher ပုံအသစ် လဲလှယ်တင်သွင်းခဲ့သည်");
-      }
+      const imgStatus = !formData.image_url ? 'Voucher image removed' : 'New voucher image uploaded';
+      changes.push(`🖼️ Attachment: "${imgStatus}"`);
     }
 
-    // အကယ်၍ အခြား စာသား/လိပ်စာတွေပဲ ပြင်သွားခဲ့ရင်
+    // အကယ်၍ ဘာမှမပြင်ဘဲ သိမ်းခဲ့ရင်
     if (changes.length === 0) {
-      changes.push("ပါဆယ်အချက်အလက်များကို အသေးစိတ် ပြင်ဆင်ခဲ့သည်");
+      changes.push("ℹ️ No fields were modified (Re-saved)");
     }
 
-    const logNote = changes.join("၊ ");
+    // စာကြောင်းတစ်ခုချင်းစီကို Line Break (\n) ချပြီး သိမ်းဆည်းမည်
+    const logNote = changes.join("\n");
     const operatorName = localStorage.getItem('user_branch') || formData.branch || 'Unknown Office';
 
     const newLogEntry = {
@@ -168,14 +228,14 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     };
 
     const updatedHistory = [...(orderData.history || []), newLogEntry];
-    // ─────────────────────────────────
+    // ─────────────────────────────────────────────────────────────
 
     const payload = {
         ...formData,
         pickup_rider_id: formData.pickup_rider_id || null,
         deliver_rider_id: formData.deliver_rider_id || null,
         deliver_date: formData.deliver_date || null,
-        cash_added_date: formData.cash_added_date || null,
+        cleared_date: formData.cleared_date || null,
         history: updatedHistory
     }
 
@@ -365,22 +425,20 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                 </div>
                 <div>
                   <label className={labelStyle}>Cash Event</label>
-                  <select value={formData.cash_added_date ? "yes" : "no"} onChange={e => setFormData({...formData, cash_added_date: e.target.value === "yes" ? new Date().toISOString().split('T')[0] : ""})} className={winSelect}>
-                    <option value="no">No Cash Added</option>
-                    <option value="yes">Cash Added Event</option>
+                  <select value={formData.cleared_date ? "yes" : "no"} onChange={e => setFormData({...formData, cleared_date: e.target.value === "yes" ? new Date().toISOString().split('T')[0] : ""})} className={winSelect}>
+                    <option value="no">Not Cleared</option>
+                    <option value="yes">Cleared</option>
                   </select>
                 </div>
               </div>
             </div>
 
-            {/* ★ Voucher Image Section (ပုံဖျက်ခလုတ် ဖြည့်စွက်ထားသည်) ★ */}
+            {/* ★ Voucher Image Section ★ */}
             <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-xs">
               <label className={labelStyle}>Voucher Image</label>
               {formData.image_url && (
                 <div className="mb-2 relative rounded border border-gray-200 bg-gray-50 flex items-center justify-center p-2 group">
                   <img src={formData.image_url} alt="Current Voucher" className="max-h-24 object-contain" />
-                  
-                  {/* ပုံကို လုံးဝဖျက်ပစ်ချင်လျှင် နှိပ်ရန် ခလုတ်လေး */}
                   <button 
                     type="button" 
                     onClick={() => setFormData(prev => ({ ...prev, image_url: '' }))}
@@ -391,7 +449,6 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                   </button>
                 </div>
               )}
-              {/* ပုံအသစ်တင်လိုက်တာနဲ့ ၎င်း url ကို တန်းယူပြီး အစားထိုးသွားပါမည် */}
               <ImageUploader 
                 key={resetKey}
                 onUploadSuccess={(url) => setFormData(prev => ({ ...prev, image_url: url }))} 

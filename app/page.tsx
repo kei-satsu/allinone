@@ -56,7 +56,7 @@ export default function Dashboard() {
       pending: filteredRows.filter(o => o.status === 'Pending').length,
       delivered: filteredRows.filter(o => o.status === 'Delivered').length,
       totalCod: filteredRows.reduce((sum, o) => sum + (o.cod_amount || 0), 0),
-      unpaidCod: filteredRows.filter(o => !o.cash_added_date).reduce((sum, o) => sum + (o.cod_amount || 0), 0)
+      unpaidCod: filteredRows.filter(o => !o.cleard_date).reduce((sum, o) => sum + (o.cod_amount || 0), 0)
     }
   }, [userBranch, allOrders])
 
@@ -220,7 +220,7 @@ export default function Dashboard() {
               </div>
               
               <p className="text-xs text-slate-400 font-medium mt-3.5 border-t border-slate-100 pt-3">
-                * Rider များထံမှ ရုံးခန်းသို့ Cash Added စာရင်းသွင်းရန် ကျန်ရှိနေသေးသော စုစုပေါင်းရရန်ကျန်ငွေ ဖြစ်ပါသည်။
+                * Rider များထံမှ ရုံးခန်းသို့ ငွေလည်ပတ် မပြီးဆောင်းသေးသော စုစုပေါင်းငွေ ဖြစ်ပါသည်။
               </p>
             </div>
           </>

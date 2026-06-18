@@ -25,7 +25,7 @@ const COLUMN_DEFS = [
   { key: 'pickup_rider', label: 'Pickup By', defaultVisible: true },
   { key: 'deliver_rider', label: 'Deliver By', defaultVisible: true },
   { key: 'deliver_date', label: 'Deliver Date', defaultVisible: false },
-  { key: 'cash_added_date', label: 'Cash Add Date', defaultVisible: false },
+  { key: 'cleard_date', label: 'Cleared Date', defaultVisible: false },
   { key: 'note', label: 'Note', defaultVisible: false },
   { key: 'created_at', label: 'Created At', defaultVisible: false },
 ]
@@ -667,79 +667,113 @@ export default function OrderList() {
   }} 
 />
 
-{/* ── 📜 View History Log Modal ── */}
+{/* ── 📜 PREMIUM VIEW HISTORY LOG MODAL ── */}
 {viewingHistoryOrder && (
   <div 
-    className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200"
+    className="fixed inset-0 bg-gray-900/60 backdrop-blur-[3px] flex items-end sm:items-center justify-center z-50 p-0 sm:p-4 animate-in fade-in duration-200"
     onClick={() => setViewingHistoryOrder(null)}
   >
+    {/* Backdrop */}
+    <div className="absolute inset-0" />
+    
+    {/* Modal Box */}
     <div 
-      className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+      className="relative bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-lg h-[80vh] sm:h-auto sm:max-h-[80vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-200 border border-gray-100"
       onClick={e => e.stopPropagation()}
     >
       {/* Modal Header */}
-      <div className="px-5 py-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
-        <div>
-          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide flex items-center gap-1.5">
-            📜 Activity History Log
-          </h3>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Item ID: <span className="font-mono font-semibold text-orange-600">{viewingHistoryOrder.item_id}</span>
+      <div className="px-5 py-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center shrink-0">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-extrabold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
+              📜 Activity Logs
+            </h3>
+            <span className="bg-orange-100 text-orange-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+              {viewingHistoryOrder.history?.length || 0} Events
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+            Tracking ID: <span className="font-mono font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-100">{viewingHistoryOrder.item_id}</span>
           </p>
         </div>
         <button 
           onClick={() => setViewingHistoryOrder(null)}
-          className="text-gray-400 hover:text-gray-600 bg-gray-100 hover:bg-gray-200 w-7 h-7 flex items-center justify-center rounded-full transition-colors text-xs font-bold"
+          className="text-gray-400 hover:text-gray-700 bg-gray-200/60 hover:bg-gray-200 w-8 h-8 flex items-center justify-center rounded-full transition-colors shrink-0 ml-2"
         >
-          ✕
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
       </div>
 
       {/* Modal Body (Timeline View) */}
-      <div className="p-5 overflow-y-auto flex-1 space-y-4 bg-gray-50/50">
+      <div className="p-5 overflow-y-auto flex-1 bg-slate-50/50 scrollbar-thin">
         {!viewingHistoryOrder.history || viewingHistoryOrder.history.length === 0 ? (
-          <div className="text-center py-8 text-gray-400 text-xs font-medium">
-            လှုပ်ရှားမှုမှတ်တမ်း (Log) မရှိသေးပါ။
+          <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2">
+            <span className="text-3xl">📭</span>
+            <p className="text-xs font-semibold italic">လှုပ်ရှားမှုမှတ်တမ်း (Log) မရှိသေးပါ။</p>
           </div>
         ) : (
-          <div className="relative border-l-2 border-orange-200 pl-4 ml-2 space-y-5 my-2">
-            {viewingHistoryOrder.history.map((log: any, index: number) => (
-              <div key={index} className="relative">
-                {/* Timeline Dot */}
-                <span className="absolute -left-[21px] top-1 bg-orange-500 w-2.5 h-2.5 rounded-full ring-4 ring-white shadow-sm" />
-                
-                {/* Log Card */}
-                <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
-                  <div className="flex justify-between items-start gap-2 mb-1.5">
-                    <span className="text-[11px] font-bold text-gray-800 bg-gray-100 px-2 py-0.5 rounded">
-                      {log.action || 'Updated'}
-                    </span>
-                    <span className="text-[10px] text-gray-400 font-medium font-mono">
-                      {log.timestamp ? new Date(log.timestamp).toLocaleString('en-GB', { hour12: true }) : '-'}
-                    </span>
-                  </div>
+          /* [...].reverse() သုံးပြီး နောက်ဆုံးပြင်ဆင်ချက်ကို ထိပ်ဆုံးမှာ ပြသမည် */
+          <div className="relative border-l border-gray-200 pl-4 ml-2.5 space-y-5 my-1">
+            {[...viewingHistoryOrder.history].reverse().map((log: any, index: number) => {
+              const isLatest = index === 0; // ထိပ်ဆုံးတစ်ခု (အသစ်ဆုံး Log) ဟုတ်မဟုတ် စစ်ဆေးခြင်း
+              
+              return (
+                <div key={index} className="relative animate-in fade-in slide-in-from-top-2 duration-300">
+                  {/* Timeline Node Point */}
+                  <span className={`absolute -left-[21.5px] top-2 w-3 h-3 rounded-full border-2 border-white shadow-sm z-10 transition-all
+                    ${isLatest ? 'bg-orange-500 ring-4 ring-orange-100' : 'bg-gray-300 ring-4 ring-slate-100'}`} 
+                  />
                   
-                  <p className="text-xs text-gray-600 font-medium leading-relaxed break-words">
-                    {log.note || '-'}
-                  </p>
+                  {/* အသစ်ဆုံး Log ဖြစ်ပါက Pulse အစက်လေး လင်းနေစေရန် */}
+                  {isLatest && (
+                    <span className="absolute -left-[21.5px] top-2 w-3 h-3 rounded-full bg-orange-500 animate-ping opacity-75 z-0" />
+                  )}
                   
-                  <div className="mt-2 pt-1.5 border-t border-gray-100 flex items-center justify-end text-[10px] text-gray-400 font-semibold uppercase tracking-wide">
-                    👤 Operator: <span className="text-orange-600 ml-1">{log.operator || 'Unknown'}</span>
+                  {/* Log Card Box */}
+                  <div className={`bg-white border rounded-xl p-3.5 shadow-sm transition-all duration-200
+                    ${isLatest ? 'border-orange-200 ring-1 ring-orange-100/50' : 'border-gray-200/80 hover:border-gray-300'}`}
+                  >
+                    {/* Card Top Block */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-50 pb-2 mb-2">
+                      <span className={`text-[10px] font-extrabold uppercase tracking-wide px-2 py-0.5 rounded-md border
+                        ${isLatest 
+                          ? 'bg-orange-50 text-orange-700 border-orange-100' 
+                          : 'bg-slate-50 text-slate-600 border-slate-100'}`}
+                      >
+                        ⚡ {log.action || 'Order Updated'}
+                      </span>
+                      <span className="text-[10px] text-gray-400 font-bold font-mono tracking-tight bg-gray-50 px-2 py-0.5 rounded border border-gray-100">
+                        ⏱️ {log.timestamp ? new Date(log.timestamp).toLocaleString('en-GB', { hour12: true }) : '-'}
+                      </span>
+                    </div>
+                    
+                    {/* Log Note Details (CRITICAL: whitespace-pre-line ပါဝင်သဖြင့် စာကြောင်းများ ကွဲပြားစွာဆင်းမည်) */}
+                    <div className="text-xs text-gray-700 font-sans font-medium whitespace-pre-line leading-relaxed tracking-normal break-words bg-slate-50/70 p-2.5 rounded-lg border border-slate-100/60">
+                      {log.note || '-'}
+                    </div>
+                    
+                    {/* Card Footer: Operator Detail */}
+                    <div className="mt-2 pt-2 border-t border-dashed border-gray-100 flex items-center justify-between text-[10px] text-gray-400 font-bold uppercase tracking-wide">
+                      <span>Status</span>
+                      <span className="flex items-center gap-1 text-gray-600">
+                        👤 Operator: <span className="text-orange-600 font-extrabold">{log.operator || 'Unknown'}</span>
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
 
       {/* Modal Footer */}
-      <div className="p-3 bg-gray-50 border-t border-gray-200 flex justify-end">
+      <div className="p-3.5 bg-gray-50 border-t border-gray-200 flex justify-end shrink-0">
         <button 
           onClick={() => setViewingHistoryOrder(null)}
-          className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold px-4 py-2 rounded-lg text-xs transition-colors"
+          className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold px-4 py-2 rounded-xl text-xs shadow-sm transition-colors"
         >
-          Close
+          Close Window
         </button>
       </div>
     </div>

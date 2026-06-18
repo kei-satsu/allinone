@@ -73,7 +73,7 @@ export default function PendingEntry() {
     deliver_rider_id: '',
     deliver_date: '',
     note: '',
-    cash_added_date: '',
+    cleard_date: '',
     branch: '',
     image_url: ''
   })
@@ -323,7 +323,7 @@ export default function PendingEntry() {
       deliver_rider_id: item.deliver_rider_id || '',
       deliver_date: item.deliver_date || '',
       note: item.note || '',
-      cash_added_date: item.cash_added_date || '',
+      cleard_date: item.cleard_date || '',
       sender_id: item.sender_id || null,
       branch: item.branch || userBranch,
       image_url: item.image_url || ''
@@ -439,7 +439,7 @@ export default function PendingEntry() {
       ...formData,
       pickup_rider_id: formData.pickup_rider_id || null,
       deliver_rider_id: formData.deliver_rider_id || null,
-      cash_added_date: formData.cash_added_date || null,
+      cleard_date: formData.cleard_date || null,
     }
 
     if (formData.status === 'On Way' || formData.status === 'Delivered') {
@@ -1024,19 +1024,19 @@ export default function PendingEntry() {
                   </div>
                   <div>
                     <label className={labelStyle}>Cash Event</label>
-                    <select value={formData.cash_added_date ? 'yes' : 'no'} onChange={e => setFormData({...formData, cash_added_date: e.target.value === 'yes' ? today : ''})} className={winSelect} disabled={!selectedItem} onFocus={handleSelectFocus}>
-                      <option value="no">No Cash Added</option>
-                      <option value="yes">Cash Added Event</option>
+                    <select value={formData.cleard_date ? 'yes' : 'no'} onChange={e => setFormData({...formData, cleard_date: e.target.value === 'yes' ? today : ''})} className={winSelect} disabled={!selectedItem} onFocus={handleSelectFocus}>
+                      <option value="no">Not Cleared</option>
+                      <option value="yes">Cleared</option>
                     </select>
                   </div>
                 </div>
-                {formData.cash_added_date && (
+                {formData.cleard_date && (
                   <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-                    <label className="block text-emerald-700 font-semibold mb-1.5 uppercase text-xs tracking-wide">Cash Added Date</label>
+                    <label className="block text-emerald-700 font-semibold mb-1.5 uppercase text-xs tracking-wide">Cleared Date</label>
                     <input
                       type="date"
-                      value={formData.cash_added_date}
-                      onChange={e => setFormData({...formData, cash_added_date: e.target.value})}
+                      value={formData.cleard_date}
+                      onChange={e => setFormData({...formData, cleard_date: e.target.value})}
                       className={`${winInput} border-emerald-200 focus:border-emerald-500`}
                       required
                       disabled={!selectedItem}

@@ -60,7 +60,7 @@ export default function EntryForm() {
     deliver_rider_id: '',
     deliver_date: '',
     note: '',
-    cash_added_date: '',
+    cleard_date: '',
     branch: '',
     image_url: '' // 🔥 ပုံ Link သိမ်းဖို့ နေရာအသစ်
   })
@@ -288,7 +288,7 @@ export default function EntryForm() {
       ...formData,
       pickup_rider_id: formData.pickup_rider_id || null,
       deliver_rider_id: formData.deliver_rider_id || null,
-      cash_added_date: formData.cash_added_date || null,
+      cleard_date: formData.cleard_date || null,
     }
 
     if (formData.status === 'On Way' || formData.status === 'Delivered') {
@@ -348,7 +348,7 @@ export default function EntryForm() {
       sender_id: null,
       sender_name: '', sender_phone: '', sender_loc: userBranch || 'MDY',
       receiver_name: '', receiver_phone: '', receiver_address: '',
-      cod_amount: 0, deli_fee: 0, fee_type: 'Deli', total_amount: 0, note: '', cash_added_date: '',
+      cod_amount: 0, deli_fee: 0, fee_type: 'Deli', total_amount: 0, note: '', cleard_date: '',
       pickup_rider_id: '', deliver_rider_id: '', status: 'At Office', deliver_date: '',
       image_url: '' // Reset Image
     }))
@@ -676,19 +676,19 @@ export default function EntryForm() {
                 </div>
                 <div>
                   <label className={labelStyle}>Cash Event</label>
-                  <select value={formData.cash_added_date ? "yes" : "no"} onChange={e => setFormData({...formData, cash_added_date: e.target.value === "yes" ? today : ""})} className={winSelect}>
-                    <option value="no">No Cash Added</option>
-                    <option value="yes">Cash Added Event</option>
+                  <select value={formData.cleard_date ? "yes" : "no"} onChange={e => setFormData({...formData, cleard_date: e.target.value === "yes" ? today : ""})} className={winSelect}>
+                    <option value="no">Not Cleared</option>
+                    <option value="yes">Cleared</option>
                   </select>
                 </div>
               </div>
-              {formData.cash_added_date && (
+              {formData.cleard_date && (
                 <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-                  <label className="block text-emerald-700 font-semibold mb-1.5 uppercase text-xs tracking-wide">Date Received</label>
+                  <label className="block text-emerald-700 font-semibold mb-1.5 uppercase text-xs tracking-wide">Cleared Date</label>
                   <input 
                     type="date" 
-                    value={formData.cash_added_date} 
-                    onChange={e => setFormData({...formData, cash_added_date: e.target.value})} 
+                    value={formData.cleard_date} 
+                    onChange={e => setFormData({...formData, cleard_date: e.target.value})} 
                     className={`${winInput} border-emerald-200 focus:border-emerald-500`}
                     required
                   />
