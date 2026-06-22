@@ -56,7 +56,9 @@ export default function Dashboard() {
       pending: filteredRows.filter(o => o.status === 'Pending').length,
       delivered: filteredRows.filter(o => o.status === 'Delivered').length,
       totalCod: filteredRows.reduce((sum, o) => sum + (o.cod_amount || 0), 0),
-      unpaidCod: filteredRows.filter(o => !o.cleard_date).reduce((sum, o) => sum + (o.cod_amount || 0), 0)
+      unpaidCod: filteredRows
+  .filter(o => o.status !== 'Delivered')
+  .reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0)
     }
   }, [userBranch, allOrders])
 

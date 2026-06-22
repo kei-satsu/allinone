@@ -8,13 +8,13 @@ import EditOrderModal from '@/components/EditOrderModal'
 const COLUMN_DEFS = [
   { key: 'item_id', label: 'Item ID', defaultVisible: true },
   { key: 'received_date', label: 'Received Date', defaultVisible: true },
-  { key: 'branch', label: 'Branch', defaultVisible: true },
+  { key: 'branch', label: 'Branch', defaultVisible: false },
   { key: 'sender_name', label: 'Sender', defaultVisible: true },
   { key: 'sender_loc', label: 'S. City', defaultVisible: true },
   { key: 'receiver_name', label: 'Receiver', defaultVisible: true },
   { key: 'receiver_phone', label: 'Phone', defaultVisible: true },
-  { key: 'receiver_loc', label: 'R. City', defaultVisible: true },
-  { key: 'receiver_address', label: 'Full Address', defaultVisible: false },
+  { key: 'receiver_loc', label: 'R. City', defaultVisible: false },
+  { key: 'receiver_address', label: 'Full Address', defaultVisible: true },
   { key: 'fee_type', label: 'Type', defaultVisible: true },
   { key: 'cod_amount', label: 'COD (Ks)', defaultVisible: true },
   { key: 'deli_fee', label: 'Deli Fee (Ks)', defaultVisible: true },
@@ -23,8 +23,8 @@ const COLUMN_DEFS = [
   { key: 'image_url', label: 'Photo', defaultVisible: true }, 
   { key: 'pickup_rider', label: 'Pickup By', defaultVisible: true },
   { key: 'deliver_rider', label: 'Deliver By', defaultVisible: true },
-  { key: 'deliver_date', label: 'Deliver Date', defaultVisible: false },
-  { key: 'note', label: 'Note', defaultVisible: false },
+  { key: 'deliver_date', label: 'Deliver Date', defaultVisible: true },
+  { key: 'note', label: 'Note', defaultVisible: true },
 ]
 
 export default function DailyReport() {
@@ -224,7 +224,7 @@ export default function DailyReport() {
 
   // Handover အမှတ်တမ်းတစ်ခု ဖျက်ခြင်း
   const deleteHandover = async (handoverId: string) => {
-    if (!confirm('ဤ ငွေအပ်နှံမှုမှတ်တမ်းကို ဖျက်လိုပါသလား?')) return
+    if (!confirm('ဖျက်မှာသေချာပြီလား?')) return
     
     try {
       const { error } = await supabase
@@ -260,7 +260,7 @@ export default function DailyReport() {
         }])
 
       if (error) throw error
-      alert(`${handoverModal.riderName} ၏ Ngwe အပ်နှံမှုမှတ်တမ်း (${handoverForm.transaction_type}) ကို အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ।`)
+      alert(`${handoverModal.riderName} ရဲ့ အပ်ငွေကို (${handoverForm.transaction_type}) ကို အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ।`)
       setHandoverModal({ open: false, riderName: '' })
       setHandoverForm({ amount: 0, payment_method: 'Cash', transaction_type: 'Cash-in', note: '' })
       fetchData()
@@ -273,6 +273,26 @@ export default function DailyReport() {
 
   // Cell Rendering Styles
   const renderCell = (o: any, key: string) => {
+
+if (key === 'sender_loc' || key === 'receiver_loc') {
+      const location = o[key];
+      if (location === 'MDY') {
+        return (
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider border bg-blue-50 text-blue-700 border-blue-200 shadow-sm">
+            MDY
+          </span>
+        );
+      }
+      if (location === 'YGN') {
+        return (
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider border bg-red-50 text-red-700 border-red-200 shadow-sm">
+            YGN
+          </span>
+        );
+      }
+      return location || '-';
+    }
+
     if (key === 'branch') return (
       <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider border ${
         o.branch === 'MDY' ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-purple-50 text-purple-700 border-purple-200'
@@ -311,7 +331,11 @@ export default function DailyReport() {
 
   // Delivered ဖြစ်ပြီးသား ပါဆယ်များအတွက် Senders နှင့် မြို့အလိုက် COD စာရင်းတွက်ချက်ခြင်း
   const senderCodByLoc = reportData
-    .filter(o => o.status === 'Delivered' && o.sender_name)
+    .filter(o => 
+      o.status === 'Delivered' && 
+      o.sender_name && 
+      o.deliver_date === selectedDate // 👈 ဒီ Filter အခြေအနေကို အသစ်ဖြည့်သွင်းလိုက်တာပါ
+    )
     .reduce((acc: Record<string, Record<string, number>>, o) => {
       const loc = o.sender_loc || 'Unknown City';
       const sender = o.sender_name;
@@ -329,7 +353,7 @@ export default function DailyReport() {
   const riderSummaryOop = handovers.filter(h => h.transaction_type === 'OOP').reduce((sum, h) => sum + (Number(h.amount) || 0), 0);
   const riderSummaryGap = riderSummaryTotal - (riderSummaryCashIn + riderSummaryOop);
 
-  const tableTotalAmount = reportData.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+  // ၁။ Deli Fee စုစုပေါင်းများနှင့် မြို့အလိုက် သတ်မှတ်ချက်များကို အရင်တွက်ချက်သည်
   const tableDeliFeeTotal = reportData.reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
   const oppositeCity = userBranch === 'MDY' ? 'YGN' : 'MDY';
   const oppositeCityDeliTotal = reportData
@@ -341,6 +365,7 @@ export default function DailyReport() {
   const senderLocCount = Object.keys(senderCodByLoc).length;
   const senderCodTotal = Object.values(senderCodByLoc).reduce((acc, senders) => acc + Object.values(senders).reduce((sum, amount) => sum + amount, 0), 0);
 
+  // ၂။ ရုံးခွဲအလိုက် ရှင်းပြီးသား Office Paid စုစုပေါင်းကို တွက်ချက်သည်
   const officePaidTotal = reportData
     .filter(o => 
       o.received_date === selectedDate && 
@@ -349,13 +374,22 @@ export default function DailyReport() {
     )
     .reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
 
-      const oppositePaidTotal = reportData
+  // ၃။ တစ်ဖက်မြို့က ရှင်းလိုက်သည့် Opposite Paid စုစုပေါင်းကို တွက်ချက်သည်
+  const oppositePaidTotal = reportData
     .filter(o => 
       o.received_date === selectedDate && 
       (o.fee_type === 'Cash' || o.fee_type === 'Kpay') && 
       o.sender_loc === oppositeCity
     )
     .reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
+
+  // ၄။ ယနေ့ရက်စွဲအတိုင်း Delivered ဖြစ်သွားသည့် Rider ပါဆယ်များ၏ တန်ဖိုးစုစုပေါင်း (grandTotalToPay) ကို ကြိုတင်တွက်ထုတ်သည်
+  const grandTotalToPayCalculated = reportData
+    .filter(o => o.status === 'Delivered' && o.deliver_date === selectedDate)
+    .reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+
+  // ၅။ ✨ သင်အလိုရှိသော ပုံသေနည်းအတိုင်း ဒေတာ ၃ ခုကို ပေါင်းပြီး tableTotalAmount ကို သတ်မှတ်သည်
+  const tableTotalAmount = grandTotalToPayCalculated + oppositePaidTotal + officePaidTotal;
 
   return (
     <div className="w-full h-full flex flex-col bg-[#f3f3f3] font-[system-ui] overflow-hidden select-none">
@@ -365,7 +399,7 @@ export default function DailyReport() {
         <div className="flex items-center gap-3">
           <div className="flex flex-col">
             <h1 className="text-base font-semibold text-gray-900 tracking-wide uppercase flex items-center gap-2">
-              📊 Daily Report · {userBranch === 'MDY' ? 'Mandalay' : 'Yangon'} Office
+              Daily Report · {userBranch === 'MDY' ? 'Mandalay' : 'Yangon'} Office
             </h1>
           </div>
         </div>
@@ -383,7 +417,7 @@ export default function DailyReport() {
               onClick={() => setShowColDropdown(!showColDropdown)}
               className="bg-white border border-gray-300 hover:border-gray-400 text-gray-700 font-medium px-3 py-1.5 rounded-md transition-all text-xs flex items-center gap-1.5 shadow-sm"
             >
-              👁️ Columns
+              Columns
             </button>
             
             {showColDropdown && (
@@ -409,7 +443,7 @@ export default function DailyReport() {
           </div>
 
           <button onClick={() => fetchData(userBranch, selectedDate)} className="bg-orange-500 hover:bg-orange-600 text-white font-medium px-3 py-1.5 rounded-md text-xs shadow-sm transition-all">
-            🔄 Refresh
+            Refresh
           </button>
         </div>
       </div>
@@ -508,10 +542,7 @@ export default function DailyReport() {
         </button>
       </div>
 
-     
-
-        
-        
+           
         
         {/* ── Cards Layout Wrapper (Responsive managed with state) ── */}
       <div className={`${showMobileSummary ? 'grid' : 'hidden sm:grid'} mx-4 mt-3 grid-cols-1 lg:grid-cols-2 gap-4 shrink-0 transition-all`}>
@@ -520,8 +551,11 @@ export default function DailyReport() {
         {/* ဘယ်ဘက် Column: ကတ် (၁) - Rider Ngwe ရှင်းမှုမှတ်တမ်း Card */}
         {/* ========================================================= */}
         <div className="flex flex-col gap-3 h-full">
+
+        
           
           {/* ထိပ်ဆုံးက Metric Cards ၄ ခု */}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
             <div className="rounded-lg bg-orange-50 border border-orange-100 px-3 py-3 text-xs font-semibold text-orange-900 flex flex-col justify-between shadow-sm">
               <span className="text-[10px] uppercase tracking-wide text-orange-600">Total</span>
@@ -541,6 +575,8 @@ export default function DailyReport() {
             </div>
           </div>
 
+        
+
           {/* 🔴 🟣 🔵 အသစ်ပြင်ဆင်ထားသော Layout (Image ထဲကအတိုင်း ဘယ်ညာကပ်လျက်) */}
           <div className="flex flex-row bg-white rounded-lg border border-gray-200 shadow-sm h-[320px] overflow-hidden mt-1">
             
@@ -550,20 +586,33 @@ export default function DailyReport() {
             <div className="w-[30%] flex flex-col border-r border-gray-200 shrink-0">
               
               {/* 🟣 ခရမ်းရောင်နေရာ (Top Left Placeholder - ပုံထဲက Title နေရာ) */}
-              <div className="h-[55px] p-2 bg-purple-50/40 border-b border-gray-200 relative">
+
+
+              <div className="h-[100px] p-2 bg-purple-50/40 border-b border-gray-200 relative">
+                <div className="absolute inset-1  rounded flex flex-col items-center justify-center">
+                  <span className="text-[10px] uppercase tracking-wide text-orange-600">{userBranch === 'MDY' ? 'Yangon' : 'Mandalay'} Paid</span>
+              <span className="text-right text-sm font-bold">{oppositePaidTotal.toLocaleString()} Ks</span>
+                </div>
+              </div>
+
+                   {/* 🟣 ခရမ်းရောင်နေရာ (Top Left Placeholder - ပုံထဲက Title နေရာ) */}
+              <div className="h-[100px] p-2 bg-purple-50/40 border-b border-gray-200 relative">
                 <div className="absolute inset-1  rounded flex flex-col items-center justify-center">
                   <span className="text-[10px] uppercase tracking-wide text-orange-600">Office Paid</span>
               <span className="text-right text-sm font-bold">{officePaidTotal.toLocaleString()} Ks</span>
                 </div>
               </div>
 
+               
               {/* 🔴 အနီရောင်နေရာ (Bottom Left Placeholder - ပုံထဲက Rider Name List နေရာ) */}
               <div className="flex-1 p-2 bg-red-50/40 relative">
                 <div className="absolute inset-1 top-2  rounded flex flex-col items-center justify-center">
-                   <span className="text-[10px] uppercase tracking-wide text-orange-600">{userBranch === 'MDY' ? 'Yangon' : 'Mandalay'} Paid</span>
+                   <span className="text-[10px] uppercase tracking-wide text-orange-600">Total</span>
               <span className="text-right text-sm font-bold">{oppositePaidTotal.toLocaleString()} Ks</span>
                 </div>
               </div>
+
+           
 
             </div>
 
@@ -605,7 +654,11 @@ export default function DailyReport() {
 
                 // 1. Rider တစ်ယောက်ချင်းစီရဲ့ Data တွက်ချက်ခြင်းအပိုင်း
                 const rows = riders.map(rider => {
-                  const riderOrders = reportData.filter(o => o.deliver_rider_id === rider.id && o.status === 'Delivered');
+                  const riderOrders = reportData.filter(o => 
+  o.deliver_rider_id === rider.id && 
+  o.status === 'Delivered' && 
+  o.deliver_date === selectedDate
+);
                   const totalToPay = riderOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
                   const riderHandovers = handovers.filter(h => h.rider_name === rider.name);
                   const cashIn = riderHandovers.filter(h => h.transaction_type === 'Cash-in').reduce((sum, h) => sum + (h.amount || 0), 0);

@@ -4,6 +4,7 @@ import { createContext, useEffect, useState, useCallback, useMemo, useRef, useCo
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase" // ✨ Supabase Client
+import GlobalPrintVoucher from "@/components/GlobalPrintVoucher"
 
 // ──────────────────────────────────────
 // Types & Constants
