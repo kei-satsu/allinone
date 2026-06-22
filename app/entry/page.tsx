@@ -60,7 +60,7 @@ export default function EntryForm() {
     deliver_rider_id: '',
     deliver_date: '',
     note: '',
-    cleard_date: '',
+    cleared_date: '',
     branch: '',
     image_url: '' // 🔥 ပုံ Link သိမ်းဖို့ နေရာအသစ်
   })
@@ -271,7 +271,7 @@ export default function EntryForm() {
   }
 
   // 5. Submit Mechanism
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!formData.sender_name || !formData.receiver_name || !formData.receiver_phone) {
@@ -284,77 +284,97 @@ export default function EntryForm() {
       return
     }
 
-    const baseOrder: any = {
-      ...formData,
-      pickup_rider_id: formData.pickup_rider_id || null,
-      deliver_rider_id: formData.deliver_rider_id || null,
-      cleard_date: formData.cleard_date || null,
-    }
+    setLoading(true)
 
-    if (formData.status === 'On Way' || formData.status === 'Delivered') {
-      baseOrder.deliver_date = formData.deliver_date || null
-    } else {
-      delete baseOrder.deliver_date
-    }
-
-    const isOnlineNow = navigator.onLine
-
-    // If we have a selected sender id, just create order or queue it
-    if (selectedSenderId) {
-      const orderPayload = { ...baseOrder, sender_id: selectedSenderId }
-      if (isOnlineNow) {
-        supabase.from('orders').insert([orderPayload])
-      } else {
-        const newItem: QueueItem = { local_id: `local_${Date.now()}_${Math.random().toString(36).substr(2,5)}`, payload: { type: 'order', order: orderPayload } }
-        const updatedQueue = [...syncQueue, newItem]
-        setSyncQueue(updatedQueue)
-        localStorage.setItem('offline_orders_queue', JSON.stringify(updatedQueue))
+    try {
+      const baseOrder: any = {
+        ...formData,
+        pickup_rider_id: formData.pickup_rider_id || null,
+        deliver_rider_id: formData.deliver_rider_id || null,
+        cleared_date: formData.cleared_date || null,
       }
 
-    } else {
-      // New sender typed in
-      const newSenderData = { name: formData.sender_name, phone: formData.sender_phone, LOC: formData.sender_loc }
+      if (formData.status === 'On Way' || formData.status === 'Delivered') {
+        baseOrder.deliver_date = formData.deliver_date || null
+      } else {
+        delete baseOrder.deliver_date
+      }
 
-      if (isOnlineNow) {
-        ;(async () => {
+      const isOnlineNow = navigator.onLine
+
+      // If we have a selected sender id, just create order or queue it
+      if (selectedSenderId) {
+        const orderPayload = { ...baseOrder, sender_id: selectedSenderId }
+        if (isOnlineNow) {
+          const { error } = await supabase.from('orders').insert([orderPayload])
+          if (error) {
+            alert(`❌ အမှားအယွင်း - Order မဆွဲထုတ်နိုင်ခြင်း:\n${error.message}`)
+            setLoading(false)
+            return
+          }
+        } else {
+          const newItem: QueueItem = { local_id: `local_${Date.now()}_${Math.random().toString(36).substr(2,5)}`, payload: { type: 'order', order: orderPayload } }
+          const updatedQueue = [...syncQueue, newItem]
+          setSyncQueue(updatedQueue)
+          localStorage.setItem('offline_orders_queue', JSON.stringify(updatedQueue))
+        }
+
+      } else {
+        // New sender typed in
+        const newSenderData = { name: formData.sender_name, phone: formData.sender_phone, LOC: formData.sender_loc }
+
+        if (isOnlineNow) {
           const { data: senderCreated, error: senderError } = await supabase.from('senders').insert(newSenderData).select().single()
           if (senderError || !senderCreated) {
+            console.error('Sender creation error:', senderError)
             // fallback to queue
             const newItem: QueueItem = { local_id: `local_${Date.now()}_${Math.random().toString(36).substr(2,5)}`, payload: { type: 'create_sender_and_order', sender: newSenderData, order: baseOrder } }
             const updatedQueue = [...syncQueue, newItem]
             setSyncQueue(updatedQueue)
             localStorage.setItem('offline_orders_queue', JSON.stringify(updatedQueue))
+            alert("ℹ️ စender အသစ်တည်ဆောက်ခြင်းမှ ကွန်ယက်ပြissue ရှိနေသည်။ Offline Queue သို့ သိမ်းဆည်းထားသည်။")
           } else {
             const orderPayload = { ...baseOrder, sender_id: senderCreated.id }
-            await supabase.from('orders').insert([orderPayload])
+            const { error: orderError } = await supabase.from('orders').insert([orderPayload])
+            if (orderError) {
+              alert(`❌ Order မဆွဲထုတ်နိုင်ခြင်း:\n${orderError.message}`)
+              setLoading(false)
+              return
+            }
           }
-        })()
-      } else {
-        // offline: queue combined task
-        const newItem: QueueItem = { local_id: `local_${Date.now()}_${Math.random().toString(36).substr(2,5)}`, payload: { type: 'create_sender_and_order', sender: newSenderData, order: baseOrder } }
-        const updatedQueue = [...syncQueue, newItem]
-        setSyncQueue(updatedQueue)
-        localStorage.setItem('offline_orders_queue', JSON.stringify(updatedQueue))
+        } else {
+          // offline: queue combined task
+          const newItem: QueueItem = { local_id: `local_${Date.now()}_${Math.random().toString(36).substr(2,5)}`, payload: { type: 'create_sender_and_order', sender: newSenderData, order: baseOrder } }
+          const updatedQueue = [...syncQueue, newItem]
+          setSyncQueue(updatedQueue)
+          localStorage.setItem('offline_orders_queue', JSON.stringify(updatedQueue))
+        }
       }
+
+      // Reset form & UI (only after successful submission)
+      setOriginalCod(0)
+      setSelectedSenderId('')
+      setSearchQuery('')
+      setShowSenderDropdown(false)
+      setFormData(prev => ({
+        ...prev,
+        sender_id: null,
+        sender_name: '', sender_phone: '', sender_loc: userBranch || 'MDY',
+        receiver_name: '', receiver_phone: '', receiver_address: '',
+        cod_amount: 0, deli_fee: 0, fee_type: 'Deli', total_amount: 0, note: '', cleared_date: '',
+        pickup_rider_id: '', deliver_rider_id: '', status: 'At Office', deliver_date: '',
+        image_url: '' // Reset Image
+      }))
+
+      setResetKey(Date.now())
+      alert("✅ အရည်အသွေး သိမ်းဆည်းခြင်းအောင်မြင်သည်")
+      setTimeout(() => senderInputRef.current?.focus(), 30)
+    } catch (err: any) {
+      console.error('Submit error:', err)
+      alert(`❌ အမှားအယွင်း:\n${err?.message || 'Unknown error'}`)
+    } finally {
+      setLoading(false)
     }
-
-    // Reset form & UI
-    setOriginalCod(0)
-    setSelectedSenderId('')
-    setSearchQuery('')
-    setShowSenderDropdown(false)
-    setFormData(prev => ({
-      ...prev,
-      sender_id: null,
-      sender_name: '', sender_phone: '', sender_loc: userBranch || 'MDY',
-      receiver_name: '', receiver_phone: '', receiver_address: '',
-      cod_amount: 0, deli_fee: 0, fee_type: 'Deli', total_amount: 0, note: '', cleard_date: '',
-      pickup_rider_id: '', deliver_rider_id: '', status: 'At Office', deliver_date: '',
-      image_url: '' // Reset Image
-    }))
-
-    setResetKey(Date.now())
-    setTimeout(() => senderInputRef.current?.focus(), 30)
   }
 
   const winInput = "w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-800 text-base placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all shadow-sm"
@@ -676,19 +696,19 @@ export default function EntryForm() {
                 </div>
                 <div>
                   <label className={labelStyle}>Cash Event</label>
-                  <select value={formData.cleard_date ? "yes" : "no"} onChange={e => setFormData({...formData, cleard_date: e.target.value === "yes" ? today : ""})} className={winSelect}>
+                  <select value={formData.cleared_date ? "yes" : "no"} onChange={e => setFormData({...formData, cleared_date: e.target.value === "yes" ? today : ""})} className={winSelect}>
                     <option value="no">Not Cleared</option>
                     <option value="yes">Cleared</option>
                   </select>
                 </div>
               </div>
-              {formData.cleard_date && (
+              {formData.cleared_date && (
                 <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
                   <label className="block text-emerald-700 font-semibold mb-1.5 uppercase text-xs tracking-wide">Cleared Date</label>
                   <input 
                     type="date" 
-                    value={formData.cleard_date} 
-                    onChange={e => setFormData({...formData, cleard_date: e.target.value})} 
+                    value={formData.cleared_date} 
+                    onChange={e => setFormData({...formData, cleared_date: e.target.value})} 
                     className={`${winInput} border-emerald-200 focus:border-emerald-500`}
                     required
                   />
@@ -714,9 +734,10 @@ export default function EntryForm() {
             {/* Submit Button */}
             <button 
               type="submit" 
-              className="w-full py-3.5 text-base font-semibold rounded-lg uppercase tracking-wide transition-all bg-orange-500 hover:bg-orange-600 text-white shadow-md active:scale-[0.99]"
+              disabled={loading}
+              className={`w-full py-3.5 text-base font-semibold rounded-lg uppercase tracking-wide transition-all text-white shadow-md active:scale-[0.99] ${loading ? 'bg-gray-400 cursor-not-allowed opacity-75' : 'bg-orange-500 hover:bg-orange-600'}`}
             >
-              Queue & Save Item
+              {loading ? '⏳ Saving...' : '✅ Queue & Save Item'}
             </button>
           </div>
         </form>

@@ -349,6 +349,14 @@ export default function DailyReport() {
     )
     .reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
 
+      const oppositePaidTotal = reportData
+    .filter(o => 
+      o.received_date === selectedDate && 
+      (o.fee_type === 'Cash' || o.fee_type === 'Kpay') && 
+      o.sender_loc === oppositeCity
+    )
+    .reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
+
   return (
     <div className="w-full h-full flex flex-col bg-[#f3f3f3] font-[system-ui] overflow-hidden select-none">
       
@@ -500,16 +508,23 @@ export default function DailyReport() {
         </button>
       </div>
 
-      {/* ── Cards Layout Wrapper (Responsive managed with state) ── */}
-      <div className={`${showMobileSummary ? 'grid' : 'hidden sm:grid'} mx-4 mt-3 grid-cols-1 lg:grid-cols-2 gap-4 shrink-0 transition-all`}>
+     
 
         
         
-        {/* ကတ် (၁) - Rider Ngwe ရှင်းမှုမှတ်တမ်း Card */}
+        
+        {/* ── Cards Layout Wrapper (Responsive managed with state) ── */}
+      <div className={`${showMobileSummary ? 'grid' : 'hidden sm:grid'} mx-4 mt-3 grid-cols-1 lg:grid-cols-2 gap-4 shrink-0 transition-all`}>
+
+        {/* ========================================================= */}
+        {/* ဘယ်ဘက် Column: ကတ် (၁) - Rider Ngwe ရှင်းမှုမှတ်တမ်း Card */}
+        {/* ========================================================= */}
         <div className="flex flex-col gap-3 h-full">
+          
+          {/* ထိပ်ဆုံးက Metric Cards ၄ ခု */}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
             <div className="rounded-lg bg-orange-50 border border-orange-100 px-3 py-3 text-xs font-semibold text-orange-900 flex flex-col justify-between shadow-sm">
-              <span className="text-[10px] uppercase tracking-wide text-orange-600">Total Total</span>
+              <span className="text-[10px] uppercase tracking-wide text-orange-600">Total</span>
               <span className="text-right text-sm font-bold">{tableTotalAmount.toLocaleString()} Ks</span>
             </div>
             <div className="rounded-lg bg-indigo-50 border border-indigo-100 px-3 py-3 text-xs font-semibold text-indigo-900 flex flex-col justify-between shadow-sm">
@@ -517,162 +532,183 @@ export default function DailyReport() {
               <span className="text-right text-sm font-bold">{tableDeliFeeTotal.toLocaleString()} Ks</span>
             </div>
             <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-3 text-xs font-semibold text-emerald-900 flex flex-col justify-between shadow-sm">
-              <span className="text-[10px] uppercase tracking-wide text-emerald-600">{oppositeCity} Sender Deli / 2</span>
+              <span className="text-[10px] uppercase tracking-wide text-emerald-600">{userBranch === 'MDY' ? 'Yangon' : 'Mandalay'} Deli Fee</span>
               <span className="text-right text-sm font-bold">{oppositeCityDeliHalf.toLocaleString()} Ks</span>
             </div>
             <div className="rounded-lg bg-purple-50 border border-purple-100 px-3 py-3 text-xs font-semibold text-purple-900 flex flex-col justify-between shadow-sm">
-              <span className="text-[10px] uppercase tracking-wide text-purple-600">Remaining Deli Fee</span>
+              <span className="text-[10px] uppercase tracking-wide text-purple-600">{userBranch === 'MDY' ? 'Mandalay' : 'Yangon'} Deli Fee</span>
               <span className="text-right text-sm font-bold">{oppositeCityDeliRemaining.toLocaleString()} Ks</span>
             </div>
           </div>
 
-          <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col gap-3 h-full overflow-y-auto">
-            <div className="flex justify-between items-center border-b border-gray-100 pb-2 sticky top-0 bg-white z-10">
-              <h2 className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
-                🏍️ Rider Ngwe ရှင်းမှုမှတ်တမ်း (Delivered စာရင်းချုပ်)
-              </h2>
-              <div className="flex items-center gap-1.5">
-                {/* 📋 History ကြည့်ရန် ခလုတ်အသစ် */}
-                <button 
-                  onClick={() => setViewHandoverModal(true)}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-2.5 py-1 rounded-md text-[11px] border border-gray-300 shadow-sm transition-all flex items-center gap-1"
-                >
-                  📋 History
-                </button>
-                
-                <button 
-                  onClick={() => setHandoverModal({ open: true, riderName: riders[0]?.name || '' })}
-                  className="bg-green-600 hover:bg-green-700 text-white font-semibold px-2.5 py-1 rounded-md text-[11px] shadow-sm transition-all flex items-center gap-1"
-                >
-                  💵 Add Cash
-                </button>
+          {/* 🔴 🟣 🔵 အသစ်ပြင်ဆင်ထားသော Layout (Image ထဲကအတိုင်း ဘယ်ညာကပ်လျက်) */}
+          <div className="flex flex-row bg-white rounded-lg border border-gray-200 shadow-sm h-[320px] overflow-hidden mt-1">
+            
+            {/* ---------------------------------------------------- */}
+            {/* ဘယ်ဘက်ခြမ်း (Purple & Red Areas) - Width 30% */}
+            {/* ---------------------------------------------------- */}
+            <div className="w-[30%] flex flex-col border-r border-gray-200 shrink-0">
+              
+              {/* 🟣 ခရမ်းရောင်နေရာ (Top Left Placeholder - ပုံထဲက Title နေရာ) */}
+              <div className="h-[55px] p-2 bg-purple-50/40 border-b border-gray-200 relative">
+                <div className="absolute inset-1  rounded flex flex-col items-center justify-center">
+                  <span className="text-[10px] uppercase tracking-wide text-orange-600">Office Paid</span>
+              <span className="text-right text-sm font-bold">{officePaidTotal.toLocaleString()} Ks</span>
+                </div>
               </div>
+
+              {/* 🔴 အနီရောင်နေရာ (Bottom Left Placeholder - ပုံထဲက Rider Name List နေရာ) */}
+              <div className="flex-1 p-2 bg-red-50/40 relative">
+                <div className="absolute inset-1 top-2  rounded flex flex-col items-center justify-center">
+                   <span className="text-[10px] uppercase tracking-wide text-orange-600">{userBranch === 'MDY' ? 'Yangon' : 'Mandalay'} Paid</span>
+              <span className="text-right text-sm font-bold">{oppositePaidTotal.toLocaleString()} Ks</span>
+                </div>
+              </div>
+
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 mb-2">
-              <div className="rounded-full bg-orange-50 border border-orange-100 px-3 py-1 text-[11px] font-semibold text-orange-800 flex items-center justify-between shadow-sm">
-                <span>စုစုပေါင်း ငွေရှင်းရန်</span>
-                <span>{riderSummaryTotal.toLocaleString()} Ks</span>
+            {/* ---------------------------------------------------- */}
+            {/* ညာဘက်ခြမ်း (Blue Area - Table & Buttons) - Width 70% */}
+            {/* ---------------------------------------------------- */}
+            <div className="w-[70%] p-2 relative bg-blue-50/20 flex flex-col h-full">
+              
+              {/* 🔵 အပြာရောင် Frame (Box ကို ကွပ်ထားသည်) */}
+              
+              
+              {/* Header & Buttons (Blue Box အတွင်း) */}
+              <div className="flex justify-between items-center pb-2 z-10 px-2 pt-1 relative shrink-0">
+                <h2 className="text-[11px] font-bold text-blue-800 uppercase tracking-wide flex items-center gap-1.5">
+                  💵 အပ်ငွေ Summary
+                </h2>
+                <div className="flex items-center gap-1.5">
+                  <button 
+                    onClick={() => setViewHandoverModal(true)}
+                    className="bg-blue-100 hover:bg-blue-200 text-blue-800 font-semibold px-2.5 py-1 rounded text-[10px] border border-blue-300 shadow-sm transition-all flex items-center gap-1"
+                  >
+                    အပ်ငွေစရင်း
+                  </button>
+                  <button 
+                    onClick={() => setHandoverModal({ open: true, riderName: riders[0]?.name || '' })}
+                    className="bg-teal-600 hover:bg-teal-700 text-white font-semibold px-2.5 py-1 rounded text-[10px] shadow-sm transition-all flex items-center gap-1"
+                  >
+                    ငွေထည့်ရန်
+                  </button>
+                </div>
               </div>
-              <div className="rounded-full bg-sky-50 border border-sky-100 px-3 py-1 text-[11px] font-semibold text-sky-800 flex items-center justify-between shadow-sm">
-                <span>Cash-in</span>
-                <span>{riderSummaryCashIn.toLocaleString()} Ks</span>
-              </div>
-            </div>
 
-          {/* Table Format ဖြင့် သပ်သပ်ရပ်ရပ် ပြောင်းလဲထားခြင်း */}
-          <div className="overflow-x-auto border border-gray-100 rounded-lg">
-            <table className="w-full text-left text-xs whitespace-nowrap">
-              <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] tracking-wider border-b border-gray-200 sticky top-0 z-10 shadow-xs">
-                <tr>
-                  <th className="px-3 py-2">Rider Name</th>
-                  <th className="px-3 py-2 text-right">Total (ရှင်းရန်)</th>
-                  <th className="px-3 py-2 text-right">Cash-in (အပ်ငွေ)</th>
-                  <th className="px-3 py-2 text-right">OOP (စိုက်ငွေ)</th>
-                  <th className="px-3 py-2 text-right">Gap</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 text-gray-700 font-medium">
-                {(() => {
-                  // စုစုပေါင်း Grand Total တွက်ချက်ရန် Variable များ
-                  let grandTotalToPay = 0;
-                  let grandTotalCashIn = 0;
-                  let grandTotalOop = 0;
-                  let grandTotalGap = 0;
+              {/* တွက်ချက်ခြင်းနှင့် Layout တည်ဆောက်ခြင်းအပိုင်း */}
+              {(() => {
+                let grandTotalToPay = 0;
+                let grandTotalCashIn = 0;
+                let grandTotalOop = 0;
+                let grandTotalGap = 0;
 
-                  // Rider တစ်ဦးချင်းစီရဲ့ data ကို တွက်ချက်စစ်ဆေးပြီး Row များထုတ်ယူခြင်း
-                  const rows = riders.map(rider => {
-                    const riderOrders = reportData.filter(o => o.deliver_rider_id === rider.id && o.status === 'Delivered');
-                    const totalToPay = riderOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
-                    const riderHandovers = handovers.filter(h => h.rider_name === rider.name);
-                    const cashIn = riderHandovers.filter(h => h.transaction_type === 'Cash-in').reduce((sum, h) => sum + (h.amount || 0), 0);
-                    const oop = riderHandovers.filter(h => h.transaction_type === 'OOP').reduce((sum, h) => sum + (h.amount || 0), 0);
-                    const gap = totalToPay - (cashIn + oop);
+                // 1. Rider တစ်ယောက်ချင်းစီရဲ့ Data တွက်ချက်ခြင်းအပိုင်း
+                const rows = riders.map(rider => {
+                  const riderOrders = reportData.filter(o => o.deliver_rider_id === rider.id && o.status === 'Delivered');
+                  const totalToPay = riderOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
+                  const riderHandovers = handovers.filter(h => h.rider_name === rider.name);
+                  const cashIn = riderHandovers.filter(h => h.transaction_type === 'Cash-in').reduce((sum, h) => sum + (h.amount || 0), 0);
+                  const oop = riderHandovers.filter(h => h.transaction_type === 'OOP').reduce((sum, h) => sum + (h.amount || 0), 0);
+                  const gap = totalToPay - (cashIn + oop);
 
-                    // စာရင်းမရှိသော Rider ဖြစ်ပါက ချန်လှပ်ခဲ့မည်
-                    if (totalToPay === 0 && cashIn === 0 && oop === 0) return null;
+                  if (totalToPay === 0 && cashIn === 0 && oop === 0) return null;
 
-                    // Grand Totals ထဲသို့ ပေါင်းထည့်ခြင်း
-                    grandTotalToPay += totalToPay;
-                    grandTotalCashIn += cashIn;
-                    grandTotalOop += oop;
-                    grandTotalGap += gap;
+                  grandTotalToPay += totalToPay;
+                  grandTotalCashIn += cashIn;
+                  grandTotalOop += oop;
+                  grandTotalGap += gap;
 
-                    let gapColor = "text-green-600";
-                    if (gap > 0) gapColor = "text-red-600 font-bold";
-                    else if (gap < 0) gapColor = "text-amber-600 font-bold";
-
-                    return (
-                      <tr key={rider.id} className="hover:bg-gray-50/60 transition-colors">
-                        <td className="px-3 py-2 font-semibold text-gray-900">👤 {rider.name}</td>
-                        <td className="px-3 py-2 text-right font-mono text-gray-900">{totalToPay.toLocaleString()} Ks</td>
-                        <td className="px-3 py-2 text-right font-mono text-blue-600">{cashIn.toLocaleString()} Ks</td>
-                        <td className="px-3 py-2 text-right font-mono text-purple-600">{oop.toLocaleString()} Ks</td>
-                        <td className={`px-3 py-2 text-right font-mono ${gapColor}`}>
-                          {gap > 0 ? `+${gap.toLocaleString()}` : gap.toLocaleString()} Ks
-                        </td>
-                      </tr>
-                    );
-                  }).filter(Boolean); // null များကို စစ်ထုတ်ပစ်ခြင်း
-
-                  // ပြစရာ စာရင်းမရှိပါက
-                  if (rows.length === 0) {
-                    return (
-                      <tr>
-                        <td colSpan={5} className="text-center py-6 text-gray-400 font-medium">
-                          ယနေ့အတွက် Rider စာရင်းချုပ် မရှိသေးပါ။
-                        </td>
-                      </tr>
-                    );
-                  }
-
-                  // Total Gap အရောင် သတ်မှတ်ခြင်း
-                  let totalGapColor = "text-green-700";
-                  if (grandTotalGap > 0) totalGapColor = "text-red-700";
-                  else if (grandTotalGap < 0) totalGapColor = "text-amber-700";
+                  let gapColor = "text-green-600";
+                  if (gap > 0) gapColor = "text-red-600 font-bold";
+                  else if (gap < 0) gapColor = "text-amber-600 font-bold";
 
                   return (
-                    <>
-                      {/* Rider အားလုံးရဲ့ Row စာရင်း */}
-                      {rows}
-                      
-                      {/* 📊 အောက်ဆုံးမှ စုစုပေါင်း Total Row */}
-                      <tr className="bg-gray-100 border-t-2 border-gray-200 font-bold text-gray-950 sticky bottom-0 z-10 shadow-sm">
-                        <td className="px-3 py-2 text-gray-900 font-bold">📊 Total</td>
-                        <td className="px-3 py-2 text-right font-mono text-gray-900">{grandTotalToPay.toLocaleString()} Ks</td>
-                        <td className="px-3 py-2 text-right font-mono text-blue-700">{grandTotalCashIn.toLocaleString()} Ks</td>
-                        <td className="px-3 py-2 text-right font-mono text-purple-700">{grandTotalOop.toLocaleString()} Ks</td>
-                        <td className={`px-3 py-2 text-right font-mono ${totalGapColor}`}>
-                          {grandTotalGap > 0 ? `+${grandTotalGap.toLocaleString()}` : grandTotalGap.toLocaleString()} Ks
-                        </td>
-                      </tr>
-                    </>
+                    <tr key={rider.id} className="hover:bg-blue-50/30 transition-colors">
+                      <td className="px-2 py-1.5 font-semibold text-gray-900 truncate" title={rider.name}>👤 {rider.name}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-gray-900">{totalToPay.toLocaleString()}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-blue-600">{cashIn.toLocaleString()}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-purple-600">{oop.toLocaleString()}</td>
+                      <td className={`px-2 py-1.5 text-right font-mono ${gapColor}`}>
+                        {gap > 0 ? `+${gap.toLocaleString()}` : gap.toLocaleString()}
+                      </td>
+                    </tr>
                   );
-                })()}
-              </tbody>
-            </table>
+                }).filter(Boolean);
+
+                let totalGapColor = "text-green-700";
+                if (grandTotalGap > 0) totalGapColor = "text-red-700";
+                else if (grandTotalGap < 0) totalGapColor = "text-amber-700";
+
+                return (
+                  <div className="flex-1 min-h-0 flex flex-col rounded border border-blue-200 bg-white mx-1 mb-1 z-10 shadow-inner">
+                    
+                    {/* 🟢 အပေါ်ဘက်ခြမ်း: ရိုးရိုး Data Row များပြသပေးပြီး Content များလာပါက Scroll ဆွဲနိုင်မည့် Area */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                      <table className="w-full text-left text-[11px] whitespace-nowrap table-fixed">
+                        <thead className="bg-blue-50/50 text-gray-600 font-bold uppercase text-[9px] tracking-wider border-b border-blue-100 sticky top-0 z-10">
+                          <tr>
+                            <th className="px-2 py-2 w-[24%]">Rider Name</th>
+                            <th className="px-2 py-2 text-right w-[19%]">Total</th>
+                            <th className="px-2 py-2 text-right w-[19%]">အပ်ငွေ</th>
+                            <th className="px-2 py-2 text-right w-[19%]">စိုက်ငွေ</th>
+                            <th className="px-2 py-2 text-right w-[19%]">ကွာဟချက်</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 text-gray-700 font-medium">
+                          {rows.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="text-center py-8 text-gray-400 font-medium">
+                                ယနေ့အတွက် Rider စာရင်းချုပ် မရှိသေးပါ။
+                              </td>
+                            </tr>
+                          ) : (
+                            rows
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* 🔵 အောက်ဘက်ခြမ်း: ဒေတာ ရှိရှိမရှိရှိ အောက်ခြေမှာ Layout အရ အမြဲတမ်း Fixed ကပ်နေမည့် Total Footer Area */}
+                    <div className="bg-blue-50 border-t-2 border-blue-200 font-bold text-gray-950 shadow-sm shrink-0">
+                      <table className="w-full text-left text-[11px] whitespace-nowrap table-fixed">
+                        <tbody>
+                          <tr className="font-bold">
+                            <td className="px-2 py-2 text-blue-900 font-bold w-[24%]">Total</td>
+                            <td className="px-2 py-2 text-right font-mono text-blue-900 w-[19%]">{grandTotalToPay.toLocaleString()}</td>
+                            <td className="px-2 py-2 text-right font-mono text-blue-700 w-[19%]">{grandTotalCashIn.toLocaleString()}</td>
+                            <td className="px-2 py-2 text-right font-mono text-purple-700 w-[19%]">{grandTotalOop.toLocaleString()}</td>
+                            <td className={`px-2 py-2 text-right font-mono w-[19%] ${totalGapColor}`}>
+                              {grandTotalGap > 0 ? `+${grandTotalGap.toLocaleString()}` : grandTotalGap.toLocaleString()}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                  </div>
+                );
+              })()}
+
+            </div>
+              
           </div>
         </div>
-      </div>
 
+        {/* ========================================================= */}
+        {/* ဒီအောက်မှာ ညာဘက်ခြမ်း COD ခွဲဝေမှုကတ် တွေ ဆက်ရှိနေမှာပါ... */}
+        {/* ========================================================= */}
+        
+      
         {/* ကတ် (၂) - Sender အလိုက် ပြန်ပေးရမယ့် COD စာရင်း Card */}
         <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col gap-3 h-full overflow-y-auto">
           <div className="border-b border-gray-100 pb-2 sticky top-0 bg-white z-10">
             <h2 className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
-              📦 Sender အလိုက် ပြန်ပေးရမယ့် COD (Delivered - LOC အလိုက်ခွဲထုတ်မှု)
+              COD ခွဲဝေမှု စရင်း 
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 mb-2">
-            <div className="rounded-full bg-emerald-50 border border-emerald-100 px-3 py-1 text-[11px] font-semibold text-emerald-800 flex items-center justify-between shadow-sm">
-              <span>LOC အရ ကဏ္ဍ</span>
-              <span>{senderLocCount}</span>
-            </div>
-            <div className="rounded-full bg-purple-50 border border-purple-100 px-3 py-1 text-[11px] font-semibold text-purple-800 flex items-center justify-between shadow-sm">
-              <span>စုစုပေါင်း COD</span>
-              <span>{senderCodTotal.toLocaleString()} Ks</span>
-            </div>
-          </div>
+          
 
           {Object.keys(senderCodByLoc).length === 0 ? (
             <p className="text-xs text-gray-400 font-medium py-2 text-center my-auto">ယနေ့အတွက် Delivered ဖြစ်ပြီးသား COD ပေးရန်မရှိသေးပါ။</p>
@@ -903,7 +939,7 @@ export default function DailyReport() {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
             <div className="bg-gray-50 border-b border-gray-200 px-5 py-3.5 flex justify-between items-center">
-              <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">💵 Rider Ngwe ရှင်းမှတ်တမ်းအသစ်သွင်းရန်</h3>
+              <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">💵ငွေအပ်မှတ်တမ်းသွင်းရန်</h3>
               <button onClick={() => setHandoverModal({ open: false, riderName: '' })} className="text-gray-400 hover:text-gray-600 text-xl font-bold">×</button>
             </div>
             
@@ -936,7 +972,7 @@ export default function DailyReport() {
                   value={handoverForm.payment_method} 
                   onChange={e => setHandoverForm({...handoverForm, payment_method: e.target.value})}
                 >
-                  <option value="Cash">Cash (Ngwe သား)</option>
+                  <option value="Cash">Cash</option>
                   <option value="Kpay">Kpay</option>
                 </select>
               </div>
@@ -948,13 +984,13 @@ export default function DailyReport() {
                   value={handoverForm.transaction_type} 
                   onChange={e => setHandoverForm({...handoverForm, transaction_type: e.target.value})}
                 >
-                  <option value="Cash-in">Cash-in (ရိုးရိုးငွေအပ်)</option>
-                  <option value="OOP">OOP (Out-Of-Pocket စိုက်ငွေ)</option>
+                  <option value="Cash-in">အပ်ငွေ</option>
+                  <option value="OOP">စိုက်ငွေ</option>
                 </select>
               </div>
 
               <div>
-                <label className={labelStyle}>Note (မှတ်ချက်)</label>
+                <label className={labelStyle}>Note</label>
                 <input 
                   type="text" 
                   placeholder="မှတ်ချက်ရှိပါက ဖြည့်သွင်းရန်..."
@@ -991,7 +1027,7 @@ export default function DailyReport() {
             {/* Modal Header */}
             <div className="bg-gray-50 border-b border-gray-200 px-5 py-3.5 flex justify-between items-center shrink-0">
               <div>
-                <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">📋 ငွေအပ်နှံမှုနှင့် အသုံးစရိတ်မှတ်တမ်းများ</h3>
+                <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">📋 ငွေအပ်နှံမှုနှင့် စိုက်ငွေမှတ်တမ်း</h3>
                 <p className="text-[11px] text-gray-500 mt-0.5">ရက်စွဲ - {selectedDate} · ရုံးခွဲ - {userBranch === 'MDY' ? 'Mandalay' : 'Yangon'}</p>
               </div>
               <button onClick={() => setViewHandoverModal(false)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">×</button>
@@ -1017,7 +1053,7 @@ export default function DailyReport() {
                       {/* 💰 TABLE 1: CASH IN (ငွေဝင်စာရင်း) */}
                       <div className="flex flex-col gap-2">
                         <div className="flex justify-between items-center bg-green-50 p-2 rounded-lg border border-green-100 px-3">
-                          <span className="text-xs font-bold text-green-800">💵 Cash In (ငွေဝင်စာရင်း)</span>
+                          <span className="text-xs font-bold text-green-800">အပ်ငွေ</span>
                           <span className="text-xs font-mono font-bold text-green-700">Total: {totalCashIn.toLocaleString()} Ks</span>
                         </div>
                         <div className="overflow-x-auto border border-gray-100 rounded-lg max-h-[50vh]">
@@ -1032,7 +1068,7 @@ export default function DailyReport() {
                             </thead>
                             <tbody className="divide-y divide-gray-100 text-gray-700">
                               {cashInItems.length === 0 ? (
-                                <tr><td colSpan={4} className="text-center py-6 text-gray-400 text-[11px]">Cash In စာရင်းမရှိပါ။</td></tr>
+                                <tr><td colSpan={4} className="text-center py-6 text-gray-400 text-[11px]">အပ်ငွေမရှိပါ။</td></tr>
                               ) : (
                                 cashInItems.map((h) => (
                                   <tr 
@@ -1066,7 +1102,7 @@ export default function DailyReport() {
                       {/* 💸 TABLE 2: OPP (အထွေထွေအသုံးစရိတ်စာရင်း) */}
                       <div className="flex flex-col gap-2">
                         <div className="flex justify-between items-center bg-purple-50 p-2 rounded-lg border border-purple-100 px-3">
-                          <span className="text-xs font-bold text-purple-800">💸 OPP (အသုံးစရိတ်စာရင်း)</span>
+                          <span className="text-xs font-bold text-purple-800">စိုက်ငွေ</span>
                           <span className="text-xs font-mono font-bold text-purple-700">Total: {totalOpp.toLocaleString()} Ks</span>
                         </div>
                         <div className="overflow-x-auto border border-gray-100 rounded-lg max-h-[50vh]">
@@ -1081,7 +1117,7 @@ export default function DailyReport() {
                             </thead>
                             <tbody className="divide-y divide-gray-100 text-gray-700">
                               {oppItems.length === 0 ? (
-                                <tr><td colSpan={4} className="text-center py-6 text-gray-400 text-[11px]">OPP စာရင်းမရှိပါ။</td></tr>
+                                <tr><td colSpan={4} className="text-center py-6 text-gray-400 text-[11px]">စိုက်ငွေ မရှိပါ။</td></tr>
                               ) : (
                                 oppItems.map((h) => (
                                   <tr 
