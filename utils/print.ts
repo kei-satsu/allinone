@@ -1,13 +1,10 @@
-// src/utils/print.ts
-
-/**
- * စနစ်အတွင်းရှိ မည်သည့်စာမျက်နှာမှမဆို Voucher လှမ်းထုတ်ရန် သုံးသော Utility Function
- * @param orderData - ပုံနှိပ်မည့် ပါဆယ်ထုပ် အချက်အလက် Object
- */
+// utils/print.ts
 export const printVoucher = (orderData: any) => {
   if (typeof window !== "undefined") {
-    // Custom Event တစ်ခုဆောက်ပြီး Data ထည့်ပေးလိုက်ခြင်းဖြစ်သည်
-    const event = new CustomEvent("app:print-voucher", { detail: orderData });
-    window.dispatchEvent(event);
+    // ၁။ ပါဆယ် Data ကို localStorage ထဲ ယာယီလှမ်းသိမ်းလိုက်ပါမယ်
+    localStorage.setItem("print_order_data", JSON.stringify(orderData));
+    
+    // ၂။ Voucher Template ရှိရာ /voc စာမျက်နှာကို Tab အသစ်ဖြင့် တိုက်ရိုက်ဖွင့်ပါမည်
+    window.open("/voc", "_blank");
   }
 };

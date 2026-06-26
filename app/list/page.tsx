@@ -65,6 +65,31 @@ export default function OrderList() {
   const [showMobileFilters, setShowMobileFilters] = useState(false)
   const [expandedMobileCards, setExpandedMobileCards] = useState<Record<string, boolean>>({})
 
+  // ၁။ Print ထုတ်မည့် Data ကို ယာယီသိမ်းထားမည့် State
+  const [activePrintOrder, setActivePrintOrder] = useState<any | null>(null);
+
+  // ၂။ print.ts က လွှတ်လိုက်တဲ့ Custom Event (အော်သံ) ကို နားထောင်ပြီး Data ဖမ်းယူမည့်စနစ်
+  useEffect(() => {
+    const handlePrintEvent = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      setActivePrintOrder(customEvent.detail); // ပို့လိုက်တဲ့ order data ကို လှမ်းဖမ်းပြီး State ထဲထည့်ခြင်း
+    };
+
+    window.addEventListener("app:print-voucher", handlePrintEvent);
+    return () => window.removeEventListener("app:print-voucher", handlePrintEvent);
+  }, []);
+
+  // ၃။ State ထဲကို Data ရောက်လာတာနဲ့ Browser ရဲ့ Print Window ကို Auto ဆွဲဖွင့်ပေးမည့်စနစ်
+  useEffect(() => {
+    if (activePrintOrder) {
+      const timer = setTimeout(() => {
+        window.print();
+        setActivePrintOrder(null); // Print ပြီးသွားရင် State ကို Null ပြန်လုပ်ပြီး သန့်ရှင်းရေးလုပ်ခြင်း
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [activePrintOrder]);
+
   useEffect(() => {
     if (!previewImage) {
       setImgScale(1)
@@ -639,6 +664,16 @@ export default function OrderList() {
             </button>
 
             <button 
+  onClick={() => { printVoucher(contextMenu.order); setContextMenu(null); }} 
+  className="w-full text-left px-4 py-3 sm:px-3 sm:py-2 text-sm sm:text-xs text-gray-700 hover:bg-gray-50 active:bg-gray-100 font-medium flex items-center gap-3 sm:gap-2 border-t border-gray-100"
+>
+  <svg className="w-4 h-4 text-green-600 sm:w-3.5 sm:h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+  </svg>
+  Print Voucher
+</button>
+
+            <button 
               onClick={() => { handleDeleteOrder(contextMenu.order.id); setContextMenu(null); }}
               className="w-full text-left px-4 py-3 sm:px-3 sm:py-2 text-sm sm:text-xs text-red-600 hover:bg-red-50 active:bg-red-100 font-medium flex items-center gap-3 sm:gap-2 border-t border-gray-100"
             >
@@ -966,6 +1001,17 @@ export default function OrderList() {
         >
           Close
         </button>
+
+        <button 
+    onClick={() => printVoucher(viewingDetailOrder)}
+    className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 rounded-xl text-center shadow-md transition-colors flex items-center justify-center gap-2"
+  >
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+    </svg>
+    Print Voucher
+  </button>
+
       </div>
 
     </div>
