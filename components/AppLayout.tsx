@@ -79,6 +79,15 @@ const MENU_ITEMS: MenuItem[] = [
     ),
   },
   {
+    name: "Status Updater",
+    path: "/bulk-update",
+    icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+</svg>
+    ),
+  },
+  {
     name: "Recently Deleted",
     path: "/trash",
     icon: (
@@ -231,6 +240,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const isLoginPage = pathname === "/login"
   const isIntakePage = pathname === "/intake" 
+  const isVocPage = pathname === "/voc"
   const { branchInfo, isAuthenticated, isReady, logout } = useAuth(!isLoginPage)
   const sidebarRef = useRef<HTMLElement>(null)
 
@@ -310,7 +320,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* ── 📱💻 iOS Premium Sidebar / Mobile Bottom Sheet ── */}
-<aside
+{!isVocPage && (<aside
   ref={sidebarRef}
   onMouseEnter={handleMouseEnter}
   onMouseLeave={handleMouseLeave}
@@ -457,7 +467,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }`}>
     VERSION 1.0
   </div>
-</aside>
+</aside>)}
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -469,7 +479,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           {/* ── Mobile Dock ── */}
 {/* ── 📱 iOS Mobile Dock with Tuned Ambient Bottom Fade ── */}
-{isMobile && !isLoginPage && !hideMobileDock && !mobileSidebarOpen && !isIntakePage && (
+{isMobile && !isLoginPage && !hideMobileDock && !mobileSidebarOpen && !isIntakePage && !isVocPage &&(
   <>
     {/* 🌫️ iOS Bottom Gradient Sheet Mask (အောက်ဆုံးအနားသတ်ကို Solid မဟုတ်ဘဲ ၈၀% Opacity ဖြင့် ဝါးပေးထားသော Mask) */}
     <div className="fixed inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#f4f6f9]/80 via-[#f4f6f9]/40 to-transparent pointer-events-none z-40 md:hidden backdrop-blur-[1px]" />
@@ -557,7 +567,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </MobileDockContext.Provider>
 
         {/* Floating Action Button (bottom-right for desktop) */}
-        {!isIntakePage && (
+        {!isIntakePage && !isVocPage && (
           <Link
             href="/intake"
             className="hidden md:flex fixed bottom-6 right-6 z-50 items-center justify-center gap-2 bg-gradient-to-br from-orange-500 to-amber-500 text-white w-12 h-12 md:w-auto md:h-12 md:px-5 rounded-full shadow-lg hover:shadow-orange-500/30 active:scale-95 transition-all duration-200 group font-semibold tracking-wide"
