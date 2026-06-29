@@ -11,6 +11,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",
     "@tailwindcss/oxide": "^4.3.0",
+    "@yudiel/react-qr-scanner": "^2.6.0",
     "cloudinary": "^2.10.0",
     "html-to-image": "^1.11.13",
     "konva": "^10.3.0",

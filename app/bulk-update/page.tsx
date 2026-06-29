@@ -3,11 +3,12 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { Scanner } from '@yudiel/react-qr-scanner' // 📸 Camera Scanner Package
 
 export default function BulkUpdatePage() {
   const router = useRouter()
   const qrInputRef = useRef<HTMLInputElement>(null)
-  const isMounted = useRef(false) // Initial load မှာ ရှာဖွေမှု နှစ်ခါမဖြစ်စေရန် ထိန်းပေးမည့် Ref
+  const isMounted = useRef(false)
   
   // App States
   const [orders, setOrders] = useState<any[]>([])
@@ -21,6 +22,11 @@ export default function BulkUpdatePage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [qrInput, setQrInput] = useState('')
 
+  // 📸 Camera Scanner States (အသစ်ထပ်ထည့်ထားသော State များ)
+  const [showCamera, setShowCamera] = useState(false)
+  const [pendingOrder, setPendingOrder] = useState<any>(null) // Scan ဖတ်မိပြီး Add မလုပ်ရသေးသော အထုပ်
+  const [cameraLoading, setCameraLoading] = useState(false)
+
   // Bulk Action Update States
   const [bulkRiderId, setBulkRiderId] = useState('')
   const [bulkStatus, setBulkStatus] = useState('In-Transit') 
@@ -31,7 +37,6 @@ export default function BulkUpdatePage() {
   const winSelect = "w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-gray-800 text-sm focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all appearance-none bg-no-repeat bg-[length:0.75rem_auto] bg-[right_1rem_center] cursor-pointer shadow-sm"
   const labelStyle = "block text-gray-600 font-semibold mb-1 uppercase text-[11px] tracking-wide"
 
-  // 📝 🌟 (ဒီနေရာတွင် လာထည့်ပေးပါ) လှုပ်ရှားမှု မှတ်တမ်းအသစ် ဖန်တီးပေးမည့် Helper Function
   const appendLog = (currentHistory: any[], action: string, note: string) => {
     const operator = userBranch || localStorage.getItem('user_branch') || 'Unknown Office';
     const newLogEntry = {
@@ -43,7 +48,6 @@ export default function BulkUpdatePage() {
     return [...(currentHistory || []), newLogEntry];
   };
 
-  // 1. Initial Load & Auth Check
   useEffect(() => {
     const storedBranch = localStorage.getItem('user_branch')
     if (!storedBranch) {
@@ -57,22 +61,16 @@ export default function BulkUpdatePage() {
     qrInputRef.current?.focus()
   }, [router])
 
-  // Rider စာရင်း ဆွဲယူရန်
   async function fetchRiders() {
     const { data } = await supabase.from('riders').select('*')
     if (data) setRiders(data)
   }
 
-  // လတ်တလော ပါဆယ်များကို ပြသထားရန်
   async function fetchRecentOrders(branch: string) {
     setSearchLoading(true)
     const { data, error } = await supabase
       .from('orders')
-      .select(`
-        *,
-        pickup_rider:riders!orders_pickup_rider_id_fkey(name),
-        deliver_rider:riders!orders_deliver_rider_id_fkey(name)
-      `)
+      .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
       .eq('branch', branch)
       .in('status', ['At Office', 'Pending', 'In-Transit'])
       .order('created_at', { ascending: false })
@@ -82,59 +80,40 @@ export default function BulkUpdatePage() {
     setSearchLoading(false)
   }
 
-  // 🔥 Core Search Engine Function
   async function performSearch(query: string) {
     if (!userBranch) return
-
     if (!query.trim()) {
       fetchRecentOrders(userBranch)
       return
     }
-
     setSearchLoading(true)
     const { data, error } = await supabase
       .from('orders')
-      .select(`
-        *,
-        pickup_rider:riders!orders_pickup_rider_id_fkey(name),
-        deliver_rider:riders!orders_deliver_rider_id_fkey(name)
-      `)
+      .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
       .eq('branch', userBranch)
       .or(`item_id.ilike.%${query}%,sender_name.ilike.%${query}%,receiver_name.ilike.%${query}%,receiver_phone.ilike.%${query}%`)
       .order('created_at', { ascending: false })
 
-    if (!error && data) {
-      setOrders(data)
-    }
+    if (!error && data) setOrders(data)
     setSearchLoading(false)
   }
 
-  // 🔥 2. Smart Debounce Search Effect (စာရိုက်ရပ်မှ ရှာဖွေပေးမည့် စနစ်)
   useEffect(() => {
     if (!userBranch) return
-
-    // ပထမဆုံးအကြိမ် Page စပွင့်ပွင့်ချင်း Double Fetch ဖြစ်ခြင်းကို တားဆီးရန်
     if (!isMounted.current) {
       isMounted.current = true
       return
     }
-
-    // အစ်ကို စာရိုက်နေစဉ်အတွင်း 500ms (0.5 စက္ကန့်) စောင့်ဆိုင်းပေးမည်
-    const delayDebounceFn = setTimeout(() => {
-      performSearch(searchTerm)
-    }, 500)
-
-    // အကယ်၍ 0.5 စက္ကန့်မပြည့်ခင် စာလုံးအသစ်ထပ်ရိုက်ရင် အဟောင်း Timer ကို ဖျက်ပြီး ပြန်စောင့်မည်
+    const delayDebounceFn = setTimeout(() => { performSearch(searchTerm) }, 500)
     return () => clearTimeout(delayDebounceFn)
   }, [searchTerm, userBranch])
 
-  // အကယ်၍ Enter ချက်ချင်းခေါက်လိုက်ရင် စောင့်မနေဘဲ တန်းရှာပေးရန် Manual Form Submit
   const handleManualSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     performSearch(searchTerm)
   }
 
-  // 3. QR Scanner Hardware Fast Scan
+  // 1. Hardware Scanner Logic
   const handleQrScanSubmit = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault()
@@ -144,11 +123,7 @@ export default function BulkUpdatePage() {
       setSearchLoading(true)
       const { data, error } = await supabase
         .from('orders')
-        .select(`
-          *,
-          pickup_rider:riders!orders_pickup_rider_id_fkey(name),
-          deliver_rider:riders!orders_deliver_rider_id_fkey(name)
-        `)
+        .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
         .eq('branch', userBranch)
         .eq('item_id', value)
         .maybeSingle()
@@ -164,82 +139,98 @@ export default function BulkUpdatePage() {
       } else {
         alert(`Item ID: ${value} အား ရှာမတွေ့ပါ။ စာလုံးပေါင်း သေချာပါသလား?`)
       }
-
       setQrInput('') 
       qrInputRef.current?.focus()
       setSearchLoading(false)
     }
   }
 
-  // Checkbox Selection Logic
+  // 📸 2. Mobile Camera Scanner Logic အသစ်
+  const handleCameraScan = async (detectedCodes: any[]) => {
+    // Code ဖတ်ပြီးဖြစ်နေချိန် (သို့) Data ဆွဲနေချိန်ဆိုရင် နောက်ထပ် ထပ်မဖတ်အောင် တားထားမည်
+    if (detectedCodes.length === 0 || pendingOrder || cameraLoading) return;
+    const value = detectedCodes[0].rawValue;
+    if (!value) return;
+
+    setCameraLoading(true);
+    const { data, error } = await supabase
+      .from('orders')
+      .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
+      .eq('branch', userBranch)
+      .eq('item_id', value)
+      .maybeSingle()
+
+    if (error || !data) {
+      alert(`Item ID: ${value} အား ရှာမတွေ့ပါ။`);
+    } else {
+      setPendingOrder(data); // ဒေတာရပြီဆိုရင် Confirmation UI ကို ပြပေးမည်
+    }
+    setCameraLoading(false);
+  }
+
+  const confirmPendingOrder = () => {
+    if (pendingOrder) {
+      setOrders(prev => {
+        if (prev.some(o => o.id === pendingOrder.id)) return prev;
+        return [pendingOrder, ...prev];
+      });
+      setSelectedIds(prev => prev.includes(pendingOrder.id) ? prev : [...prev, pendingOrder.id]);
+      setPendingOrder(null); // အထုပ်ကို List ထဲထည့်ပြီးပါက နောက်တစ်ထုပ် ဆက်ဖတ်ရန်
+    }
+  }
+
+  const cancelPendingOrder = () => {
+    setPendingOrder(null); // မထည့်ဘဲ နောက်တစ်ထုပ် ပြန်ဖတ်ရန်
+  }
+
   const handleSelectRow = (id: string) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])
   }
 
   const handleSelectAllVisible = () => {
-    if (selectedIds.length === orders.length) {
-      setSelectedIds([])
-    } else {
-      setSelectedIds(orders.map(o => o.id))
-    }
+    if (selectedIds.length === orders.length) setSelectedIds([])
+    else setSelectedIds(orders.map(o => o.id))
   }
 
-  // 🔥 4. Execute Bulk Update (သမိုင်းကြောင်းမှတ်တမ်းပါ JSON ထဲ တစ်ခါတည်း ထည့်သွင်းမည့် စနစ်သစ်)
   const handleBulkUpdateSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (selectedIds.length === 0) return alert("ကျေးဇူးပြု၍ အပ်ဒိတ်လုပ်မည့် ပါဆယ်ထုပ်များကို အရင်ရွေးချယ်ပါ!")
 
     setLoading(true)
-
     try {
-      // ၁။ ရွေးချယ်လိုက်တဲ့ Rider ရဲ့ အမည်ကို ရှာဖွေခြင်း
       const selectedRider = riders.find(r => r.id === bulkRiderId);
       const riderName = selectedRider ? selectedRider.name : 'ဖြုတ်လိုက်သည်';
 
-      // ၂။ ရွေးချယ်ထားသော ပါဆယ် ID တစ်ခုချင်းစီအတွက် သီးသန့် Log တွက်ချက်ပြီး Update လုပ်ရန် Map ပတ်ခြင်း
       const updatePromises = selectedIds.map(async (id) => {
-        // လက်ရှိပြသနေတဲ့ orders စာရင်းထဲကနေ ဒီပါဆယ်ရဲ့ လက်ရှိဒေတာကို ရှာဖွေမယ်
         const currentOrder = orders.find(o => o.id === id);
         if (!currentOrder) return null;
 
         let changes: string[] = [];
-        
-        // Status ပြောင်းလဲသွားခြင်း ရှိမရှိ စစ်ဆေးပြီး Log စာသားတည်ဆောက်ခြင်း
         if (currentOrder.status !== bulkStatus) {
           changes.push(`Bulk စနစ်ဖြင့် Status ကို "${currentOrder.status || 'At Office'}" မှ "${bulkStatus}" သို့ ပြောင်းလဲခဲ့သည်`);
         }
-        
-        // Rider ပြောင်းလဲသွားခြင်း ရှိမရှိ စစ်ဆေးခြင်း
         if (currentOrder.deliver_rider_id !== bulkRiderId) {
           changes.push(`Rider ကို "${riderName}" သို့ တာဝန်ပေးခဲ့သည်`);
         }
-
-        // အကယ်၍ ဘာမှမပြောင်းလဲဘဲ Date ပဲပြင်တာမျိုးဆိုလျှင်
         if (changes.length === 0) {
           changes.push("Bulk စနစ်ဖြင့် ပါဆယ်အချက်အလက်များကို ပြင်ဆင်ခဲ့သည်");
         }
 
         const logNote = changes.join("၊ ");
-        
-        // မူလရှိပြီးသား JSON History ထဲသို့ Log အသစ်ကို လှမ်းပေါင်းထည့်ခြင်း
         const updatedHistory = appendLog(currentOrder.history, "Bulk Updated", logNote);
 
-        // Supabase ထဲသို့ တစ်ထုပ်ချင်းစီအလိုက် သီးသန့် သမိုင်းကြောင်းဖြင့် Update သွားလုပ်ခြင်း
         return supabase
           .from('orders')
           .update({
             status: bulkStatus,
             deliver_rider_id: bulkRiderId || null,
             deliver_date: bulkDeliverDate || null,
-            history: updatedHistory // 🌟 JSON History Log အသစ်
+            history: updatedHistory
           })
           .eq('id', id);
       });
 
-      // ၃။ ဒေတာဘေ့စ် Update တောင်းဆိုမှုအားလုံးကို တစ်ပြိုင်တည်း (Parallel) လှမ်းပို့လိုက်ခြင်း
       const results = await Promise.all(updatePromises);
-      
-      // Error ရှိမရှိ စစ်ဆေးခြင်း
       const hasError = results.some(res => res && res.error);
 
       if (!hasError) {
@@ -259,7 +250,61 @@ export default function BulkUpdatePage() {
   }
 
   return (
-    <div className="w-full h-full flex flex-col bg-[#f3f3f3] font-[system-ui,-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif] overflow-auto select-none p-4">
+    <div className="w-full h-full flex flex-col bg-[#f3f3f3] font-[system-ui,-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif] overflow-auto select-none p-4 relative">
+      
+      {/* 📸 Mobile Camera Modal (ပေါ်လာမည့် အစိတ်အပိုင်း) */}
+      {showCamera && (
+        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center animate-in fade-in duration-200">
+          <div className="absolute top-4 right-4 z-50">
+            <button onClick={() => setShowCamera(false)} className="bg-white/20 text-white hover:bg-white/30 px-4 py-2 rounded-lg font-bold text-sm backdrop-blur-md transition-all">
+              ✕ Close
+            </button>
+          </div>
+
+          <div className="w-full max-w-md w-full relative h-[60vh] flex items-center justify-center bg-black overflow-hidden rounded-2xl shadow-2xl">
+            {cameraLoading ? (
+              <div className="text-orange-500 font-bold animate-pulse text-lg">ရှာဖွေနေပါသည်...</div>
+            ) : !pendingOrder ? (
+              <Scanner onScan={handleCameraScan} formats={['qr_code', 'code_128', 'code_39', 'ean_13']} />
+            ) : (
+              // 📸 Scan ဖတ်မိပြီးနောက် ပြသမည့် အချက်အလက် (Add / Cancel ရွေးချယ်ရန်)
+              <div className="absolute inset-0 bg-white p-6 flex flex-col justify-center text-left">
+                <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4 mx-auto">
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                </div>
+                <h3 className="text-lg font-bold text-center text-gray-900 mb-6">အထုပ်အား ရှာဖွေတွေ့ရှိပါသည်</h3>
+                
+                <div className="space-y-3 mb-8 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                  <p className="text-sm flex justify-between border-b border-gray-200 pb-2">
+                    <span className="text-gray-500">Item ID:</span> <span className="font-mono font-bold">{pendingOrder.item_id}</span>
+                  </p>
+                  <p className="text-sm flex justify-between border-b border-gray-200 pb-2">
+                    <span className="text-gray-500">Sender:</span> <span className="font-semibold">{pendingOrder.sender_name}</span>
+                  </p>
+                  <p className="text-sm flex justify-between border-b border-gray-200 pb-2">
+                    <span className="text-gray-500">Receiver:</span> <span className="font-semibold">{pendingOrder.receiver_name}</span>
+                  </p>
+                  <p className="text-sm flex justify-between text-orange-600 font-bold text-base">
+                    {/* 💡 Database ထဲက COD Column နာမည်ကွဲနေပါက ဒီနေရာတွင် (ဥပမာ- cod_amount) ပြင်ပေးပါ */}
+                    <span>COD:</span> <span>{pendingOrder.cod || pendingOrder.cod_amount || '0'} MMK</span>
+                  </p>
+                </div>
+
+                <div className="flex gap-3 mt-auto">
+                  <button onClick={cancelPendingOrder} className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-all">
+                    Cancel
+                  </button>
+                  <button onClick={confirmPendingOrder} className="flex-1 py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl transition-all shadow-lg shadow-orange-500/30">
+                    + Add to List
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+          <p className="text-gray-400 mt-6 text-sm font-medium">ဘားကုဒ် (သို့) QR ကို ဘောင်အတွင်း ချိန်ရွယ်ပါ</p>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto w-full space-y-4">
         
         {/* Title Top Bar */}
@@ -286,22 +331,34 @@ export default function BulkUpdatePage() {
 
         {/* 🔍 SECTION 1: SEARCH & SCANNER INPUTS */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Hardware QR/Barcode Scanner Field */}
+          
+          {/* Hardware & Mobile Scanner Field */}
           <div className="bg-gray-900 text-white p-4 rounded-lg border border-gray-950 shadow flex flex-col justify-center relative">
-            <label className="block text-orange-400 font-semibold mb-1.5 uppercase text-[11px] tracking-wider flex items-center gap-2">
-              <span>📷 QR / BARCODE SCAN HARDWARE</span>
-              {searchLoading && <span className="text-[9px] bg-orange-500 text-white px-1.5 py-0.5 rounded animate-pulse">SEARCHING...</span>}
+            <label className="block text-orange-400 font-semibold mb-2 uppercase text-[11px] tracking-wider flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2">
+                📷 QR / BARCODE SCANNER
+                {searchLoading && <span className="text-[9px] bg-orange-500 text-white px-1.5 py-0.5 rounded animate-pulse">SEARCHING...</span>}
+              </span>
             </label>
-            <input 
-              ref={qrInputRef}
-              type="text"
-              placeholder="အထုပ်ပေါ်မှ QR Code ကို ဖတ်ပါ..."
-              value={qrInput}
-              onChange={e => setQrInput(e.target.value)}
-              onKeyDown={handleQrScanSubmit}
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white font-mono placeholder-gray-500 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-900 text-sm shadow-inner"
-            />
-            <p className="text-[10px] text-gray-400 mt-1 italic">💡 Scanner ဖတ်လိုက်လျှင် အလိုအလျောက် List ထဲရောက်ပြီး Checked ဖြစ်သွားပါမည်။</p>
+            <div className="flex gap-2">
+              <input 
+                ref={qrInputRef}
+                type="text"
+                placeholder="Scanner ဖြင့် ဖတ်ပါ..."
+                value={qrInput}
+                onChange={e => setQrInput(e.target.value)}
+                onKeyDown={handleQrScanSubmit}
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white font-mono placeholder-gray-500 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-900 text-sm shadow-inner"
+              />
+              {/* 📸 ဖုန်းကင်မရာ ဖွင့်ရန်ခလုတ် အသစ် */}
+              <button 
+                onClick={() => setShowCamera(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium text-xs whitespace-nowrap transition-all shadow-md flex items-center gap-1.5"
+              >
+                📱 ဖုန်းဖြင့် ဖတ်မည်
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-400 mt-2 italic">💡 Computer Scanner ဖတ်လျှင် အလိုအလျောက် ရွေးချယ်ပြီးဖြစ်သွားမည်။</p>
           </div>
 
           {/* Normal Smart Search */}
@@ -319,11 +376,11 @@ export default function BulkUpdatePage() {
                 {searchLoading ? '...' : 'Search'}
               </button>
             </div>
-            <p className="text-[10px] text-gray-400 mt-1">💡 စာရိုက်ရပ်လိုက်သည်နှင့် Auto ရှာပေးမည်။ စာရိုက်ပြီး Enter ခေါက်ကလည်း ချက်ချင်းရှာပေးသည်။</p>
+            <p className="text-[10px] text-gray-400 mt-2">💡 စာရိုက်ရပ်လိုက်သည်နှင့် Auto ရှာပေးမည်။</p>
           </form>
         </div>
 
-        {/* 🚀 SECTION 2: BULK ACTION CONTROLLER */}
+        {/* 🚀 SECTION 2: BULK ACTION CONTROLLER (မူလအတိုင်း) */}
         <div className="bg-white p-4 rounded-lg border-2 border-orange-400 shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-100 pb-2 mb-3">
             <h2 className="text-xs font-bold text-gray-900 uppercase tracking-wide flex items-center gap-1.5">
@@ -377,7 +434,7 @@ export default function BulkUpdatePage() {
           </form>
         </div>
 
-        {/* 📊 SECTION 3: DATA TABLE */}
+        {/* 📊 SECTION 3: DATA TABLE (မူလအတိုင်း) */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left whitespace-nowrap text-[12px]">
@@ -445,13 +502,11 @@ export default function BulkUpdatePage() {
               </tbody>
             </table>
           </div>
-          
           <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex justify-between items-center text-[11px] text-gray-500 font-mono">
             <span>Showing {orders.length} parcels in view</span>
             <span className="text-orange-600 font-bold">{selectedIds.length} checked for bulk modification</span>
           </div>
         </div>
-
       </div>
     </div>
   )

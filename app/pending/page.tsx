@@ -2,6 +2,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import AddCityForm from "@/components/AddCityForm";
+
 
 interface QueueItem {
   local_id: string;
@@ -28,6 +30,7 @@ export default function PendingEntry() {
   const [syncQueue, setSyncQueue] = useState<QueueItem[]>([])
   const [isOnline, setIsOnline] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // ── Persisted fields across items ──
   const [persistSenderName, setPersistSenderName] = useState('')
@@ -77,6 +80,27 @@ export default function PendingEntry() {
     branch: '',
     image_url: ''
   })
+
+  const [cities, setCities] = useState<any[]>([]);
+
+const loadCities = async () => {
+  const { data, error } = await supabase
+    .from("cities")
+    .select('*')
+    .order("name", { ascending: true });
+  
+  if (error) {
+    console.error("Error fetching cities:", error);
+    return;
+  }
+  
+  if (data) setCities(data);
+};
+
+// စာမျက်နှာ စပွင့်ပွင့်ချင်းမှာ မြို့စာရင်း ဆွဲထုတ်ခိုင်းရန်
+useEffect(() => {
+  loadCities();
+}, []);
 
   // 🌟 Tab နှိပ်ပြီး Select Box ပေါ်ရောက်တာနဲ့ Dropdown ကို Auto ဖြည်ချပေးမယ့် စနစ်
   const handleSelectFocus = (e: React.FocusEvent<HTMLSelectElement>) => {
@@ -932,13 +956,42 @@ export default function PendingEntry() {
                     <input type="text" value={formData.receiver_phone} onChange={handlePhoneChange} className={`${winInput} font-mono`} required disabled={!selectedItem} />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
+
                     <div>
-                      <label className={labelStyle}>City</label>
-                     <select value={formData.receiver_loc} onChange={e => setFormData({...formData, receiver_loc: e.target.value})} className={winSelect}  disabled={!selectedItem} onFocus={handleSelectFocus}>
-                        <option value="MDY">Mandalay</option>
-                        <option value="YGN">Yangon</option>
-                      </select>
-                    </div>
+  {/* Label နှင့် ခလုတ်ကို ဘယ်/ညာ ခွဲထုတ်ထားခြင်း */}
+  <div className="flex justify-between items-center mb-1.5">
+    <label className={labelStyle}>City</label>
+    
+    {/* ➕ မြို့အသစ်ခေါ်မည့် ခလုတ် */}
+    <button
+      type="button"
+      onClick={() => setIsModalOpen(true)} // 💡 ကလစ်နှိပ်လျှင် မိုဒယ်လ် ပေါ့အပ်ပွင့်မည်
+      className="text-xs text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-xl border border-blue-500/20 transition active:scale-95"
+    >
+      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+      </svg>
+      Add New
+    </button>
+  </div>
+
+  {/* အစ်ကို့ရဲ့ မူရင်း Select Dropdown */}
+  <select 
+    value={formData.receiver_loc} 
+    onChange={e => setFormData({...formData, receiver_loc: e.target.value})} 
+    className={winSelect}  
+    disabled={!selectedItem} 
+    onFocus={handleSelectFocus}
+  >
+    <option value="">-- Select City --</option>
+    {cities.map((city) => (
+      <option key={city["C.ID"]} value={city["C.ID"]}>{city.name}</option>
+    ))}
+  </select>
+</div>
+
+                    
+
                     <div className="col-span-2 mt-1">
                       <label className={labelStyle}>Address</label>
                       <input type="text" value={formData.receiver_address} onChange={e => setFormData({...formData, receiver_address: e.target.value})} className={winInput} disabled={!selectedItem} />
@@ -1056,7 +1109,12 @@ export default function PendingEntry() {
             </div>
           </form>
         </div>
-      </div>      
+      </div> 
+      <AddCityForm 
+      isOpen={isModalOpen} 
+      onClose={() => setIsModalOpen(false)} 
+      onCityAdded={loadCities} 
+    />     
     </div>
   )
 } 

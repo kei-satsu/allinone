@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 // Cloudinary Uploader Component ကို Import လုပ်ပါ (လမ်းကြောင်းမှန်အောင် ပြင်ပေးပါ)
 // လောလောဆယ် ရှိနေတဲ့ import စာကြောင်းကို ဖျက်ပြီး ဒါလေးနဲ့ အစားထိုးပါ
 import dynamic from 'next/dynamic'
+import AddCityForm from "@/components/AddCityForm";
 
 const ImageUploader = dynamic(
   () => import('@/components/ImageUploader'),
@@ -30,6 +31,28 @@ export default function EntryForm() {
   const [showSenderDropdown, setShowSenderDropdown] = useState<boolean>(false)
   const [showAllSuggestions, setShowAllSuggestions] = useState<boolean>(false)
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState<number>(0)
+
+  const [cities, setCities] = useState<any[]>([]);       // Table မြို့စာရင်းသိမ်းရန် State
+const [isModalOpen, setIsModalOpen] = useState(false); // Pop-up ပွင့်/ပိတ် ထိန်းရန် State
+
+// 💡 Supabase ထဲက မြို့စာရင်းကို ဆွဲထုတ်ပေးမည့် Function
+const loadCities = async () => {
+  const { data, error } = await supabase
+    .from("cities")
+    .select("*")
+    .order("name", { ascending: true }); // မြို့နာမည်အလိုက် အက္ခရာစဉ်ပေးထားပါသည်
+
+  if (error) {
+    console.error("Error fetching cities:", error);
+    return;
+  }
+  if (data) setCities(data);
+};
+
+// 💡 Page စပွင့်ချင်းမှာ အလုပ်လုပ်ခိုင်းရန်
+useEffect(() => {
+  loadCities();
+}, []);
   
   // ImageUploader ကို Form ရှင်းတဲ့အခါ Auto Clear ဖြစ်သွားအောင် သုံးမယ့် State
   const [resetKey, setResetKey] = useState<number>(Date.now())
@@ -567,37 +590,66 @@ export default function EntryForm() {
 
             {/* Receiver Card */}
             <div className="bg-white border border-gray-200 p-5 rounded-lg shadow-sm">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-emerald-600 bg-emerald-50 p-2 rounded-lg">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
-                </span>
-                <h3 className="font-semibold text-gray-800 uppercase tracking-wide text-sm">Receiver Details</h3>
-              </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className={labelStyle}>Receiver Name <span className="text-red-500">*</span></label>
-                  <input ref={receiverNameRef} type="text" value={formData.receiver_name} onChange={e => setFormData({...formData, receiver_name: e.target.value})} className={winInput} placeholder="Enter name" required />
-                </div>
-                <div>
-                  <label className={labelStyle}>Phone Number <span className="text-red-500">*</span></label>
-                  <input type="text" value={formData.receiver_phone} onChange={handlePhoneChange} placeholder="09-xxx-xxx-xxx" className={`${winInput} font-mono`} required />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="sm:col-span-2">
-                  <label className={labelStyle}>Full Delivery Address</label>
-                  <input type="text" value={formData.receiver_address} onChange={e => setFormData({...formData, receiver_address: e.target.value})} className={winInput} placeholder="Enter detailed address..." />
-                </div>
-                <div>
-                  <label className={labelStyle}>Destination City</label>
-                  <select value={formData.receiver_loc} onChange={e => setFormData({...formData, receiver_loc: e.target.value})} className={winSelect}>
-                    <option value="MDY">Mandalay (MDY)</option>
-                    <option value="YGN">Yangon (YGN)</option>
-                    <option value="NPT">Nay Pyi Taw (NPT)</option>
-                  </select>
-                </div>
-              </div>
-            </div>
+  <div className="flex items-center gap-2 mb-4">
+    <span className="text-emerald-600 bg-emerald-50 p-2 rounded-lg">
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+      </svg>
+    </span>
+    <h3 className="font-semibold text-gray-800 uppercase tracking-wide text-sm">Receiver Details</h3>
+  </div>
+
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+    <div>
+      <label className={labelStyle}>Receiver Name <span className="text-red-500">*</span></label>
+      <input ref={receiverNameRef} type="text" value={formData.receiver_name} onChange={e => setFormData({...formData, receiver_name: e.target.value})} className={winInput} placeholder="Enter name" required />
+    </div>
+    <div>
+      <label className={labelStyle}>Phone Number <span className="text-red-500">*</span></label>
+      <input type="text" value={formData.receiver_phone} onChange={handlePhoneChange} placeholder="09-xxx-xxx-xxx" className={`${winInput} font-mono`} required />
+    </div>
+  </div>
+
+  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div className="sm:col-span-2">
+      <label className={labelStyle}>Full Delivery Address</label>
+      <input type="text" value={formData.receiver_address} onChange={e => setFormData({...formData, receiver_address: e.target.value})} className={winInput} placeholder="Enter detailed address..." />
+    </div>
+    
+    {/* 🏙️ Destination City Dropdown (မြို့အသစ်ထည့်ရန် ခလုတ်ပါဝင်သည်) */}
+    <div>
+      <div className="flex justify-between items-center mb-1.5">
+        <label className={labelStyle}>Destination City</label>
+        
+        {/* ➕ မြို့အသစ်ထည့်မည့် ခလုတ်ကလေး (White Theme နှင့် ကွက်တိဖြစ်အောင် ပြင်ထားပါသည်) */}
+        <button
+          type="button"
+          onClick={() => setIsModalOpen(true)} // 💡 ကလစ်နှိပ်လျှင် Pop-up ပွင့်မည်
+          className="text-[11px] text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-lg border border-blue-200 transition active:scale-95"
+        >
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          Add New
+        </button>
+      </div>
+
+      <select 
+        value={formData.receiver_loc} 
+        onChange={e => setFormData({...formData, receiver_loc: e.target.value})} 
+        className={winSelect}
+      >
+        <option value="">-- Select City --</option>
+        {/* 💡 Table ထဲက မြို့စာရင်းကို Loop ပတ်ပြီး လာပြပေးမည့်နေရာ */}
+        {cities.map((city) => (
+          <option key={city["C.ID"]} value={city["C.ID"]}>
+            {city.name} ({city["C.ID"]})
+          </option>
+        ))}
+      </select>
+    </div>
+  </div>
+</div>
           </div>
 
           {/* RIGHT COLUMN */}
@@ -742,6 +794,11 @@ export default function EntryForm() {
           </div>
         </form>
       </div>
+      <AddCityForm 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        onCityAdded={loadCities} 
+      />
     </div>
   )
 }
