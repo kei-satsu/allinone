@@ -7,43 +7,34 @@ import EditOrderModal from '@/components/EditOrderModal' // သင့် Compone
 import { printVoucher } from "@/utils/print"
 
 const COLUMN_DEFS = [
+  { key: 'image_url', label: 'Photo', defaultVisible: true }, 
   { key: 'item_id', label: 'Item ID', defaultVisible: true },
   { key: 'received_date', label: 'Received Date', defaultVisible: true },
-  { key: 'branch', label: 'Branch', defaultVisible: true },
+  { key: 'branch', label: 'Branch', defaultVisible: false },
   { key: 'sender_name', label: 'Sender', defaultVisible: true },
   { key: 'sender_loc', label: 'S. City', defaultVisible: true },
   { key: 'receiver_name', label: 'Receiver', defaultVisible: true },
   { key: 'receiver_phone', label: 'Phone', defaultVisible: true },
-  { key: 'receiver_loc', label: 'R. City', defaultVisible: true },
   { key: 'receiver_address', label: 'Full Address', defaultVisible: false },
+  { key: 'receiver_loc', label: 'R. City', defaultVisible: true },
   { key: 'fee_type', label: 'Type', defaultVisible: true },
   { key: 'cod_amount', label: 'COD (Ks)', defaultVisible: true },
   { key: 'deli_fee', label: 'Deli Fee (Ks)', defaultVisible: true },
   { key: 'total_amount', label: 'Total (Ks)', defaultVisible: true },
   { key: 'status', label: 'Status', defaultVisible: true },
-  { key: 'image_url', label: 'Photo', defaultVisible: true }, 
-  { key: 'pickup_rider', label: 'Pickup By', defaultVisible: true },
-  { key: 'deliver_rider', label: 'Deliver By', defaultVisible: true },
+  { key: 'pickup_rider', label: 'Pickup By', defaultVisible: false },
+  { key: 'deliver_rider', label: 'Deliver By', defaultVisible: false },
   { key: 'deliver_date', label: 'Deliver Date', defaultVisible: false },
   { key: 'cleard_date', label: 'Cleared Date', defaultVisible: false },
   { key: 'note', label: 'Note', defaultVisible: false },
   { key: 'created_at', label: 'Created At', defaultVisible: false },
+  { key: 'transit_date', label: 'Transit Date', defaultVisible: false },
+  { key: 'transit_to', label: 'Transit To', defaultVisible: false },
+  { key: 'agent_fee', label: 'Agent Fee', defaultVisible: false },
+  { key: 'remark', label: 'Remark', defaultVisible: false },
+  
 ]
 
-const extractPublicId = (url: string) => {
-  try {
-    const parts = url.split('/upload/');
-    if (parts.length < 2) return null;
-    const rightPart = parts[1];
-    const pathParts = rightPart.split('/');
-    if (pathParts[0].startsWith('v')) {
-      pathParts.shift(); 
-    }
-    return pathParts.join('/').split('.')[0]; 
-  } catch (error) {
-    return null;
-  }
-}
 
 export default function OrderList() {
   const router = useRouter()
@@ -100,28 +91,27 @@ export default function OrderList() {
     }
   }, [previewImage])
 
-  const appendLog = (currentHistory: any[], action: string, note: string) => {
-    const operator = userBranch || localStorage.getItem('user_branch') || 'Unknown Office';
-    const newLogEntry = {
-      timestamp: new Date().toISOString(),
-      action: action,      
-      operator: operator,  
-      note: note           
-    };
-    return [...(currentHistory || []), newLogEntry];
-  };
 
   const [visibleCols, setVisibleCols] = useState<Record<string, boolean>>(() => {
     const initialState: Record<string, boolean> = {}
     COLUMN_DEFS.forEach(col => { initialState[col.key] = col.defaultVisible })
     return initialState
   })
+
+useEffect(() => {
+  const savedCols = localStorage.getItem('all_in_one_visible_cols');
+  if (savedCols) {
+    try {
+      setVisibleCols(JSON.parse(savedCols));
+    } catch (error) {
+      console.error("Error parsing visible columns from localStorage:", error);
+    }
+  }
+}, []);
+
   const [showColDropdown, setShowColDropdown] = useState(false)
   const [colFilters, setColFilters] = useState<Record<string, string>>({})
 
-  const winInput = "w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all shadow-sm"
-  const winSelect = "w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-gray-800 text-sm focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all appearance-none bg-no-repeat bg-[length:0.75rem_auto] bg-[right_1rem_center] cursor-pointer shadow-sm"
-  const labelStyle = "block text-gray-600 font-semibold mb-1 uppercase text-[11px] tracking-wide"
 
   const fetchData = async (branchCode?: string) => {
     const activeBranch = branchCode || userBranch;
@@ -145,7 +135,7 @@ export default function OrderList() {
   }
 
   const fetchRiders = async () => {
-    const { data, error } = await supabase.from('riders').select('*')
+    const { data } = await supabase.from('riders').select('*')
     if (data) setRiders(data)
   }
 
@@ -196,8 +186,12 @@ export default function OrderList() {
   }
 
   const toggleColumn = (colKey: string) => {
-    setVisibleCols(prev => ({ ...prev, [colKey]: !prev[colKey] }))
-  }
+  setVisibleCols(prev => {
+    const updated = { ...prev, [colKey]: !prev[colKey] };
+    localStorage.setItem('all_in_one_visible_cols', JSON.stringify(updated)); // localStorage ထဲ သိမ်းလိုက်ခြင်း
+    return updated;
+  });
+};
 
   const handleRowContextMenu = (e: React.MouseEvent | any, order: any) => {
     if (e.preventDefault) e.preventDefault()
@@ -334,7 +328,7 @@ export default function OrderList() {
                         <input 
                           type="checkbox" 
                           className="mr-2.5 w-4 h-4 sm:w-3.5 sm:h-3.5 text-orange-500 rounded border-gray-300 accent-orange-500"
-                          checked={visibleCols[col.key]} 
+                          checked={visibleCols[col.key] || false }  
                           onChange={() => toggleColumn(col.key)}
                           disabled={col.key === 'item_id'} 
                         />
@@ -857,17 +851,35 @@ export default function OrderList() {
 
     {/* ── 🌟 Full Detail View Modal ── */}
 {viewingDetailOrder && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-end sm:items-center justify-center p-0 sm:p-4 z-60 animate-in fade-in duration-200">
-    {/* Backdrop ကို နှိပ်ရင် ပိတ်သွားအောင် */}
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-[3px] flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-in fade-in duration-200">
+    {/* Backdrop */}
     <div className="absolute inset-0" onClick={() => setViewingDetailOrder(null)} />
     
-    {/* 💡 Modal Size ကို ပိုကျယ်အောင် လုပ်ထားပြီး ဖုန်းမှာ Screen အပြည့်နီးပါး (h-[90vh]) ပေးထားပါတယ် */}
-    <div className="relative bg-white rounded-t-2xl sm:rounded-xl w-full sm:max-w-lg h-[90vh] sm:h-auto sm:max-h-[85vh] flex flex-col shadow-2xl border border-gray-200 z-10 animate-in slide-in-from-bottom sm:zoom-in-95 duration-200 overflow-hidden">
+    {/* Responsive Modal Container */}
+    <div className="relative bg-white rounded-t-2xl sm:rounded-xl w-full sm:max-w-2xl lg:max-w-3xl h-[92vh] sm:h-auto sm:max-h-[85vh] flex flex-col shadow-2xl border border-gray-200 z-10 animate-in slide-in-from-bottom sm:zoom-in-95 duration-200 overflow-hidden">
       
       {/* Modal Header */}
       <div className="bg-gray-50 border-b border-gray-200 px-5 py-4 flex justify-between items-center shrink-0">
         <div className="min-w-0 flex-1">
-          <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-200 uppercase tracking-wider">Parcel Details</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-200 uppercase tracking-wider">
+              Parcel Details
+            </span>
+            <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider border ${
+              viewingDetailOrder.branch === 'MDY' 
+                ? 'bg-orange-50 text-orange-700 border-orange-200' 
+                : viewingDetailOrder.branch === 'YGN' 
+                ? 'bg-purple-50 text-purple-700 border-purple-200' 
+                : 'bg-gray-50 text-gray-600 border-gray-200'
+            }`}>
+              {viewingDetailOrder.branch === 'MDY' ? 'MANDALAY' : viewingDetailOrder.branch === 'YGN' ? 'YANGON' : viewingDetailOrder.branch || '-'}
+            </span>
+            <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wide ${
+              viewingDetailOrder.status === 'Delivered' ? 'bg-green-50 text-green-700 border border-green-200' : 
+              viewingDetailOrder.status === 'Pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 
+              viewingDetailOrder.status === 'In-Transit' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-gray-100 text-gray-600 border border-gray-200'
+            }`}>{viewingDetailOrder.status || 'At Office'}</span>
+          </div>
           <h3 className="text-base font-mono font-bold text-gray-900 mt-1 break-words">ID: {viewingDetailOrder.item_id}</h3>
         </div>
         <button 
@@ -878,141 +890,181 @@ export default function OrderList() {
         </button>
       </div>
 
-      {/* 💡 Modal Body - နေရာအကျယ်ကြီးနဲ့ အောက်ကို အဝောာ့အပြတ် Scroll ဆွဲလို့ရမယ့်အပိုင်း */}
+      {/* Modal Body */}
       <div className="p-5 flex flex-col gap-6 text-sm flex-1 overflow-y-auto bg-white">
         
-        {/* Status & Dates (ရိုးရိုးရှင်းရှင်း အကန့်မပါဘဲ ခွဲပြထားပါတယ်) */}
-        <div className="grid grid-cols-2 gap-4 border-b border-gray-100 pb-4">
-          <div>
-            <span className="text-[11px] font-bold text-gray-400 uppercase block mb-1">Current Status</span>
-            <span className="font-bold text-gray-900 text-sm break-words">{viewingDetailOrder.status || 'At Office'}</span>
-          </div>
-          <div>
-            <span className="text-[11px] font-bold text-gray-400 uppercase block mb-1">Received Date</span>
-            <span className="font-semibold text-gray-700 text-sm break-words">{viewingDetailOrder.received_date || '-'}</span>
-          </div>
-        </div>
-
-        {/* Route Information (ဘယ်လိုစာတိုရှည်ရှည် လွတ်လွတ်လပ်လပ် ဆန့်မယ့်အပိုင်း) */}
-        <div className="flex flex-col gap-4 border-b border-gray-100 pb-5">
-          <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Route Information</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           
-          <div className="space-y-1">
-            <span className="text-gray-400 text-xs block">Sender (ပို့သူ)</span>
-            <div className="text-gray-900 font-semibold text-sm break-words">
-              {viewingDetailOrder.sender_name || '-'} <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded ml-1">({viewingDetailOrder.sender_loc || '-'})</span>
-            </div>
-          </div>
-          
-          <div className="space-y-1 pt-2">
-            <span className="text-gray-400 text-xs block">Receiver (ယူသူ)</span>
-            <div className="text-gray-900 font-semibold text-sm break-words">
-              {viewingDetailOrder.receiver_name || '-'} <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded ml-1">({viewingDetailOrder.receiver_loc || '-'})</span>
-            </div>
-          </div>
-
-          {viewingDetailOrder.receiver_phone && (
-            <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 flex justify-between items-center gap-4 mt-1">
-              <div className="min-w-0">
-                <span className="text-[10px] font-bold text-orange-400 uppercase block mb-0.5">Phone Number</span>
-                <span className="font-mono font-bold text-orange-800 text-base block break-words">{viewingDetailOrder.receiver_phone}</span>
+          {/* 📦 LEFT COLUMN: Route & Logistics Info */}
+          <div className="flex flex-col gap-4 bg-gray-50/50 p-4 rounded-xl border border-gray-100">
+            <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">📍 Route Information</h4>
+            
+            <div className="space-y-1">
+              <span className="text-gray-400 text-xs block">Sender (ပို့သူ)</span>
+              <div className="text-gray-900 font-semibold text-sm break-words">
+                {viewingDetailOrder.sender_name || '-'} <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded ml-1">({viewingDetailOrder.sender_loc || '-'})</span>
               </div>
-              <a href={`tel:${viewingDetailOrder.receiver_phone}`} className="bg-orange-500 hover:bg-orange-600 text-white font-medium px-4 py-2 rounded-lg shadow-sm text-xs shrink-0 transition-colors">ခေါ်ဆိုရန်</a>
             </div>
-          )}
+            
+            <div className="space-y-1 pt-1">
+              <span className="text-gray-400 text-xs block">Receiver (ယူသူ)</span>
+              <div className="text-gray-900 font-semibold text-sm break-words">
+                {viewingDetailOrder.receiver_name || '-'} <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded ml-1">({viewingDetailOrder.receiver_loc || '-'})</span>
+              </div>
+            </div>
 
-          {viewingDetailOrder.receiver_address && (
-            <div className="space-y-1 pt-2">
-              <span className="text-gray-400 text-xs block">Full Address</span>
-              <p className="text-gray-800 font-medium leading-relaxed break-words whitespace-pre-wrap bg-gray-50 p-3 rounded-xl border border-gray-100">
-                {viewingDetailOrder.receiver_address}
-              </p>
+            {viewingDetailOrder.receiver_phone && (
+              <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 flex justify-between items-center gap-4 mt-1">
+                <div className="min-w-0">
+                  <span className="text-[10px] font-bold text-orange-400 uppercase block mb-0.5">Phone Number</span>
+                  <span className="font-mono font-bold text-orange-800 text-base block break-words">{viewingDetailOrder.receiver_phone}</span>
+                </div>
+                <a href={`tel:${viewingDetailOrder.receiver_phone}`} className="bg-orange-500 hover:bg-orange-600 text-white font-medium px-4 py-2 rounded-lg shadow-sm text-xs shrink-0 transition-colors">ခေါ်ဆိုရန်</a>
+              </div>
+            )}
+
+            {viewingDetailOrder.receiver_address && (
+              <div className="space-y-1 pt-1">
+                <span className="text-gray-400 text-xs block">Full Address</span>
+                <p className="text-gray-800 font-medium leading-relaxed break-words whitespace-pre-wrap bg-white p-3 rounded-xl border border-gray-100">
+                  {viewingDetailOrder.receiver_address}
+                </p>
+              </div>
+            )}
+
+            {/* Transit Block */}
+            {(viewingDetailOrder.transit_to || viewingDetailOrder.transit_date) && (
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200/60 mt-1">
+                <div>
+                  <span className="text-gray-400 text-xs block">Transit To</span>
+                  <span className="font-semibold text-gray-800 break-words">{viewingDetailOrder.transit_to || '-'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400 text-xs block">Transit Date</span>
+                  <span className="font-semibold text-gray-800 font-mono break-words">
+                    {viewingDetailOrder.transit_date ? new Date(viewingDetailOrder.transit_date).toLocaleDateString() : '-'}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 💵 RIGHT COLUMN: Financials & Riders */}
+          <div className="flex flex-col gap-5">
+            
+            {/* Financial Details Box */}
+            <div className="flex flex-col gap-3 bg-gray-50/50 p-4 rounded-xl border border-gray-100">
+              <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">💵 Financials</h4>
+              
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-500">Payment Type</span>
+                <span className="bg-gray-100 px-2 py-0.5 rounded text-[11px] font-semibold text-gray-600 border border-gray-200">{viewingDetailOrder.fee_type || '-'}</span>
+              </div>
+              
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-500">COD Amount</span>
+                <span className="font-semibold text-gray-900 font-mono">{viewingDetailOrder.cod_amount?.toLocaleString() || 0} Ks</span>
+              </div>
+              
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-500">Delivery Fee</span>
+                <span className="font-semibold text-gray-900 font-mono">{viewingDetailOrder.deli_fee?.toLocaleString() || 0} Ks</span>
+              </div>
+
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-500">Agent Fee</span>
+                <span className="font-semibold text-gray-900 font-mono">{viewingDetailOrder.agent_fee?.toLocaleString() || 0} Ks</span>
+              </div>
+              
+              <div className="flex justify-between items-center pt-3 border-t border-dashed border-gray-200 mt-1">
+                <span className="text-gray-900 font-bold">Total Net Amount</span>
+                <span className="text-base font-mono font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded-lg border border-orange-100">
+                  {viewingDetailOrder.total_amount?.toLocaleString() || 0} Ks
+                </span>
+              </div>
             </div>
-          )}
+
+            {/* Riders Allocation */}
+            <div className="grid grid-cols-2 gap-4 bg-gray-50/50 p-4 rounded-xl border border-gray-100">
+              <div>
+                <span className="text-[11px] text-gray-400 font-bold uppercase block mb-1">Pickup Rider</span>
+                <span className="font-semibold text-gray-800 break-words">{viewingDetailOrder.pickup_rider?.name || '-'}</span>
+              </div>
+              <div>
+                <span className="text-[11px] text-gray-400 font-bold uppercase block mb-1">Delivery Rider</span>
+                <span className="font-semibold text-gray-800 break-words">{viewingDetailOrder.deliver_rider?.name || '-'}</span>
+              </div>
+            </div>
+
+          </div>
         </div>
 
-        {/* Financials (စာသားမကျပ်အောင် ဘယ်/ညာအပြည့် ဖြန့်ခင်းပြသပေးထားပါတယ်) */}
-        <div className="flex flex-col gap-3 border-b border-gray-100 pb-5">
-          <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Financials ({viewingDetailOrder.fee_type || 'Deli'})</h4>
-          
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-gray-500">COD Amount</span>
-            <span className="font-semibold text-gray-900 font-mono">{viewingDetailOrder.cod_amount?.toLocaleString() || 0} Ks</span>
+        {/* ⏱️ System Lifecycle Dates Grid */}
+        <div className="bg-gray-50/30 border border-gray-100 rounded-xl p-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+          <div>
+            <span className="text-[10px] text-gray-400 font-bold uppercase block mb-0.5">Received Date</span>
+            <span className="font-medium text-gray-700 font-mono break-words">{viewingDetailOrder.received_date || '-'}</span>
           </div>
-          
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-gray-500">Delivery Fee</span>
-            <span className="font-semibold text-gray-900 font-mono">{viewingDetailOrder.deli_fee?.toLocaleString() || 0} Ks</span>
+          <div>
+            <span className="text-[10px] text-gray-400 font-bold uppercase block mb-0.5">Deliver Date</span>
+            <span className="font-medium text-gray-700 font-mono break-words">{viewingDetailOrder.deliver_date || '-'}</span>
           </div>
-          
-          <div className="flex justify-between items-center pt-3 border-t border-dashed border-gray-200 mt-1">
-            <span className="text-gray-900 font-bold">Total Net Amount</span>
-            <span className="text-base font-mono font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded-lg border border-orange-100">
-              {viewingDetailOrder.total_amount?.toLocaleString() || 0} Ks
+          <div>
+            <span className="text-[10px] text-gray-400 font-bold uppercase block mb-0.5">Cleared Date</span>
+            <span className="font-medium text-gray-700 font-mono break-words">{viewingDetailOrder.cleard_date || '-'}</span>
+          </div>
+          <div>
+            <span className="text-[10px] text-gray-400 font-bold uppercase block mb-0.5">Created At</span>
+            <span className="font-medium text-gray-700 font-mono break-words">
+              {viewingDetailOrder.created_at ? new Date(viewingDetailOrder.created_at).toLocaleDateString() : '-'}
             </span>
           </div>
         </div>
 
-        {/* Riders (အပေါ်အောက်အပြည့် နေရာပေးထားလို့ နာမည်ရှည်လည်း အဆင်ပြေပါတယ်) */}
-        <div className="grid grid-cols-2 gap-4 border-b border-gray-100 pb-4">
-          <div>
-            <span className="text-[11px] text-gray-400 font-bold uppercase block mb-1">Pickup Rider</span>
-            <span className="font-semibold text-gray-800 break-words">{viewingDetailOrder.pickup_rider?.name || '-'}</span>
-          </div>
-          <div>
-            <span className="text-[11px] text-gray-400 font-bold uppercase block mb-1">Delivery Rider</span>
-            <span className="font-semibold text-gray-800 break-words">{viewingDetailOrder.deliver_rider?.name || '-'}</span>
-          </div>
-        </div>
-
-        {/* Attached Photo */}
+        {/* Attached Photo Details */}
         {viewingDetailOrder.image_url && (
           <div className="flex flex-col gap-2">
             <span className="text-[11px] text-gray-400 font-bold uppercase">Attached Photo</span>
             <div 
               onClick={() => { setPreviewImage(viewingDetailOrder.image_url); }}
-              className="relative rounded-xl overflow-hidden border border-gray-200 max-h-52 bg-gray-50 flex items-center justify-center cursor-zoom-in"
+              className="relative rounded-xl overflow-hidden border border-gray-200 max-h-52 bg-gray-50 flex items-center justify-center cursor-zoom-in group shadow-sm"
             >
-              <img src={viewingDetailOrder.image_url} alt="Parcel Attachment" className="max-w-full max-h-52 object-contain" />
+              <img src={viewingDetailOrder.image_url} alt="Parcel Attachment" className="max-w-full max-h-52 object-contain transition-transform duration-200 group-hover:scale-[1.02]" />
               <div className="absolute bottom-2 right-2 bg-black/60 px-2 py-1 text-[10px] text-white rounded-md backdrop-blur-[2px]">Zoom Image</div>
             </div>
           </div>
         )}
 
-        {/* Special Notes */}
+        {/* Special Notes & Custom Warning Blocks */}
         {viewingDetailOrder.note && (
-          <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3 rounded-xl font-medium break-words leading-relaxed">
+          <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3.5 rounded-xl font-medium break-words leading-relaxed">
             ⚠️ <strong>Note:</strong> {viewingDetailOrder.note === 'RT' ? 'Return Item (ပစ္စည်းပြန်အပ်ငွေ)' : viewingDetailOrder.note}
+          </div>
+        )}
+
+        {/* 📝 Remark Column Section (အသစ်ထည့်ထားသောအပိုင်း) */}
+        {viewingDetailOrder.remark && (
+          <div className="bg-blue-50 border border-blue-200 text-blue-900 p-3.5 rounded-xl font-medium break-words leading-relaxed">
+            📝 <strong>Remark:</strong> {viewingDetailOrder.remark}
           </div>
         )}
 
       </div>
       
-      {/* Modal Footer Actions (အောက်ခြေမှာ ငြိမ်ငြိမ်လေး ကပ်နေမှာပါ) */}
+      {/* Modal Footer Actions */}
       <div className="p-4 bg-gray-50 border-t border-gray-200 flex items-center gap-3 shrink-0">
         <button 
           onClick={() => { setEditingOrder(viewingDetailOrder); setViewingDetailOrder(null); }}
-          className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2.5 rounded-xl text-center shadow-md transition-colors"
+          className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2.5 rounded-xl text-center shadow-md transition-colors text-sm"
         >
           Edit Order
         </button>
         <button 
           onClick={() => setViewingDetailOrder(null)}
-          className="px-5 py-2.5 bg-white border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-100 transition-colors"
+          className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-100 transition-colors text-sm"
         >
           Close
         </button>
-
-        <button 
-    onClick={() => printVoucher(viewingDetailOrder)}
-    className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 rounded-xl text-center shadow-md transition-colors flex items-center justify-center gap-2"
-  >
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-    </svg>
-    Print Voucher
-  </button>
-
       </div>
 
     </div>

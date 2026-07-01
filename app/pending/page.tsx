@@ -78,7 +78,8 @@ export default function PendingEntry() {
     note: '',
     cleared_date: '',
     branch: '',
-    image_url: ''
+    image_url: '',
+    remark: ''
   })
 
   const [cities, setCities] = useState<any[]>([]);
@@ -213,20 +214,21 @@ useEffect(() => {
   }, [userBranch])
 
   async function fetchPendingItems(branch: string) {
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('branch', branch)
-      .eq('status', 'Pending')
-      .order('created_at', { ascending: true })
+  const { data, error } = await supabase
+    .from('orders')
+    .select('*')
+    .eq('branch', branch)
+    // 💡 receiver_name က null ဖြစ်နေတာ သို့မဟုတ် စာလုံးအလွတ် "" ဖြစ်နေတာတွေကိုပဲ ရှာခိုင်းလိုက်တာပါ
+    .or('receiver_name.is.null,receiver_name.eq.""') 
+    .order('created_at', { ascending: true })
 
-    if (!error && data) {
-      setPendingItems(data)
-      if (data.length > 0 && !selectedItem) {
-        handleSelectItem(data[0])
-      }
+  if (!error && data) {
+    setPendingItems(data)
+    if (data.length > 0 && !selectedItem) {
+      handleSelectItem(data[0])
     }
   }
+}
 
   // 🌟 ဘယ်နေရာမှာပဲဖြစ်ဖြစ် Enter နှိပ်လိုက်ရင် Update & Next ကို တန်းနှိပ်ပေးမယ့် စနစ်
   useEffect(() => {
@@ -350,7 +352,8 @@ useEffect(() => {
       cleared_date: item.cleared_date || '',
       sender_id: item.sender_id || null,
       branch: item.branch || userBranch,
-      image_url: item.image_url || ''
+      image_url: item.image_url || '',
+      remark: item.remark || ''
     }))
 
     if (shouldFocusInput) {
@@ -785,330 +788,367 @@ useEffect(() => {
         />
 
         {/* Right panel: Form */}
-        <div className="flex-1 overflow-y-auto p-4">
-          <form onSubmit={handleSubmit} className="w-full space-y-4">
-            
-            {selectedItem?.uploader_note && (
-              <div className="bg-amber-50 border-l-4 border-amber-500 p-3.5 rounded-r-lg shadow-sm">
-                <span className="text-xs font-bold text-amber-800 uppercase tracking-wide block mb-1">💬 Note for this Percel</span>
-                <p className="text-gray-900 font-medium text-sm">{selectedItem.uploader_note}</p>
-              </div>
-            )}
-
-            {/* Top row: Item ID, Arrival Date, Pickup Rider */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-              <div>
-                <label className={labelStyle}>Item ID</label>
-                <input type="text" readOnly value={selectedItem?.item_id || selectedItem?.id || '[ Select ]'} className="w-full px-3 py-2 bg-gray-100 border border-gray-300 text-gray-500 font-mono font-bold rounded-lg text-sm cursor-not-allowed" />
-              </div>
-              <div>
-                <label className={labelStyle}>Arrival Date</label>
-                <input type="date" value={formData.received_date} onChange={e => setFormData({...formData, received_date: e.target.value})} className={winInput} required />
-              </div>
-              <div>
-                <label className={labelStyle}>Pickup Rider</label>
-                <select 
-                  value={formData.pickup_rider_id} 
-                  onChange={e => handlePersistChange('pickup_rider_id', e.target.value)} 
-                  className={winSelect}
-                  disabled={!selectedItem}
-                  onFocus={handleSelectFocus}
-                >
-                  <option value="">Select rider</option>
-                  {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                </select>
-              </div>
-            </div>
-
-            {/* Sender & Receiver cards */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              {/* Sender */}
-              <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-sm">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-blue-600 bg-blue-50 p-1.5 rounded-lg">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
-                  </span>
-                  <h3 className="font-semibold text-gray-800 uppercase tracking-wide text-xs">Sender</h3>
-                </div>
-                <div className="space-y-3">
-                  <div>
-                    <label className={labelStyle}>Name <span className="text-red-500">*</span></label>
-                    <div className="relative">
-                      <input
-                        ref={senderInputRef}
-                        type="text"
-                        value={searchQuery || formData.sender_name}
-                        onChange={e => {
-                          const v = e.target.value
-                          setShowAllSuggestions(false)
-                          setSearchQuery(v)
-                          const q = v.trim().toLowerCase()
-                          const matches = q ? senders.filter(s => String(s.name || '').toLowerCase().startsWith(q)) : []
-                          setShowSenderDropdown(Boolean(matches.length && q.length > 0))
-                          setSelectedSenderId('')
-                          setFormData(prev => ({ ...prev, sender_id: null, sender_name: v }))
-                        }}
-                        onKeyDown={(e) => {
-                          if (filteredSenders.length === 0) return
-                          if (e.key === 'ArrowDown') {
-                            e.preventDefault()
-                            setActiveSuggestionIndex(prev => Math.min(prev + 1, filteredSenders.length - 1))
-                            setShowSenderDropdown(true)
-                          }
-                          if (e.key === 'ArrowUp') {
-                            e.preventDefault()
-                            setActiveSuggestionIndex(prev => Math.max(prev - 1, 0))
-                            setShowSenderDropdown(true)
-                          }
-                          if ((e.key === 'Enter' || e.key === 'Tab') && showSenderDropdown) {
-                            e.preventDefault()
-                            const selected = filteredSenders[activeSuggestionIndex >= 0 ? activeSuggestionIndex : 0]
-                            if (selected) handleSenderSelection(String(selected.id))
-                          }
-                          if (e.key === 'Escape') {
-                            setShowSenderDropdown(false)
-                          }
-                        }}
-                        className={winInput}
-                        required
-                        disabled={!selectedItem}
-                      />
-                      <button
-                        type="button"
-                        aria-label="Toggle sender suggestions"
-                        onMouseDown={(e) => {
-                          e.preventDefault()
-                          if (!showSenderDropdown) {
-                            setShowAllSuggestions(true)
-                            setShowSenderDropdown(true)
-                            setActiveSuggestionIndex(0)
-                          } else {
-                            setShowAllSuggestions(false)
-                            setShowSenderDropdown(false)
-                          }
-                          senderInputRef.current?.focus()
-                        }}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-white border border-gray-200 p-1 text-gray-600 hover:bg-gray-50"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </button>
-                      {showSenderDropdown && filteredSenders.length > 0 && (
-                        <div className="absolute z-40 mt-1 max-h-52 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
-                          {filteredSenders.map((s, index) => (
-                            <button
-                              key={s.id}
-                              type="button"
-                              onMouseDown={() => handleSenderSelection(String(s.id))}
-                              className={`w-full text-left px-4 py-2 ${index === activeSuggestionIndex ? 'bg-orange-50' : 'hover:bg-gray-50'}`}
-                            >
-                              <div className="font-semibold">{s.name}</div>
-                              <div className="text-xs text-gray-500">{s.phone} — {s.LOC}</div>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <label className={labelStyle}>Phone</label>
-                    <input
-                      type="text"
-                      value={formData.sender_phone}
-                      onChange={handleSenderPhoneChange}
-                      className={`${winInput} font-mono`}
-                      placeholder="09-xxx-xxx-xxx"
-                      disabled={!selectedItem}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelStyle}>Location</label>
-                    <select 
-                      value={formData.sender_loc} 
-                      onChange={e => handlePersistChange('sender_loc', e.target.value)} 
-                      className={winSelect} 
-                      disabled={!selectedItem}
-                      onFocus={handleSelectFocus}
-                    >
-                      <option value="MDY">MANDALAY</option>
-                      <option value="YGN">YANGON</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Receiver */}
-              <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-sm">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-emerald-600 bg-emerald-50 p-1.5 rounded-lg">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
-                  </span>
-                  <h3 className="font-semibold text-gray-800 uppercase tracking-wide text-xs">Receiver</h3>
-                </div>
-                <div className="space-y-3">
-                  <div>
-                    <label className={labelStyle}>Name <span className="text-red-500">*</span></label>
-                    <input ref={receiverNameRef} type="text" value={formData.receiver_name} onChange={e => setFormData({...formData, receiver_name: e.target.value})} className={winInput} required disabled={!selectedItem} />
-                  </div>
-                  <div>
-                    <label className={labelStyle}>Phone <span className="text-red-500">*</span></label>
-                    <input type="text" value={formData.receiver_phone} onChange={handlePhoneChange} className={`${winInput} font-mono`} required disabled={!selectedItem} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-
-                    <div>
-  {/* Label နှင့် ခလုတ်ကို ဘယ်/ညာ ခွဲထုတ်ထားခြင်း */}
-  <div className="flex justify-between items-center mb-1.5">
-    <label className={labelStyle}>City</label>
+<div className="flex-1 overflow-y-auto p-5 bg-gray-50/60 custom-scrollbar">
+  <form onSubmit={handleSubmit} className="w-full space-y-5">
     
-    {/* ➕ မြို့အသစ်ခေါ်မည့် ခလုတ် */}
-    <button
-      type="button"
-      onClick={() => setIsModalOpen(true)} // 💡 ကလစ်နှိပ်လျှင် မိုဒယ်လ် ပေါ့အပ်ပွင့်မည်
-      className="text-xs text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-xl border border-blue-500/20 transition active:scale-95"
-    >
-      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-      </svg>
-      Add New
-    </button>
-  </div>
+    {selectedItem?.uploader_note && (
+      <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-xl shadow-sm transition-all animate-fadeIn">
+        <span className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5 mb-1">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" /></svg>
+          Note for this Parcel
+        </span>
+        <p className="text-gray-950 font-medium text-sm leading-relaxed">{selectedItem.uploader_note}</p>
+      </div>
+    )}
 
-  {/* အစ်ကို့ရဲ့ မူရင်း Select Dropdown */}
-  <select 
-    value={formData.receiver_loc} 
-    onChange={e => setFormData({...formData, receiver_loc: e.target.value})} 
-    className={winSelect}  
-    disabled={!selectedItem} 
-    onFocus={handleSelectFocus}
-  >
-    <option value="">-- Select City --</option>
-    {cities.map((city) => (
-      <option key={city["C.ID"]} value={city["C.ID"]}>{city.name}</option>
-    ))}
-  </select>
-</div>
+    {/* Section 1: Core Logistics Info */}
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm">
+      <div>
+        <label className={labelStyle}>Item ID</label>
+        <input type="text" readOnly value={selectedItem?.item_id || selectedItem?.id || '[ Select Item ]'} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 text-gray-500 font-mono font-bold rounded-lg text-sm cursor-not-allowed select-all" />
+      </div>
+      <div>
+        <label className={labelStyle}>Arrival Date</label>
+        <input type="date" value={formData.received_date} onChange={e => setFormData({...formData, received_date: e.target.value})} className={winInput} required />
+      </div>
+      <div>
+        <label className={labelStyle}>Pickup Rider</label>
+        <select 
+          value={formData.pickup_rider_id} 
+          onChange={e => handlePersistChange('pickup_rider_id', e.target.value)} 
+          className={winSelect}
+          disabled={!selectedItem}
+          onFocus={handleSelectFocus}
+        >
+          <option value="">Select rider</option>
+          {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+        </select>
+      </div>
+    </div>
 
-                    
-
-                    <div className="col-span-2 mt-1">
-                      <label className={labelStyle}>Address</label>
-                      <input type="text" value={formData.receiver_address} onChange={e => setFormData({...formData, receiver_address: e.target.value})} className={winInput} disabled={!selectedItem} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Financial & Status row */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-sm">
-                <h3 className="font-semibold text-gray-800 mb-3 uppercase tracking-wide text-xs">💰 Financials</h3>
-                <div className="grid grid-cols-2 gap-3 mb-3">
-                  <div>
-                    <label className={labelStyle}>COD</label>
-                    <input type="number" value={formData.cod_amount || ''} onChange={e => {
-                      const val = Number(e.target.value);
-                      if (formData.fee_type === 'Bill') setOriginalCod(val + Number(formData.deli_fee));
-                      else setOriginalCod(val);
-                    }} className={winInput} disabled={!selectedItem} />
-                  </div>
-                  <div>
-                    <label className={labelStyle}>Deli Fee</label>
-                    <input type="number" value={formData.deli_fee || ''} onChange={e => setFormData({...formData, deli_fee: Number(e.target.value)})} className={`${winInput} text-orange-600`} disabled={!selectedItem} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelStyle}>Type</label>
-                    <select value={formData.fee_type} onChange={e => setFormData({...formData, fee_type: e.target.value})} className={winSelect}  disabled={!selectedItem} onFocus={handleSelectFocus}>
-                      <option value="Deli">Deli (+)</option>
-                      <option value="Kpay">Kpay</option>
-                      <option value="Cash">Cash</option>
-                      <option value="Bill">Bill (-)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-orange-600 font-semibold mb-1 uppercase text-xs">Total</label>
-                    <div className="w-full bg-gray-900 py-2 px-3 rounded-lg flex items-center justify-between">
-                      <span className="font-mono font-bold text-base text-orange-400">{formData.total_amount.toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-sm space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelStyle}>Status</label>
-                    <select value={formData.status} onChange={e => handleStatusChange(e.target.value)} className={winSelect}  disabled={!selectedItem} onFocus={handleSelectFocus}>
-                      <option value="At Office">📦 At Office</option>
-                      <option value="On Way">🚵 On Way</option>
-                      <option value="Delivered">✅ Delivered</option>
-                      <option value="In-Transit">🚚 In-Transit</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className={labelStyle}>Deliver Date</label>
-                    <input
-                      type="date"
-                      value={formData.deliver_date}
-                      onChange={e => setFormData({...formData, deliver_date: e.target.value})}
-                      className={`${winInput} font-mono ${formData.status !== 'On Way' && formData.status !== 'Delivered' ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                      disabled={!selectedItem || (formData.status !== 'On Way' && formData.status !== 'Delivered')}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className={labelStyle}>Delivery Rider</label>
-                  <select value={formData.deliver_rider_id} onChange={e => setFormData({...formData, deliver_rider_id: e.target.value})} className={winSelect} disabled={!selectedItem} onFocus={handleSelectFocus}>
-                    <option value="">Select delivery rider...</option>
-                    {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                  </select>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelStyle}>Return Utility</label>
-                    <select value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} className={winSelect} disabled={!selectedItem} onFocus={handleSelectFocus}>
-                      <option value="">Normal Delivery</option>
-                      <option value="RT">Return Item (RT)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className={labelStyle}>Cash Event</label>
-                    <select value={formData.cleared_date ? 'yes' : 'no'} onChange={e => setFormData({...formData, cleared_date: e.target.value === 'yes' ? today : ''})} className={winSelect} disabled={!selectedItem} onFocus={handleSelectFocus}>
-                      <option value="no">Not Cleared</option>
-                      <option value="yes">Cleared</option>
-                    </select>
-                  </div>
-                </div>
-                {formData.cleared_date && (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-                    <label className="block text-emerald-700 font-semibold mb-1.5 uppercase text-xs tracking-wide">Cleared Date</label>
-                    <input
-                      type="date"
-                      value={formData.cleared_date}
-                      onChange={e => setFormData({...formData, cleared_date: e.target.value})}
-                      className={`${winInput} border-emerald-200 focus:border-emerald-500`}
-                      required
-                      disabled={!selectedItem}
-                    />
-                  </div>
-                )}
-                <button 
-                  type="submit" 
-                  disabled={!selectedItem || loading}
-                  className={`w-full py-3 text-sm font-bold rounded-lg uppercase tracking-wide transition-all shadow-md ${
-                    !selectedItem || loading ? 'bg-gray-400 text-gray-200 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600 text-white active:scale-[0.99]'
-                  }`}
-                >
-                  {loading ? 'Saving...' : 'Update & Next'}
-                </button>
-              </div>
-            </div>
-          </form>
+    {/* Section 2: Sender & Receiver Cards */}
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+      {/* Sender Block */}
+      <div className="bg-white border border-gray-200/80 p-5 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+        <div className="flex items-center gap-2 mb-4 border-b border-gray-100 pb-2.5">
+          <span className="text-blue-600 bg-blue-50 p-1.5 rounded-lg ring-4 ring-blue-500/5">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
+          </span>
+          <h3 className="font-bold text-gray-900 uppercase tracking-wider text-xs">Sender Information</h3>
         </div>
+        <div className="space-y-3.5">
+          <div>
+            <label className={labelStyle}>Name <span className="text-red-500">*</span></label>
+            <div className="relative">
+              <input
+                ref={senderInputRef}
+                type="text"
+                value={searchQuery || formData.sender_name}
+                onChange={e => {
+                  const v = e.target.value
+                  setShowAllSuggestions(false)
+                  setSearchQuery(v)
+                  const q = v.trim().toLowerCase()
+                  const matches = q ? senders.filter(s => String(s.name || '').toLowerCase().startsWith(q)) : []
+                  setShowSenderDropdown(Boolean(matches.length && q.length > 0))
+                  setSelectedSenderId('')
+                  setFormData(prev => ({ ...prev, sender_id: null, sender_name: v }))
+                }}
+                onKeyDown={(e) => {
+                  if (filteredSenders.length === 0) return
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault()
+                    setActiveSuggestionIndex(prev => Math.min(prev + 1, filteredSenders.length - 1))
+                    setShowSenderDropdown(true)
+                  }
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault()
+                    setActiveSuggestionIndex(prev => Math.max(prev - 1, 0))
+                    setShowSenderDropdown(true)
+                  }
+                  if ((e.key === 'Enter' || e.key === 'Tab') && showSenderDropdown) {
+                    e.preventDefault()
+                    const selected = filteredSenders[activeSuggestionIndex >= 0 ? activeSuggestionIndex : 0]
+                    if (selected) handleSenderSelection(String(selected.id))
+                  }
+                  if (e.key === 'Escape') {
+                    setShowSenderDropdown(false)
+                  }
+                }}
+                className={winInput}
+                required
+                disabled={!selectedItem}
+              />
+              <button
+                type="button"
+                aria-label="Toggle sender suggestions"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  if (!showSenderDropdown) {
+                    setShowAllSuggestions(true)
+                    setShowSenderDropdown(true)
+                    setActiveSuggestionIndex(0)
+                  } else {
+                    setShowAllSuggestions(false)
+                    setShowSenderDropdown(false)
+                  }
+                  senderInputRef.current?.focus()
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-white border border-gray-200 p-1 text-gray-500 hover:bg-gray-100 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {showSenderDropdown && filteredSenders.length > 0 && (
+                <div className="absolute z-40 mt-1 max-h-52 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-xl divide-y divide-gray-50 animate-fadeIn">
+                  {filteredSenders.map((s, index) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onMouseDown={() => handleSenderSelection(String(s.id))}
+                      className={`w-full text-left px-4 py-2.5 transition-colors ${index === activeSuggestionIndex ? 'bg-orange-50 text-orange-950 font-medium' : 'hover:bg-gray-50'}`}
+                    >
+                      <div className="font-semibold text-sm text-gray-900">{s.name}</div>
+                      <div className="text-xs text-gray-500 font-mono mt-0.5">{s.phone} — {s.LOC}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <div>
+            <label className={labelStyle}>Phone</label>
+            <input
+              type="text"
+              value={formData.sender_phone}
+              onChange={handleSenderPhoneChange}
+              className={`${winInput} font-mono`}
+              placeholder="09-xxx-xxx-xxx"
+              disabled={!selectedItem}
+            />
+          </div>
+          <div>
+            <label className={labelStyle}>Location</label>
+            <select 
+              value={formData.sender_loc} 
+              onChange={e => handlePersistChange('sender_loc', e.target.value)} 
+              className={winSelect} 
+              disabled={!selectedItem}
+              onFocus={handleSelectFocus}
+            >
+              <option value="MDY">MANDALAY</option>
+              <option value="YGN">YANGON</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Receiver Block */}
+      <div className="bg-white border border-gray-200/80 p-5 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+        <div className="flex items-center gap-2 mb-4 border-b border-gray-100 pb-2.5">
+          <span className="text-emerald-600 bg-emerald-50 p-1.5 rounded-lg ring-4 ring-emerald-500/5">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+          </span>
+          <h3 className="font-bold text-gray-900 uppercase tracking-wider text-xs">Receiver Information</h3>
+        </div>
+        <div className="space-y-3.5">
+          <div>
+            <label className={labelStyle}>Name <span className="text-red-500">*</span></label>
+            <input ref={receiverNameRef} type="text" value={formData.receiver_name} onChange={e => setFormData({...formData, receiver_name: e.target.value})} className={winInput} required disabled={!selectedItem} />
+          </div>
+          <div>
+            <label className={labelStyle}>Phone <span className="text-red-500">*</span></label>
+            <input type="text" value={formData.receiver_phone} onChange={handlePhoneChange} className={`${winInput} font-mono`} required disabled={!selectedItem} />
+          </div>
+          <div>
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="block text-gray-600 font-semibold uppercase text-xs tracking-wide">City</label>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(true)}
+                className="text-[11px] text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1 bg-blue-50 hover:bg-blue-100/80 px-2 py-1 rounded-lg border border-blue-200 transition-all active:scale-95"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                Add New City
+              </button>
+            </div>
+            <select 
+              value={formData.receiver_loc} 
+              onChange={e => setFormData({...formData, receiver_loc: e.target.value})} 
+              className={winSelect}  
+              disabled={!selectedItem} 
+              onFocus={handleSelectFocus}
+            >
+              <option value="">-- Select City --</option>
+              {cities.map((city) => (
+                <option key={city["C.ID"]} value={city["C.ID"]}>{city.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={labelStyle}>Address</label>
+            <input type="text" value={formData.receiver_address} onChange={e => setFormData({...formData, receiver_address: e.target.value})} className={winInput} disabled={!selectedItem} placeholder="လမ်း၊ အိမ်နံပါတ်၊ ရပ်ကွက် ဖြည့်သွင်းရန်" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Section 3: Financials & Status / Remarks */}
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+      {/* Financials Block */}
+      <div className="bg-white border border-gray-200/80 p-5 rounded-xl shadow-sm flex flex-col justify-between">
+        <div>
+          <div className="flex items-center gap-2 mb-4 border-b border-gray-100 pb-2.5">
+            <span className="text-orange-600 bg-orange-50 p-1.5 rounded-lg ring-4 ring-orange-500/5">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.3} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </span>
+            <h3 className="font-bold text-gray-900 uppercase tracking-wider text-xs">Financial Pricing</h3>
+          </div>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className={labelStyle}>COD Amount</label>
+              <input type="number" value={formData.cod_amount || ''} onChange={e => {
+                const val = Number(e.target.value);
+                if (formData.fee_type === 'Bill') setOriginalCod(val + Number(formData.deli_fee));
+                else setOriginalCod(val);
+              }} className={`${winInput} font-mono font-bold text-gray-900`} disabled={!selectedItem} placeholder="0" />
+            </div>
+            <div>
+              <label className={labelStyle}>Deli Fee</label>
+              <input type="number" value={formData.deli_fee || ''} onChange={e => setFormData({...formData, deli_fee: Number(e.target.value)})} className={`${winInput} font-mono font-bold text-orange-600`} disabled={!selectedItem} placeholder="0" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelStyle}>Fee Type</label>
+              <select value={formData.fee_type} onChange={e => setFormData({...formData, fee_type: e.target.value})} className={winSelect} disabled={!selectedItem} onFocus={handleSelectFocus}>
+                <option value="Deli">Deli (+)</option>
+                <option value="Kpay">Kpay</option>
+                <option value="Cash">Cash</option>
+                <option value="Bill">Bill (-)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-orange-600 font-bold mb-1 uppercase text-xs tracking-wide">Total Collected</label>
+              <div className="w-full bg-gray-950 py-2 px-3 rounded-lg flex items-center justify-between border border-gray-800 shadow-inner h-[38px]">
+                <span className="font-mono font-black text-base text-orange-400">{formData.total_amount.toLocaleString()}</span>
+                <span className="text-[10px] text-gray-500 font-bold font-mono">MMK</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="mt-6 pt-4 border-t border-gray-100 hidden xl:block">
+          <p className="text-xs text-gray-400 italic">Please re-check calculations before submitting the data entry.</p>
+        </div>
+      </div>
+
+      {/* Status & Assignment Block */}
+      <div className="bg-white border border-gray-200/80 p-5 rounded-xl shadow-sm space-y-4">
+        <div className="flex items-center gap-2 mb-1 border-b border-gray-100 pb-2.5">
+          <span className="text-purple-600 bg-purple-50 p-1.5 rounded-lg ring-4 ring-purple-500/5">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.3} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+          </span>
+          <h3 className="font-bold text-gray-900 uppercase tracking-wider text-xs">Status & Execution</h3>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelStyle}>Current Status</label>
+            <select value={formData.status} onChange={e => handleStatusChange(e.target.value)} className={winSelect} disabled={!selectedItem} onFocus={handleSelectFocus}>
+              <option value="At Office">📦 At Office</option>
+              <option value="On Way">🚵 On Way</option>
+              <option value="Delivered">✅ Delivered</option>
+              <option value="In-Transit">🚚 In-Transit</option>
+            </select>
+          </div>
+          <div>
+            <label className={labelStyle}>Deliver Date</label>
+            <input
+              type="date"
+              value={formData.deliver_date}
+              onChange={e => setFormData({...formData, deliver_date: e.target.value})}
+              className={`${winInput} font-mono ${formData.status !== 'On Way' && formData.status !== 'Delivered' ? 'bg-gray-50 text-gray-400 cursor-not-allowed border-gray-200' : ''}`}
+              disabled={!selectedItem || (formData.status !== 'On Way' && formData.status !== 'Delivered')}
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className={labelStyle}>Delivery Rider</label>
+          <select value={formData.deliver_rider_id} onChange={e => setFormData({...formData, deliver_rider_id: e.target.value})} className={winSelect} disabled={!selectedItem} onFocus={handleSelectFocus}>
+            <option value="">Select delivery rider...</option>
+            {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelStyle}>Return Utility</label>
+            <select value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} className={winSelect} disabled={!selectedItem} onFocus={handleSelectFocus}>
+              <option value="">Normal Delivery</option>
+              <option value="RT">Return Item (RT)</option>
+            </select>
+          </div>
+          <div>
+            <label className={labelStyle}>Cash Event</label>
+            <select value={formData.cleared_date ? 'yes' : 'no'} onChange={e => setFormData({...formData, cleared_date: e.target.value === 'yes' ? today : ''})} className={winSelect} disabled={!selectedItem} onFocus={handleSelectFocus}>
+              <option value="no">Not Cleared</option>
+              <option value="yes">Cleared</option>
+            </select>
+          </div>
+        </div>
+
+        {formData.cleared_date && (
+          <div className="bg-emerald-50/60 border border-emerald-200 p-3.5 rounded-xl transition-all animate-fadeIn">
+            <label className="block text-emerald-800 font-bold mb-1 uppercase text-xs tracking-wide">Cleared Date</label>
+            <input
+              type="date"
+              value={formData.cleared_date}
+              onChange={e => setFormData({...formData, cleared_date: e.target.value})}
+              className={`${winInput} border-emerald-200 focus:border-emerald-500 focus:ring-emerald-100 font-mono`}
+              required
+              disabled={!selectedItem}
+            />
+          </div>
+        )}
+
+        {/* ✨ Added Field: Entry Remark */}
+        <div className="pt-1">
+          <label className={labelStyle}>Entry Remark</label>
+          <textarea
+            value={formData.remark || ''}
+            onChange={e => setFormData({...formData, remark: e.target.value})}
+            className={`${winInput} h-[76px] resize-none transition-all leading-relaxed placeholder-gray-400`}
+            placeholder="ရုံးတွင်းမှတ်သားရန် အချက်အလက်များ သို့မဟုတ် မှတ်ချက်များရေးရန်..."
+            disabled={!selectedItem}
+          />
+        </div>
+
+        <div className="pt-2">
+          <button 
+            type="submit" 
+            disabled={!selectedItem || loading}
+            className={`w-full py-3 text-sm font-bold rounded-xl uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2 ${
+              !selectedItem || loading 
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none' 
+                : 'bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white active:scale-[0.995] hover:shadow-orange-500/10'
+            }`}
+          >
+            {loading ? (
+              <>
+                <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>
+                Saving System...
+              </>
+            ) : 'Update & Next (Enter)'}
+          </button>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
       </div> 
       <AddCityForm 
       isOpen={isModalOpen} 
