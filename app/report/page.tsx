@@ -147,8 +147,8 @@ export default function DailyReport() {
           deliver_rider:riders!orders_deliver_rider_id_fkey(name)
         `)
         .eq('is_deleted', false)
-        .eq('branch', activeBranch)
-        .or(`received_date.eq.${activeDate},deliver_date.eq.${activeDate}`)
+        .or(`branch.eq.${activeBranch},transit_to.eq.${activeBranch}`)
+        .or(`deliver_date.eq.${activeDate},and(fee_type.in.(Cash,Kpay),received_date.eq.${activeDate})`)
         .order('created_at', { ascending: false })
 
       if (ordersError) {

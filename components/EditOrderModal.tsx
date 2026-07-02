@@ -19,12 +19,16 @@ interface EditOrderModalProps {
 export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSuccess }: EditOrderModalProps) {
   const [loading, setLoading] = useState(false)
   const [riders, setRiders] = useState<any[]>([])
+  const [senders, setSenders] = useState<any[]>([])
+  const [filteredSenders, setFilteredSenders] = useState<any[]>([])
+  const [showSenderDropdown, setShowSenderDropdown] = useState(false)
   const [originalCod, setOriginalCod] = useState<number>(0)
   const [resetKey, setResetKey] = useState<number>(Date.now())
 
   const [formData, setFormData] = useState({
     received_date: '',
     sender_name: '',
+    sender_phone: '', 
     sender_loc: 'MDY', 
     receiver_name: '',
     receiver_phone: '',
@@ -41,7 +45,8 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     note: '',
     cleared_date: '',
     branch: '',
-    image_url: ''
+    image_url: '',
+    remark: ''
   })
 
   // 1. Form အချက်အလက်များ မူရင်းအတိုင်း ဖြည့်သွင်းခြင်း
@@ -50,6 +55,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
       setFormData({
         received_date: orderData.received_date || '',
         sender_name: orderData.sender_name || '',
+        sender_phone: orderData.sender_phone || '',
         sender_loc: orderData.sender_loc || 'MDY',
         receiver_name: orderData.receiver_name || '',
         receiver_phone: orderData.receiver_phone || '',
@@ -66,7 +72,8 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
         note: orderData.note || '',
         cleared_date: orderData.cleared_date || '',
         branch: orderData.branch || '',
-        image_url: orderData.image_url || ''
+        image_url: orderData.image_url || '',
+        remark: orderData.remark || ''
       })
 
       if (orderData.fee_type === 'Bill') {
@@ -78,7 +85,18 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     }
   }, [orderData, isOpen])
 
-  // 2. Riders ဆွဲထုတ်ခြင်း
+  // 2. Senders နှင့် Riders အချက်အလက်များ ဆွဲထုတ်ခြင်း
+  useEffect(() => {
+    if (!isOpen) return
+    
+    async function fetchSenders() {
+      const { data, error } = await supabase.from('senders').select('*').order('name', { ascending: true })
+      if (!error && data) setSenders(data)
+    }
+
+    fetchSenders()
+  }, [isOpen])
+
   useEffect(() => {
     if (!formData.branch || !isOpen) return
     async function fetchRiders() {
@@ -88,7 +106,33 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     fetchRiders()
   }, [formData.branch, isOpen])
 
-  // 3. စုစုပေါင်းငွေ Auto ပြန်တွက်ချက်ခြင်း
+  // 3. Sender ရှာဖွေခြင်းနှင့် ရွေးချယ်ခြင်းယန္တရား (page.tsx ကဲ့သို့ ပြင်ဆင်ထားသည်)
+  const handleSenderNameChange = (val: string) => {
+    setFormData(prev => ({ ...prev, sender_name: val }))
+    if (val.trim() === '') {
+      setFilteredSenders([])
+      setShowSenderDropdown(false)
+    } else {
+      const filtered = senders.filter(s => 
+        s.name?.toLowerCase().includes(val.toLowerCase()) || 
+        s.phone?.includes(val)
+      )
+      setFilteredSenders(filtered)
+      setShowSenderDropdown(true)
+    }
+  }
+
+  const selectSender = (selectedSender: any) => {
+    setFormData(prev => ({
+      ...prev,
+      sender_name: selectedSender.name,
+      sender_phone: selectedSender.phone || '',
+      sender_loc: selectedSender.location || prev.sender_loc
+    }))
+    setShowSenderDropdown(false)
+  }
+
+  // 4. စုစုပေါင်းငွေ Auto ပြန်တွက်ချက်ခြင်း
   useEffect(() => {
     let currentCOD = originalCod;
     const deli = Number(formData.deli_fee) || 0;
@@ -108,7 +152,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     }))
   }, [originalCod, formData.deli_fee, formData.fee_type])
 
-  // 4. Phone Format ချိန်ညှိခြင်း
+  // 5. Phone Format ချိန်ညှိခြင်း
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let s = e.target.value.replace(/-/g, '').replace(/\D/g, '')
     let formatted = s;
@@ -118,7 +162,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     setFormData(prev => ({ ...prev, receiver_phone: formatted }))
   }
 
-  // 5. Save Summary & History Logger Mechanism
+  // 6. Update Submission & History Log Generator
   const handleUpdateSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.sender_name || !formData.receiver_name || !formData.receiver_phone) {
@@ -128,21 +172,33 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
 
     setLoading(true)
 
-    // ── 🔥 PROFESSIONAL AUDIT LOG GENERATION (Clean & Scannable) 🔥 ──
-    let changes: string[] = [];
+    // ─── 📥 SENDER အသစ်ဖြစ်ပါက AUTO INSERT လုပ်ခြင်း ───
+    try {
+      const isExistingSender = senders.some(
+        s => s.name?.toLowerCase().trim() === formData.sender_name.toLowerCase().trim()
+      )
 
-    // Utility helper for currency formatting inside logs
+      if (!isExistingSender && formData.sender_name.trim() !== '') {
+        await supabase.from('senders').insert({
+          name: formData.sender_name.trim(),
+          phone: formData.sender_phone,
+          location: formData.sender_loc
+        })
+      }
+    } catch (err) {
+      console.error("Auto-saving new sender failed:", err)
+    }
+
+    // ── 📝 History Audit Log Generation ──
+    let changes: string[] = [];
     const fmtKg = (val: any) => `${(Number(val) || 0).toLocaleString()} Ks`;
 
-    // (၁) ရက်စွဲနှင့် ရုံးခွဲများ
     if (orderData.received_date !== formData.received_date) {
       changes.push(`📅 Arrival Date: "${orderData.received_date || 'N/A'}" ➔ "${formData.received_date}"`);
     }
     if (orderData.branch !== formData.branch) {
       changes.push(`🏢 Branch: "${orderData.branch || 'N/A'}" ➔ "${formData.branch}"`);
     }
-
-    // (၂) Rider များ
     if (orderData.pickup_rider_id !== formData.pickup_rider_id) {
       const oldRider = riders.find(r => r.id === orderData.pickup_rider_id)?.name || 'N/A';
       const newRider = riders.find(r => r.id === formData.pickup_rider_id)?.name || 'Removed';
@@ -153,16 +209,15 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
       const newRider = riders.find(r => r.id === formData.deliver_rider_id)?.name || 'Removed';
       changes.push(`🚴 Delivery Rider: "${oldRider}" ➔ "${newRider}"`);
     }
-
-    // (၃) ပေးပို့သူ (Sender) အချက်အလက်
     if (orderData.sender_name !== formData.sender_name) {
       changes.push(`📤 Sender Name: "${orderData.sender_name}" ➔ "${formData.sender_name}"`);
+    }
+    if (orderData.sender_phone !== formData.sender_phone) {
+      changes.push(`📞 Sender Phone: "${orderData.sender_phone || 'N/A'}" ➔ "${formData.sender_phone}"`);
     }
     if (orderData.sender_loc !== formData.sender_loc) {
       changes.push(`📍 Sender Loc: "${orderData.sender_loc}" ➔ "${formData.sender_loc}"`);
     }
-
-    // (၄) လက်ခံသူ (Receiver) အချက်အလက်
     if (orderData.receiver_name !== formData.receiver_name) {
       changes.push(`📥 Receiver Name: "${orderData.receiver_name}" ➔ "${formData.receiver_name}"`);
     }
@@ -175,8 +230,6 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     if (orderData.receiver_loc !== formData.receiver_loc) {
       changes.push(`🏙️ Destination City: "${orderData.receiver_loc}" ➔ "${formData.receiver_loc}"`);
     }
-
-    // (၅) ငွေကြေးပိုင်းဆိုင်ရာ
     if (Number(orderData.cod_amount || 0) !== Number(formData.cod_amount || 0)) {
       changes.push(`💰 COD Amount: ${fmtKg(orderData.cod_amount)} ➔ ${fmtKg(formData.cod_amount)}`);
     }
@@ -186,8 +239,6 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     if (orderData.fee_type !== formData.fee_type) {
       changes.push(`💳 Pay Type: "${orderData.fee_type || 'Deli'}" ➔ "${formData.fee_type}"`);
     }
-
-    // (၆) အခြေအနေနှင့် အခြား Utility များ
     if (orderData.status !== formData.status) {
       changes.push(`📦 Status: "${orderData.status || 'At Office'}" ➔ "${formData.status}"`);
     }
@@ -204,19 +255,20 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
       const newClear = formData.cleared_date ? 'Cleared' : 'Uncleared';
       changes.push(`💸 Cash Event: "${oldClear}" ➔ "${newClear}"`);
     }
-
-    // (၇) Voucher ပုံပြောင်းလဲမှု
     if (orderData.image_url !== formData.image_url) {
       const imgStatus = !formData.image_url ? 'Voucher image removed' : 'New voucher image uploaded';
       changes.push(`🖼️ Attachment: "${imgStatus}"`);
     }
+    
+    // 🌟 ဖြည့်စွက်ချက် - Remark ပြောင်းလဲမှုအား Audit History ထဲထည့်ခြင်း
+    if ((orderData.remark || '') !== (formData.remark || '')) {
+      changes.push(`📝 Remark: "${orderData.remark || 'N/A'}" ➔ "${formData.remark || 'Deleted'}"`);
+    }
 
-    // အကယ်၍ ဘာမှမပြင်ဘဲ သိမ်းခဲ့ရင်
     if (changes.length === 0) {
       changes.push("ℹ️ No fields were modified (Re-saved)");
     }
 
-    // စာကြောင်းတစ်ခုချင်းစီကို Line Break (\n) ချပြီး သိမ်းဆည်းမည်
     const logNote = changes.join("\n");
     const operatorName = localStorage.getItem('user_branch') || formData.branch || 'Unknown Office';
 
@@ -228,7 +280,6 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     };
 
     const updatedHistory = [...(orderData.history || []), newLogEntry];
-    // ─────────────────────────────────────────────────────────────
 
     const payload = {
         ...formData,
@@ -302,13 +353,48 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
               </div>
             </div>
 
-            {/* Sender Section */}
-            <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-xs">
+            {/* Sender Section (Searchable Dropdown) */}
+            <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-xs relative">
               <h3 className="font-bold text-gray-800 uppercase text-xs mb-3 flex items-center gap-1.5 text-blue-600">📤 Sender Details</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="relative">
                   <label className={labelStyle}>Sender Name <span className="text-red-500">*</span></label>
-                  <input type="text" value={formData.sender_name} onChange={e => setFormData({...formData, sender_name: e.target.value})} className={winInput} required />
+                  <input 
+                    type="text" 
+                    value={formData.sender_name} 
+                    onChange={e => handleSenderNameChange(e.target.value)}
+                    onFocus={() => { if (formData.sender_name) setShowSenderDropdown(true) }}
+                    onBlur={() => setTimeout(() => setShowSenderDropdown(false), 200)}
+                    className={winInput} 
+                    placeholder="ရှာဖွေရန် အမည်ရိုက်ပါ..."
+                    required 
+                  />
+                  {/* Dropdown Overlay */}
+                  {showSenderDropdown && filteredSenders.length > 0 && (
+                    <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {filteredSenders.map(s => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onMouseDown={() => selectSender(s)}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-orange-50 transition-colors border-b border-gray-100 last:border-none flex justify-between items-center"
+                        >
+                          <span className="font-semibold">{s.name}</span>
+                          <span className="text-gray-400 font-mono text-xs">{s.phone}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className={labelStyle}>Sender Phone</label>
+                  <input 
+                    type="text" 
+                    value={formData.sender_phone} 
+                    onChange={e => setFormData({...formData, sender_phone: e.target.value})} 
+                    className={`${winInput} font-mono`} 
+                    placeholder="ပေးပို့သူ ဖုန်းနံပါတ်"
+                  />
                 </div>
                 <div>
                   <label className={labelStyle}>Sender Office Location</label>
@@ -348,6 +434,18 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                 </div>
               </div>
             </div>
+
+            {/* 🌟 ဖြည့်စွက်ချက် - Remark Section UI (Receiver အောက်တွင် ထည့်ထားပါသည်) */}
+            <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-xs">
+              <label className={labelStyle}>Remark (အထွေထွေမှတ်ချက်)</label>
+              <textarea 
+                value={formData.remark} 
+                onChange={e => setFormData({...formData, remark: e.target.value})} 
+                className={`${winInput} h-20 resize-none`} 
+                placeholder="ဒီ Order နဲ့ပတ်သက်ပြီး မှတ်သားရန်ရှိသည်များကို ရေးသားပါ..."
+              />
+            </div>
+
           </div>
 
           {/* RIGHT COLUMN */}
@@ -433,7 +531,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
               </div>
             </div>
 
-            {/* ★ Voucher Image Section ★ */}
+            {/* Voucher Image Section */}
             <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-xs">
               <label className={labelStyle}>Voucher Image</label>
               {formData.image_url && (

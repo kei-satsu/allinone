@@ -30,8 +30,9 @@ export default function BulkUpdatePage() {
 
   // Bulk Action Update States
   const [bulkRiderId, setBulkRiderId] = useState('')
-  const [bulkStatus, setBulkStatus] = useState('In-Transit') 
+  const [bulkStatus, setBulkStatus] = useState('') 
   const [bulkDeliverDate, setBulkDeliverDate] = useState(new Date().toISOString().split('T')[0])
+  const [bulkNoteAction, setBulkNoteAction] = useState('keep')
 
   // ── Windows 10 style classes ──
   const winInput = "w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all shadow-sm"
@@ -56,15 +57,15 @@ export default function BulkUpdatePage() {
       return
     }
     setUserBranch(storedBranch)
-    fetchRiders()
+    fetchRiders(storedBranch)
     fetchCities()
     fetchRecentOrders(storedBranch)
     
     qrInputRef.current?.focus()
   }, [router])
 
-  async function fetchRiders() {
-    const { data } = await supabase.from('riders').select('*')
+  async function fetchRiders(branch: string) {
+    const { data } = await supabase.from('riders').select('*').eq('branch', branch)
     if (data) setRiders(data)
   }
 
@@ -78,8 +79,8 @@ export default function BulkUpdatePage() {
     const { data, error } = await supabase
       .from('orders')
       .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
-      .eq('branch', branch)
-      .in('status', ['At Office', 'Pending', 'In-Transit'])
+      .or(`branch.eq.${branch},transit_to.eq.${branch}`)
+      .in('status', ['At Office', 'Pending', 'In-Transit','On Way'])
       .order('created_at', { ascending: false })
       .limit(40)
 
@@ -240,6 +241,12 @@ export default function BulkUpdatePage() {
         }
       }
 
+      if (bulkNoteAction === 'rt' && currentOrder.note !== 'RT') {
+        changes.push(`Note တွင် "RT" ဟု သတ်မှတ်ခဲ့သည်`);
+      } else if (bulkNoteAction === 'clear' && currentOrder.note) {
+        changes.push(`Note ထဲရှိ အချက်အလက်များကို ဖယ်ရှားရှင်းလင်းခဲ့သည်`);
+      }
+
       if (changes.length === 0) {
         changes.push("Bulk စနစ်ဖြင့် ပါဆယ်အချက်အလက်များကို ပြင်ဆင်ခဲ့သည်");
       }
@@ -261,8 +268,13 @@ export default function BulkUpdatePage() {
       } else {
         updateData.deliver_rider_id = bulkRiderId || null; // ပုံမှန် Rider ID ဝင်မည်
         updateData.deliver_date = bulkDeliverDate || null; // ပုံမှန် Delivery Date ဝင်မည်
-        updateData.transit_to = null;                      // Transit field များကို clear လုပ်မည်
-        updateData.transit_date = null;
+        
+      }
+
+      if (bulkNoteAction === 'rt') {
+        updateData.note = 'RT';
+      } else if (bulkNoteAction === 'clear') {
+        updateData.note = null;
       }
 
       // Supabase သို့ Update လုပ်ရန် လှမ်းပို့ခြင်း
@@ -279,6 +291,7 @@ export default function BulkUpdatePage() {
       alert(`ပါဆယ်ထုပ် (${selectedIds.length}) ထုပ်အား Status နှင့် လှုပ်ရှားမှုမှတ်တမ်း ပြောင်းလဲခြင်း အောင်မြင်ပါသည်! 🎉`);
       setSelectedIds([])
       setSearchTerm('')
+      setBulkNoteAction('keep')
       fetchRecentOrders(userBranch)
     } else {
       alert("ဒေတာအချို့ကို အပ်ဒိတ်လုပ်ရာတွင် အမှားအယွင်း ရှိခဲ့ပါသည်။ ကျေးဇူးပြု၍ ပြန်လည်စစ်ဆေးပါ။")
@@ -515,6 +528,22 @@ export default function BulkUpdatePage() {
       </label>
       <input type="date" value={bulkDeliverDate} onChange={e => setBulkDeliverDate(e.target.value)} className={winInput + " font-mono"} />
     </div>
+
+    <div>
+    <label className={labelStyle}>4. Note (RT Option)</label>
+    <div className="relative">
+      <select 
+        value={bulkNoteAction} 
+        onChange={e => setBulkNoteAction(e.target.value)} 
+        className={winSelect}
+      >
+        <option value="keep">-- No Change (မပြင်ပါ) --</option>
+        <option value="rt">⚠️ Mark as RT (RT ဟုရေးမည်)</option>
+        <option value="clear">✨ Clear Note (မှတ်ချက်ဖျက်မည်)</option>
+      </select>
+      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">▼</div>
+    </div>
+  </div>
 
     {/* ၄။ Submit Button အပိုင်း */}
     <div>

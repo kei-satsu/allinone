@@ -9,7 +9,7 @@ import GlobalPrintVoucher from "@/components/GlobalPrintVoucher"
 // ──────────────────────────────────────
 // Types & Constants
 // ──────────────────────────────────────
-interface MenuItem { name: string; path: string; icon: React.ReactNode }
+interface MenuItem { name: string; path: string; icon: React.ReactNode;children?: MenuItem[]; }
 interface BranchInfo { code: string; displayName: string; color: string }
 
 const BRANCH_MAP: Record<string, BranchInfo> = {
@@ -87,6 +87,36 @@ const MENU_ITEMS: MenuItem[] = [
 </svg>
     ),
   },
+
+{
+  name: "Transit",
+  path: "/transit",
+  icon: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+    </svg>
+  ),
+  // 🌟 Sub-menu သုံးခုကို children ခံပြီး ထည့်သွင်းခြင်း
+  children: [
+    {
+      name: "Transit In",
+      path: "/transit/in",
+      icon: "📥" // ပိုမိုရှင်းလင်းအောင် Icon အသေးလေးတွေပါ တွဲပေးထားပါတယ်
+    },
+    {
+      name: "Transit Out",
+      path: "/transit/out",
+      icon: "📤"
+    },
+    {
+      name: "Pending In",
+      path: "/transit/pd",
+      icon: "⏳"
+    }
+  ]
+},
+ 
+
   {
     name: "Recently Deleted",
     path: "/trash",
@@ -192,22 +222,75 @@ function useAuth(redirectIfMissing: boolean) {
 }
 
 // ──────────────────────────────────────
-// Sub-component: SidebarMenuItem
+// Sub-component: SidebarMenuItem (TypeScript Error ကင်းစင်သော ပုံစံ)
 // ──────────────────────────────────────
 function SidebarMenuItem({ item, isActive, collapsed, isMobile, onClick }: { item: MenuItem; isActive: boolean; collapsed: boolean; isMobile: boolean; onClick?: () => void }) {
+  const pathname = usePathname()
+  
+  // 🌟 Optional Chaining (?.) သုံးပြီး undefined စစ်ချက်ကို safe ဖြစ်အောင် လုပ်လိုက်ပါပြီ
+  const hasChildren = !!item.children && item.children.length > 0
+  const isChildActive = item.children?.some(child => pathname === child.path) ?? false
+  const [expanded, setExpanded] = useState(isChildActive)
+
+  useEffect(() => {
+    if (isChildActive) setExpanded(true)
+  }, [isChildActive])
+
   return (
-    <Link
-      href={item.path}
-      onClick={onClick}
-      title={collapsed ? item.name : undefined}
-      className={`flex items-center rounded-3xl transition-all duration-200 group relative ${collapsed ? "justify-center p-3" : isMobile ? "px-4 py-3" : "px-3 py-2.5"} ${
-        isActive ? "bg-orange-50 text-orange-600 font-semibold shadow-[inset_0_0_0_1px_rgba(249,115,22,0.15)]" : "hover:bg-slate-100 text-slate-700 hover:text-slate-900"
-      }`}
-    >
-      {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 bg-gradient-to-b from-orange-500 to-amber-500 rounded-r-full" />}
-      <span className={`flex-shrink-0 transition-colors ${isActive ? "text-orange-500" : "text-slate-500 group-hover:text-slate-700"}`}>{item.icon}</span>
-      <span className={`ml-3 text-sm font-medium whitespace-nowrap transition-all duration-200 ${collapsed ? "w-0 opacity-0 overflow-hidden ml-0" : "w-auto opacity-100"}`}>{item.name}</span>
-    </Link>
+    <div className="w-full flex flex-col gap-1">
+      {/* 🔹 အဓိက ခေါင်းစဉ်ကြီး Link အကွက် */}
+      <Link
+        href={item.path}
+        onClick={(e) => {
+          if (hasChildren && !collapsed) {
+            e.preventDefault()
+            setExpanded(!expanded)
+          } else {
+            if (onClick) onClick()
+          }
+        }}
+        title={collapsed ? item.name : undefined}
+        className={`flex items-center rounded-3xl transition-all duration-200 group relative ${collapsed ? "justify-center p-3" : isMobile ? "px-4 py-3" : "px-3 py-2.5"} ${
+          isActive ? "bg-orange-50 text-orange-600 font-semibold shadow-[inset_0_0_0_1px_rgba(249,115,22,0.15)]" : "hover:bg-slate-100 text-slate-700 hover:text-slate-900"
+        }`}
+      >
+        {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 bg-gradient-to-b from-orange-500 to-amber-500 rounded-r-full" />}
+        <span className={`flex-shrink-0 transition-colors ${isActive ? "text-orange-500" : "text-slate-500 group-hover:text-slate-700"}`}>{item.icon}</span>
+        
+        <span className={`ml-3 text-sm font-medium whitespace-nowrap transition-all duration-200 flex-1 flex items-center justify-between ${collapsed ? "w-0 opacity-0 overflow-hidden ml-0" : "w-auto opacity-100"}`}>
+          <span>{item.name}</span>
+          {hasChildren && (
+            <span className={`text-[10px] text-slate-400 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}>
+              ▼
+            </span>
+          )}
+        </span>
+      </Link>
+
+      {/* 📥 Sub-menu Items များကို Map ပတ်ထုတ်ပြမည့်နေရာ */}
+      {hasChildren && expanded && !collapsed && item.children && (
+        <div className={`flex flex-col gap-1 ${isMobile ? "pl-9 pr-2" : "pl-8 pr-1"} border-l border-slate-200 ml-5 mt-0.5 animate-in fade-in slide-in-from-top-1 duration-200`}>
+          {item.children.map((child) => {
+            const isSubActive = pathname === child.path
+            return (
+              <Link
+                key={child.path}
+                href={child.path}
+                onClick={onClick}
+                className={`flex items-center gap-2.5 py-2 px-3 text-xs rounded-2xl transition-all ${
+                  isSubActive 
+                    ? "text-orange-600 font-bold bg-orange-50/50 shadow-[inset_0_0_0_1px_rgba(249,115,22,0.08)]" 
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/60"
+                }`}
+              >
+                <span className="text-sm shrink-0">{child.icon}</span>
+                <span className="truncate">{child.name}</span>
+              </Link>
+            )
+          })}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -240,6 +323,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const isLoginPage = pathname === "/login"
   const isIntakePage = pathname === "/intake" 
+  
   const isVocPage = pathname === "/voc"
   const { branchInfo, isAuthenticated, isReady, logout } = useAuth(!isLoginPage)
   const sidebarRef = useRef<HTMLElement>(null)
@@ -412,16 +496,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         ? "space-y-1 px-2" 
         : "space-y-1 px-3"
   }`}>
-    {MENU_ITEMS.map(item => (
-      <SidebarMenuItem
-        key={item.path}
-        item={item}
-        isActive={pathname === item.path}
-        collapsed={collapsed && !isMobile}
-        isMobile={isMobile}
-        onClick={() => { if (isMobile) setMobileSidebarOpen(false) }}
-      />
-    ))}
+    {MENU_ITEMS.map(item => {
+      // 🌟 မိမိလမ်းကြောင်း သို့မဟုတ် Sub-menu လမ်းကြောင်းတစ်ခုခု ရောက်နေရင် Active ဖြစ်သည်ဟု သတ်မှတ်မည်
+      const isParentActive = pathname === item.path
+      const isChildActive = item.children?.some(child => pathname === child.path) ?? false
+      const isActive = isParentActive || isChildActive
+
+      return (
+        <SidebarMenuItem
+          key={item.path}
+          item={item}
+          isActive={isActive} // 🌟 တွက်ချက်ထားသော Active Status အား ပေးပို့ခြင်း
+          collapsed={collapsed && !isMobile}
+          isMobile={isMobile}
+          onClick={() => { if (isMobile) setMobileSidebarOpen(false) }}
+        />
+      )
+    })}
   </nav>
 
   {/* 👤 User Card & Sign Out Footer */}
