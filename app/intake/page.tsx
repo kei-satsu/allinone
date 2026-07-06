@@ -188,6 +188,7 @@ export default function IntakePage() {
   // 🌟 Live Barcode Scanner Logic (ကင်မရာမှတစ်ဆင့် တိုက်ရိုက်ဖတ်ခြင်း)
   useEffect(() => {
     let scanInterval: NodeJS.Timeout;
+    let scanCanvas: HTMLCanvasElement | null = null;
 
     const startScanner = async () => {
       if (!codeReader.current) {
@@ -195,21 +196,39 @@ export default function IntakePage() {
         codeReader.current = new BrowserMultiFormatReader();
       }
 
+      // မမြင်ရတဲ့ Offscreen Canvas တစ်ခု ဆောက်လိုက်မယ်
+      scanCanvas = document.createElement('canvas');
+
       scanInterval = setInterval(() => {
         if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
-          try {
-            const result = codeReader.current.decodeFromVideoElement(videoRef.current);
-            if (result) {
-              const text = result.getText();
-              playBeepSound(); // ဖတ်မိကြောင်း အသံပေးမည်
-              setCurrentScannedBarcode(text);
-              setBarcodeStep('capturing'); // ဓာတ်ပုံရိုက်ရန် အဆင့်သို့ ကူးမည်
+          const video = videoRef.current;
+          
+          if (scanCanvas) {
+            // ကင်မရာရဲ့ Resolution အတိုင်း Canvas ဆိုဒ်ကို ချိန်မယ်
+            scanCanvas.width = video.videoWidth;
+            scanCanvas.height = video.videoHeight;
+            const ctx = scanCanvas.getContext('2d');
+            
+            if (ctx) {
+              // ဗီဒီယိုရဲ့ လက်ရှိ Frame ပုံရိပ်ကို Canvas ထဲ ကူးထည့်မယ်
+              ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+              
+              try {
+                // 🚀 ဗီဒီယိုကို သွားမထိတော့ဘဲ Canvas ပုံကနေပဲ Barcode ဖတ်ခိုင်းမယ်
+                const result = codeReader.current.decodeFromCanvas(scanCanvas);
+                if (result) {
+                  const text = result.getText();
+                  playBeepSound(); // ဖတ်မိကြောင်း အသံပေးမည်
+                  setCurrentScannedBarcode(text);
+                  setBarcodeStep('capturing'); // ဓာတ်ပုံရိုက်ရန် အဆင့်သို့ ကူးမည်
+                }
+              } catch (error) {
+                // Barcode ရှာမတွေ့သေးရင် (Exception တက်ရင်) ဘာမှမလုပ်ဘဲ ကျော်သွားမယ်
+              }
             }
-          } catch (error) {
-            // NotFoundException (မတွေ့သေးပါက ပုံမှန်ကျော်သွားမည်)
           }
         }
-      }, 400); // 400ms တိုင်း Barcode ရှိမရှိ စစ်ဆေးမည်
+      }, 450); // 450ms တိုင်း တစ်ခါ စစ်ဆေးမည်
     };
 
     if (flowMode === 'camera' && intakeMethod === 'with-barcode' && barcodeStep === 'scanning' && cameraActive) {
