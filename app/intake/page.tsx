@@ -8,6 +8,7 @@ import Konva from 'konva';
 import { Stage, Layer, Image as KonvaImage, Text as KonvaText } from 'react-konva';
 import useImage from 'use-image';
 import EasyCrop, { Area } from 'react-easy-crop';
+import { Scanner } from '@yudiel/react-qr-scanner'; // 📸 ယခင်ဖိုင်အတိုင်း Camera Scanner Package ကို အသုံးပြုမည်
 
 // TypeScript Interface
 interface CapturedFile {
@@ -31,16 +32,13 @@ export default function IntakePage() {
   const stageRef = useRef<Konva.Stage>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const touchStartX = useRef<number | null>(null);
-  
-  // 🌟 ZXing Barcode Reader ကို သိမ်းထားရန်
-  const codeReader = useRef<any>(null);
 
   // State Management
   const [capturedImages, setCapturedImages] = useState<CapturedFile[]>([]);
   const [currentIdx, setCurrentIdx] = useState<number>(0); 
   const [userBranch, setUserBranch] = useState('MDY');
   
-  // Barcode စနစ် လုပ်ငန်းစဉ်အသစ်အတွက် State များ
+  // Barcode စနစ် လုပ်ငန်းစဉ်အတွက် State များ
   const [intakeMethod, setIntakeMethod] = useState<'choose' | 'no-barcode' | 'with-barcode'>('choose');
   const [barcodeStep, setBarcodeStep] = useState<'scanning' | 'capturing'>('scanning');
   const [currentScannedBarcode, setCurrentScannedBarcode] = useState('');
@@ -98,14 +96,47 @@ export default function IntakePage() {
     if (storedBranch) setUserBranch(storedBranch);
   }, []);
 
-  // ကင်မရာ Lifecycle ထိန်းချုပ်ခြင်း
+  // 📸 ကင်မရာစဖွင့်ခြင်း
+  const startCamera = useCallback(async () => {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) return setCameraSupported(false);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setCameraActive(true);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.onloadedmetadata = () => videoRef.current?.play().catch(() => {});
+      }
+    } catch (err) {
+      setCameraSupported(false);
+    }
+  }, [facingMode]);
+
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraActive(false);
+  }, []);
+
+  // 🌟 ကင်မရာ Lifecycle ထိန်းချုပ်ခြင်း (ပြိုင်တူပွင့်ပြီး Error မတက်အောင် စနစ်တကျ ခွဲထုတ်ထားသည်)
   useEffect(() => {
     if (flowMode === 'camera' && intakeMethod !== 'choose') {
-      startCamera();
+      // Barcode ဖတ်နေချိန်ဆိုလျှင် Native Camera ကို ပိတ်ထားပြီး Package Scanner ကိုပဲ ဖွင့်ပေးမည်
+      if (intakeMethod === 'with-barcode' && barcodeStep === 'scanning') {
+        stopCamera();
+      } else {
+        startCamera();
+      }
     } else {
       stopCamera();
     }
-  }, [flowMode, intakeMethod]);
+  }, [flowMode, intakeMethod, barcodeStep, startCamera, stopCamera]);
 
   useEffect(() => {
     return () => stopCamera();
@@ -156,106 +187,6 @@ export default function IntakePage() {
       whiteNoise.stop(audioCtx.currentTime + 0.08);
     } catch(e) {}
   };
-
-  // 📸 ကင်မရာစဖွင့်ခြင်း
-  const startCamera = useCallback(async () => {
-    try {
-      if (!navigator.mediaDevices?.getUserMedia) return setCameraSupported(false);
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        audio: false,
-      });
-      streamRef.current = stream;
-      setCameraActive(true);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.onloadedmetadata = () => videoRef.current?.play().catch(() => {});
-      }
-    } catch (err) {
-      setCameraSupported(false);
-    }
-  }, [facingMode]);
-
-  const stopCamera = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) videoRef.current.srcObject = null;
-    setCameraActive(false);
-  }, []);
-
-  // 🌟 Live Barcode Scanner Logic (အဆင့်မြှင့်တင်ထားသော ပုံစံသစ်)
-  useEffect(() => {
-    let isScanning = true;
-    let timeoutId: NodeJS.Timeout;
-    let scanCanvas: HTMLCanvasElement | null = null;
-
-    const startScanner = async () => {
-      // ၁။ Library ကို စက္ကန့်ပိုင်းအတွင်း dynamic အလုပ်လုပ်အောင် ခေါ်ယူမည်
-      if (!codeReader.current) {
-        try {
-          const { BrowserMultiFormatReader } = await import('@zxing/library');
-          codeReader.current = new BrowserMultiFormatReader();
-        } catch (err) {
-          console.error("Failed to load ZXing library", err);
-          return;
-        }
-      }
-
-      scanCanvas = document.createElement('canvas');
-
-      // ၂။ Loop ပတ်ပြီး စကန်ဖတ်မည့် အစိတ်အပိုင်း
-      const scanLoop = async () => {
-        if (!isScanning) return;
-
-        if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
-          const video = videoRef.current;
-          
-          if (scanCanvas) {
-            scanCanvas.width = video.videoWidth;
-            scanCanvas.height = video.videoHeight;
-            const ctx = scanCanvas.getContext('2d');
-            
-            if (ctx) {
-              ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-              
-              try {
-                // 🚀 `await` ကိုသုံးပြီး Barcode ရှာဖွေတွေ့ရှိမှုကို အမှန်တကယ် စောင့်ဆိုင်းခြင်း
-                const result = await codeReader.current.decodeFromCanvas(scanCanvas);
-                if (result && isScanning) {
-                  const text = result.getText();
-                  playBeepSound(); 
-                  setCurrentScannedBarcode(text);
-                  setBarcodeStep('capturing'); // ဓာတ်ပုံရိုက်ရန် အဆင့်သို့ ကူးမည်
-                  return; // အောင်မြင်သွားပါက လက်ရှိ loop ကို ရပ်တန့်မည်
-                }
-              } catch (error) {
-                // Barcode ရှာမတွေ့သေးပါက error ပြစ်မည်ဖြစ်၍ မည်သည့်အရာမျှ မလုပ်ဘဲ ကျော်သွားမည်
-              }
-            }
-          }
-        }
-
-        // စကန်ဖတ်ခြင်း မပြီးမချင်း 350ms ခြားပြီး နောက်တစ်ကြိမ် ထပ်မံလုပ်ဆောင်မည် (Overlapping လုံးဝမဖြစ်စေရန်)
-        if (isScanning) {
-          timeoutId = setTimeout(scanLoop, 350);
-        }
-      };
-
-      scanLoop();
-    };
-
-    if (flowMode === 'camera' && intakeMethod === 'with-barcode' && barcodeStep === 'scanning' && cameraActive) {
-      startScanner();
-    }
-
-    return () => {
-      isScanning = false;
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [flowMode, intakeMethod, barcodeStep, cameraActive]);
-
 
   const handleGallerySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
@@ -315,7 +246,7 @@ export default function IntakePage() {
           return updated;
         });
 
-        // 🌟 ပုံရိုက်ပြီးပါက နောက်တစ်ထုပ်အတွက် Scanner ကို ချက်ချင်းပြန်ဖွင့်ပေးမည်
+        // ပုံရိုက်ပြီးပါက နောက်တစ်ထုပ်အတွက် စကင်နာကို ပြန်ဖွင့်ပေးမည်
         if (intakeMethod === 'with-barcode') {
           setBarcodeStep('scanning');
           setCurrentScannedBarcode('');
@@ -465,7 +396,7 @@ export default function IntakePage() {
         <div className="fixed inset-0 bg-neutral-950 z-[400] flex flex-col items-center justify-center p-6 text-center">
           <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/20 text-orange-500 rounded-full flex items-center justify-center mb-4 text-2xl shadow-xl animate-pulse">📷</div>
           <h2 className="text-xl font-bold text-orange-500 mb-2 uppercase tracking-wider">ALL IN ONE DELI</h2>
-          <p className="text-gray-400 text-xs mb-8 max-w-xs">ဓာတ်ပုံမရိုက်မီ လုပ်ငန်းစဉ် အမျိုးအစားကို ရွေးချယ်ပေးပါဗျာ။</p>
+          <p className="text-gray-400 text-xs mb-8 max-w-xs">ဓာတ်ပုံမရိုက်မီ လုပ်ငန်းစဉ် အမျိုးအစားကို ရွေးချယ်ပေးပါဗျာ Tail</p>
           
           <div className="w-full max-w-xs flex flex-col gap-4">
             <button onClick={() => setIntakeMethod('no-barcode')} className="w-full py-4 bg-neutral-900 border border-neutral-800 rounded-2xl font-bold text-sm text-white active:scale-95 transition shadow-lg flex items-center justify-center gap-3">
@@ -539,32 +470,55 @@ export default function IntakePage() {
           <div className="flex-1 flex items-center justify-center my-2 overflow-hidden relative">
             <div className="w-full h-full bg-neutral-950 rounded-2xl overflow-hidden shadow-2xl relative border border-neutral-800 flex items-center justify-center">
               
-              <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" playsInline muted autoPlay />
-              <canvas ref={canvasRef} className="hidden" />
-
-              {/* 🌟 SCANNING LASER OVERLAY */}
-              {intakeMethod === 'with-barcode' && barcodeStep === 'scanning' && (
-                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center pointer-events-none">
-                  {/* Focus Box */}
-                  <div className="w-[75%] max-w-[300px] aspect-[2/1] border-2 border-orange-500 rounded-xl relative overflow-hidden bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.6)]">
-                    <div className="w-full h-[2px] bg-orange-500 shadow-[0_0_15px_3px_rgba(249,115,22,0.8)] absolute animate-scan-laser"></div>
-                  </div>
+              {/* 🌟 `@yudiel/react-qr-scanner` စနစ်ကို ယခင်ဖိုင်အတိုင်း စနစ်တကျ ပြောင်းလဲအသုံးပြုထားခြင်း */}
+              {intakeMethod === 'with-barcode' && barcodeStep === 'scanning' ? (
+                <div className="absolute inset-0 w-full h-full z-10 bg-black">
+                  <Scanner
+                    onScan={(detectedCodes) => {
+                      if (detectedCodes && detectedCodes.length > 0) {
+                        const text = detectedCodes[0]?.rawValue || detectedCodes[0]?.text;
+                        if (text) {
+                          playBeepSound();
+                          setCurrentScannedBarcode(text);
+                          setBarcodeStep('capturing'); // ဓာတ်ပုံရိုက်မည့် Native ကင်မရာအဆင့်သို့ ကူးပြောင်းမည်
+                        }
+                      }
+                    }}
+                    onError={(error) => console.error("Scanner Error:", error)}
+                    styles={{
+                      container: { width: '100%', height: '100%' },
+                      video: { objectFit: 'cover' }
+                    }}
+                  />
                   
-                  {/* Instructions & Manual Input Button */}
-                  <div className="mt-8 bg-black/80 px-5 py-3 rounded-full text-white text-xs font-bold flex gap-4 items-center pointer-events-auto border border-neutral-700 shadow-xl">
-                    <span className="animate-pulse">📦 Barcode ဖတ်နေသည်...</span>
-                    <div className="w-px h-4 bg-neutral-600"></div>
-                    <button 
-                      onClick={() => {
-                        const code = window.prompt('Barcode နံပါတ်ကို ကိုယ်တိုင်ရိုက်ထည့်ပါ:');
-                        if(code?.trim()) { setCurrentScannedBarcode(code.trim()); setBarcodeStep('capturing'); }
-                      }} 
-                      className="text-orange-400 active:scale-90 transition-transform border border-orange-500/30 px-3 py-1 rounded bg-orange-500/10"
-                    >
-                      စာရိုက်မည်
-                    </button>
+                  {/* Scanning Laser Focus Overlay */}
+                  <div className="absolute inset-0 z-20 flex flex-col items-center justify-center pointer-events-none">
+                    <div className="w-[75%] max-w-[300px] aspect-[2/1] border-2 border-orange-500 rounded-xl relative overflow-hidden bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.6)]">
+                      <div className="w-full h-[2px] bg-orange-500 shadow-[0_0_15px_3px_rgba(249,115,22,0.8)] absolute animate-scan-laser"></div>
+                    </div>
+                    
+                    {/* Manual Input Trigger */}
+                    <div className="mt-8 bg-black/80 px-5 py-3 rounded-full text-white text-xs font-bold flex gap-4 items-center pointer-events-auto border border-neutral-700 shadow-xl">
+                      <span className="animate-pulse">📦 Barcode ဖတ်နေသည်...</span>
+                      <div className="w-px h-4 bg-neutral-600"></div>
+                      <button 
+                        onClick={() => {
+                          const code = window.prompt('Barcode နံပါတ်ကို ကိုယ်တိုင်ရိုက်ထည့်ပါ:');
+                          if(code?.trim()) { setCurrentScannedBarcode(code.trim()); setBarcodeStep('capturing'); }
+                        }} 
+                        className="text-orange-400 active:scale-90 transition-transform border border-orange-500/30 px-3 py-1 rounded bg-orange-500/10"
+                      >
+                        စာရိုက်မည်
+                      </button>
+                    </div>
                   </div>
                 </div>
+              ) : (
+                <>
+                  {/* ဓာတ်ပုံရိုက်ရန်အတွက် သီးသန့်အလုပ်လုပ်မည့် Native High-res Camera Feed */}
+                  <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" playsInline muted autoPlay />
+                  <canvas ref={canvasRef} className="hidden" />
+                </>
               )}
 
             </div>
