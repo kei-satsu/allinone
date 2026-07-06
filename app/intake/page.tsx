@@ -8,7 +8,7 @@ import Konva from 'konva';
 import { Stage, Layer, Image as KonvaImage, Text as KonvaText } from 'react-konva';
 import useImage from 'use-image';
 import EasyCrop, { Area } from 'react-easy-crop';
-import { Scanner } from '@yudiel/react-qr-scanner'; // 📸 ယခင်ဖိုင်အတိုင်း Camera Scanner Package ကို အသုံးပြုမည်
+import { Scanner } from '@yudiel/react-qr-scanner'; // 📸 Camera Scanner Package
 
 // TypeScript Interface
 interface CapturedFile {
@@ -42,6 +42,7 @@ export default function IntakePage() {
   const [intakeMethod, setIntakeMethod] = useState<'choose' | 'no-barcode' | 'with-barcode'>('choose');
   const [barcodeStep, setBarcodeStep] = useState<'scanning' | 'capturing'>('scanning');
   const [currentScannedBarcode, setCurrentScannedBarcode] = useState('');
+  const [cameraLoading, setCameraLoading] = useState(false); // Scanner Loading State
 
   // Background Upload Queue States
   const [isBackgroundUploading, setIsBackgroundUploading] = useState(false);
@@ -96,7 +97,7 @@ export default function IntakePage() {
     if (storedBranch) setUserBranch(storedBranch);
   }, []);
 
-  // 📸 ကင်မရာစဖွင့်ခြင်း
+  // 📸 Native Camera ဖွင့်ခြင်း
   const startCamera = useCallback(async () => {
     try {
       if (!navigator.mediaDevices?.getUserMedia) return setCameraSupported(false);
@@ -124,14 +125,13 @@ export default function IntakePage() {
     setCameraActive(false);
   }, []);
 
-  // 🌟 ကင်မရာ Lifecycle ထိန်းချုပ်ခြင်း (ပြိုင်တူပွင့်ပြီး Error မတက်အောင် စနစ်တကျ ခွဲထုတ်ထားသည်)
+  // 🌟 Camera Resource ခွဲဝေမှု Lifecycle
   useEffect(() => {
     if (flowMode === 'camera' && intakeMethod !== 'choose') {
-      // Barcode ဖတ်နေချိန်ဆိုလျှင် Native Camera ကို ပိတ်ထားပြီး Package Scanner ကိုပဲ ဖွင့်ပေးမည်
       if (intakeMethod === 'with-barcode' && barcodeStep === 'scanning') {
-        stopCamera();
+        stopCamera(); // Scanner အလုပ်လုပ်ချိန် Native ကင်မရာကို ပိတ်ထားမည်
       } else {
-        startCamera();
+        startCamera(); // ဓာတ်ပုံရိုက်ချိန် Native ကင်မရာကို ပြန်ဖွင့်မည်
       }
     } else {
       stopCamera();
@@ -186,6 +186,19 @@ export default function IntakePage() {
       whiteNoise.start();
       whiteNoise.stop(audioCtx.currentTime + 0.08);
     } catch(e) {}
+  };
+
+  // 📸 Scanner ဖတ်မိသည့်အခါ အလုပ်လုပ်မည့် စနစ်
+  const handleCameraScan = async (detectedCodes: any[]) => {
+    if (detectedCodes.length === 0 || cameraLoading) return;
+    const value = detectedCodes[0].rawValue;
+    if (!value) return;
+
+    setCameraLoading(true);
+    playBeepSound(); // ဖတ်မိကြောင်း အသံပေးမည်
+    setCurrentScannedBarcode(value); // Barcode ဂဏန်းကို သိမ်းဆည်းမည်
+    setBarcodeStep('capturing'); // Scanner ပိတ်ပြီး Native Camera ဖွင့်ရန် Step ပြောင်းမည်
+    setCameraLoading(false);
   };
 
   const handleGallerySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -246,7 +259,7 @@ export default function IntakePage() {
           return updated;
         });
 
-        // ပုံရိုက်ပြီးပါက နောက်တစ်ထုပ်အတွက် စကင်နာကို ပြန်ဖွင့်ပေးမည်
+        // ဓာတ်ပုံရိုက်ပြီးပါက နောက်တစ်ထုပ်အတွက် စကင်နာ ပြန်ဖွင့်ပေးမည်
         if (intakeMethod === 'with-barcode') {
           setBarcodeStep('scanning');
           setCurrentScannedBarcode('');
@@ -279,11 +292,11 @@ export default function IntakePage() {
     setCapturedImages(capturedImages.map((img) => img.id === currentImgObj.id ? { ...img, textAnnotations: img.textAnnotations.map((ann) => ann.id === annId ? { ...ann, x, y } : ann) } : img));
   };
 
-  const removeAnnotation = (annId: string) => {
+  const deleteAnnotation = (annId: string) => {
     setCapturedImages(capturedImages.map((img) => img.id === currentImgObj.id ? { ...img, textAnnotations: img.textAnnotations.filter((ann) => ann.id !== annId) } : img));
   };
 
-  const onCropComplete = useCallback((croppedArea: Area, croppedAreaPixels: Area) => setCroppedAreaPixels(croppedAreaPixels), []);
+  const handleCropComplete = useCallback((croppedArea: Area, croppedAreaPixels: Area) => setCroppedAreaPixels(croppedAreaPixels), []);
 
   const handleCropSave = () => {
     if (currentCropOrder && croppedAreaPixels) {
@@ -300,280 +313,287 @@ export default function IntakePage() {
       img.src = imgObj.preview;
       img.onload = () => {
         const offscreenCanvas = document.createElement('canvas');
-        offscreenCanvas.width = img.width; offscreenCanvas.height = img.height;
+        offscreenCanvas.width = img.width;
+        offscreenCanvas.height = img.height;
         const ctx = offscreenCanvas.getContext('2d');
         if (!ctx) return resolve(imgObj.file);
 
         ctx.drawImage(img, 0, 0);
         const scale = img.width / stageDimensions.width;
+        
         ctx.fillStyle = 'white';
         ctx.font = `bold ${Math.round(24 * scale)}px sans-serif`;
         ctx.textBaseline = 'top';
 
-        imgObj.textAnnotations.forEach((ann) => ctx.fillText(ann.text, ann.x * scale, ann.y * scale));
-        offscreenCanvas.toBlob((blob) => resolve(blob || imgObj.file), 'image/jpeg', 0.95);
+        imgObj.textAnnotations.forEach((ann) => {
+          const textX = ann.x * scale;
+          const textY = ann.y * scale;
+          ctx.fillText(ann.text, textX, textY);
+        });
+
+        offscreenCanvas.toBlob((bakedBlob) => {
+          if (bakedBlob) {
+            resolve(new File([bakedBlob], imgObj.file.name, { type: 'image/jpeg' }));
+          } else {
+            resolve(imgObj.file);
+          }
+        }, 'image/jpeg', 0.92);
       };
       img.onerror = () => resolve(imgObj.file);
     });
   };
 
-  const handleFinalUploadAll = async () => {
-    if (capturedImages.length === 0) return;
-    
-    const imagesToUpload = [...capturedImages];
-    const currentNote = batchNote;
-
-    setCapturedImages([]);
-    setBatchNote('');
-    setFlowMode('camera');
-    setIntakeMethod('choose'); 
-
+  const startBackgroundUpload = async (finalImages: CapturedFile[]) => {
     setIsBackgroundUploading(true);
-    setBackgroundUploadCount(imagesToUpload.length);
+    setBackgroundUploadCount(finalImages.length);
     setBackgroundUploadStatus('uploading');
 
-    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-    if (!cloudName) {
-      alert('Cloudinary Cloud Name not set.');
-      setBackgroundUploadStatus('error');
-      setTimeout(() => setIsBackgroundUploading(false), 3000);
-      return;
-    }
-
     try {
-      for (let i = 0; i < imagesToUpload.length; i++) {
-        const imgObj = imagesToUpload[i];
-        let fileToUpload: Blob | File = imgObj.file;
-        if (imgObj.textAnnotations.length > 0) fileToUpload = await bakeImageWithText(imgObj);
+      for (let i = 0; i < finalImages.length; i++) {
+        const imgObj = finalImages[i];
+        let fileToUpload = imgObj.file;
 
-        const formData = new FormData();
-        formData.append('file', fileToUpload);
-        formData.append('upload_preset', 'for_allinone');
+        if (imgObj.textAnnotations.length > 0) {
+          fileToUpload = (await bakeImageWithText(imgObj)) as File;
+        }
 
-        const cloudinaryRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, { method: 'POST', body: formData });
-        const cloudinaryData = await cloudinaryRes.json();
-        if (!cloudinaryData.secure_url) throw new Error('Cloudinary upload failed');
+        const fileExt = 'jpg';
+        const fileName = `${userBranch}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+        const filePath = `intake/${fileName}`;
 
-        const { error } = await supabase.from('orders').insert([
-          {
-            image_url: cloudinaryData.secure_url,
-            branch: userBranch,
-            status: 'Pending',
-            received_date: new Date().toISOString().split('T')[0],
-            uploader_note: currentNote.trim() || null, 
-            barcode: imgObj.barcode || null, 
-          },
-        ]);
-        if (error) throw new Error(`DB Error: ${error.message}`);
-        setBackgroundUploadCount(prev => prev - 1);
+        const { error: uploadError } = await supabase.storage
+          .from('parcel-images')
+          .upload(filePath, fileToUpload);
+
+        if (uploadError) throw uploadError;
+
+        const { data: publicUrlData } = supabase.storage
+          .from('parcel-images')
+          .getPublicUrl(filePath);
+
+        const publicUrl = publicUrlData?.publicUrl;
+
+        const { error: dbError } = await supabase.from('intake_records').insert({
+          branch: userBranch,
+          image_url: publicUrl,
+          barcode: imgObj.barcode || null,
+          note: batchNote.trim() || null,
+          quality: imgObj.quality,
+          metadata: {
+            cropped: !!imgObj.croppedAreaPixels,
+            annotations_count: imgObj.textAnnotations.length
+          }
+        });
+
+        if (dbError) throw dbError;
+        setBackgroundUploadCount((prev) => Math.max(0, prev - 1));
       }
-
       setBackgroundUploadStatus('success');
-      setTimeout(() => setIsBackgroundUploading(false), 3000);
-    } catch (error: any) {
+    } catch (err) {
       setBackgroundUploadStatus('error');
-      setTimeout(() => setIsBackgroundUploading(false), 5000);
+    } finally {
+      setIsBackgroundUploading(false);
     }
   };
 
-  return (
-    <div className="h-[100dvh] w-full flex flex-col bg-black font-sans select-none overflow-hidden text-sm text-white relative">
-      
-      {/* Animation CSS for Scanner Laser */}
-      <style>{`
-        @keyframes scanLaser {
-          0% { top: 0; }
-          50% { top: 100%; }
-          100% { top: 0; }
-        }
-        .animate-scan-laser {
-          animation: scanLaser 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-        }
-      `}</style>
+  const handleFinalSubmit = async () => {
+    if (capturedImages.length === 0) return alert('ဓာတ်ပုံ အနည်းဆုံး ၁ ပုံ ရိုက်ပေးပါဗျာ');
+    const imagesToUpload = [...capturedImages];
+    
+    setCapturedImages([]);
+    setFlowMode('camera');
+    setIntakeMethod('choose');
+    setBatchNote('');
+    
+    startBackgroundUpload(imagesToUpload);
+    alert('ပါဆယ်မှတ်တမ်းများကို နောက်ကွယ် (Background) မှ စတင်အပ်ဒိတ်လုပ်နေပါပြီဗျာ။');
+  };
 
-      {/* 0. WORKFLOW SELECTION */}
+  return (
+    <div className="flex flex-col h-screen bg-black text-white select-none overflow-hidden max-w-md mx-auto relative font-sans">
+      
+      {/* BACKGROUND UPLOADER STATUS NOTIFICATION */}
+      {backgroundUploadStatus !== 'idle' && (
+        <div className={`absolute top-14 left-2 right-2 z-50 p-3 rounded-xl border flex items-center justify-between text-xs font-medium shadow-2xl backdrop-blur transition-all ${
+          backgroundUploadStatus === 'uploading' ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' :
+          backgroundUploadStatus === 'success' ? 'bg-green-500/10 border-green-500/30 text-green-400' :
+          'bg-red-500/10 border-red-500/30 text-red-400'
+        }`}>
+          <div className="flex items-center gap-2">
+            {backgroundUploadStatus === 'uploading' && <div className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />}
+            <span>
+              {backgroundUploadStatus === 'uploading' && `ပါဆယ်ပုံရိပ်များ Upload တင်နေဆဲ... ကျန်ရှိပုံစံ (${backgroundUploadCount})`}
+              {backgroundUploadStatus === 'success' && 'ယခင်ပါဆယ်မှတ်တမ်းများ အားလုံး အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။'}
+              {backgroundUploadStatus === 'error' && 'အချို့ပုံများ သိမ်းဆည်းရန် အဆင်မပြေဖြစ်ခဲ့ပါ။ အင်တာနက် စစ်ဆေးပါ။'}
+            </span>
+          </div>
+          {backgroundUploadStatus !== 'uploading' && (
+            <button onClick={() => setBackgroundUploadStatus('idle')} className="text-[10px] uppercase font-bold opacity-60 hover:opacity-100">ပိတ်မည်</button>
+          )}
+        </div>
+      )}
+
+      {/* CHOOSE METHOD SCREEN */}
       {intakeMethod === 'choose' && (
-        <div className="fixed inset-0 bg-neutral-950 z-[400] flex flex-col items-center justify-center p-6 text-center">
-          <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/20 text-orange-500 rounded-full flex items-center justify-center mb-4 text-2xl shadow-xl animate-pulse">📷</div>
+        <div className="flex-1 flex flex-col items-center justify-center p-6 bg-gradient-to-b from-neutral-900 to-black text-center animate-fade-in">
+          <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/30 text-orange-500 rounded-full flex items-center justify-center mb-4 text-2xl shadow-xl animate-pulse">📷</div>
           <h2 className="text-xl font-bold text-orange-500 mb-2 uppercase tracking-wider">ALL IN ONE DELI</h2>
-          <p className="text-gray-400 text-xs mb-8 max-w-xs">ဓာတ်ပုံမရိုက်မီ လုပ်ငန်းစဉ် အမျိုးအစားကို ရွေးချယ်ပေးပါဗျာ Tail</p>
+          <p className="text-gray-400 text-xs mb-8 max-w-xs">ဓာတ်ပုံမရိုက်မီ လုပ်ငန်းစဉ် အမျိုးအစားကို ရွေးချယ်ပေးပါဗျာ</p>
           
           <div className="w-full max-w-xs flex flex-col gap-4">
-            <button onClick={() => setIntakeMethod('no-barcode')} className="w-full py-4 bg-neutral-900 border border-neutral-800 rounded-2xl font-bold text-sm text-white active:scale-95 transition shadow-lg flex items-center justify-center gap-3">
+            <button 
+              onClick={() => setIntakeMethod('no-barcode')}
+              className="w-full py-4 bg-neutral-900 border border-neutral-800 rounded-2xl font-bold text-sm text-white active:scale-95 transition shadow-lg flex items-center justify-center gap-3"
+            >
               📷 Barcode မပါဘဲ ပုံရိုက်မည်
             </button>
-            <button onClick={() => { setIntakeMethod('with-barcode'); setBarcodeStep('scanning'); }} className="w-full py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-2xl font-bold text-sm active:scale-95 transition shadow-lg flex items-center justify-center gap-3 shadow-orange-500/10">
-              📦 Barcode + ပုံတွဲရိုက်မည်
+            <button 
+              onClick={() => { setIntakeMethod('with-barcode'); setBarcodeStep('scanning'); }}
+              className="w-full py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-neutral-950 rounded-2xl font-black text-sm active:scale-95 transition shadow-lg flex items-center justify-center gap-3"
+            >
+              🔍 Barcode ရိုက်ပြီး ပုံဖတ်မည်
             </button>
           </div>
         </div>
       )}
 
-      {/* Upload Indicator */}
-      {isBackgroundUploading && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[300] flex items-center gap-2 px-3 py-1.5 bg-neutral-900/90 backdrop-blur-md border border-neutral-700/50 rounded-full shadow-lg transition-all">
-          {backgroundUploadStatus === 'uploading' && (<><div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /><span className="text-[10px] font-bold text-blue-400 tracking-wider">UPLOADING {backgroundUploadCount} ITEMS</span></>)}
-          {backgroundUploadStatus === 'success' && (<><svg className="w-3.5 h-3.5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg><span className="text-[10px] font-bold text-green-400 tracking-wider">SUCCESS!</span></>)}
-          {backgroundUploadStatus === 'error' && (<><svg className="w-3.5 h-3.5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg><span className="text-[10px] font-bold text-red-400 tracking-wider">UPLOAD FAILED</span></>)}
-        </div>
-      )}
-
-      <input type="file" ref={fileInputRef} onChange={handleGallerySelect} accept="image/*" multiple className="hidden" />
-      <div ref={shutterFlashRef} className="fixed inset-0 bg-white opacity-0 z-[100] pointer-events-none hidden" />
-
-      {/* Crop Modal */}
-      {showCropModal && currentCropOrder && (
-        <div className="fixed inset-0 bg-black z-[200] flex flex-col">
-          <div className="bg-neutral-900 border-b border-neutral-800 px-4 py-3 flex justify-between items-center text-white font-medium">
-            <button onClick={() => { setShowCropModal(false); setCurrentCropOrder(null); }} className="text-sm font-semibold text-gray-400">Back</button>
-            <h1 className="text-base font-bold uppercase tracking-wider text-orange-500">Free Crop</h1>
-            <button onClick={handleCropSave} className="text-sm text-orange-500 font-bold active:scale-95 transition">Save</button>
-          </div>
-          <div className="relative flex-1 bg-black p-2 flex items-center justify-center">
-            <div className="relative w-full h-full max-h-[70vh] bg-neutral-900 rounded-xl overflow-hidden shadow-2xl border border-neutral-800">
-                <EasyCrop image={currentCropOrder.preview} crop={cropState} zoom={zoomState} aspect={undefined} showGrid={true} onCropChange={setCropState} onCropComplete={onCropComplete} onZoomChange={setZoomState} />
-            </div>
-          </div>
-          <div className="bg-neutral-900 px-6 py-5 flex flex-col gap-2 pb-8 border-t border-neutral-800">
-             <span className='text-[11px] text-gray-400 text-center mb-1'>Slide to Zoom Image</span>
-             <input type="range" value={zoomState} min={1} max={3} step={0.1} onChange={(e) => setZoomState(Number(e.target.value))} className="w-full accent-orange-500 bg-neutral-800 rounded-lg appearance-none cursor-pointer h-2" />
-          </div>
-        </div>
-      )}
-
-      {/* ၁။ CAMERA & SCANNER MODE VIEW */}
-      {flowMode === 'camera' && intakeMethod !== 'choose' && (
-        <div className="flex-1 flex flex-col justify-between p-3 relative h-full">
+      {/* CAMERA / SCANNER MODE */}
+      {intakeMethod !== 'choose' && flowMode === 'camera' && (
+        <div className="flex-1 flex flex-col bg-black relative justify-between overflow-hidden">
           
-          {/* Top Header Row */}
-          <div className="flex justify-between items-center px-2 py-1 z-10 flex-shrink-0">
-            <button onClick={() => { if(window.confirm('လုပ်ငန်းစဉ်ရွေးချယ်မှု စာမျက်နှာသို့ ပြန်သွားလိုပါသလား?')) { setIntakeMethod('choose'); stopCamera(); } }} className="w-9 h-9 flex items-center justify-center bg-neutral-900/60 rounded-full border border-neutral-800 text-gray-300 font-bold active:scale-90 transition-transform text-xs">
+          {/* Header */}
+          <div className="absolute top-0 inset-x-0 bg-gradient-to-b from-black/80 to-transparent p-3 flex items-center justify-between z-30 px-4">
+            <button 
+              onClick={() => {
+                if(window.confirm('လုပ်ငန်းစဉ်ရွေးချယ်မှု စာမျက်နှာသို့ ပြန်သွားလိုပါသလား?')) {
+                  setIntakeMethod('choose');
+                  stopCamera();
+                }
+              }}
+              className="w-9 h-9 flex items-center justify-center bg-neutral-900/60 rounded-full border border-neutral-800 text-gray-300 font-bold active:scale-90 transition-transform text-xs"
+            >
               ←
             </button>
             <div className="bg-neutral-900/80 px-3 py-1 rounded-full border border-neutral-800 text-[11px] font-bold tracking-wider text-orange-400 uppercase">
-              {intakeMethod === 'with-barcode' ? (barcodeStep === 'scanning' ? 'Scanning...' : 'Barcode Linked Mode') : `${userBranch} Camera`}
+              {intakeMethod === 'with-barcode' ? (barcodeStep === 'scanning' ? '🔍 Scanner ပွင့်နေသည်' : '📷 ဓာတ်ပုံရိုက်ရန်') : `${userBranch} Camera`}
             </div>
-            <button onClick={switchFacingMode} className="w-9 h-9 flex items-center justify-center bg-neutral-900/60 rounded-full border border-neutral-800 active:text-orange-500 transition-colors">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>
+            <button onClick={switchFacingMode} className="w-9 h-9 flex items-center justify-center bg-neutral-900/60 rounded-full border border-neutral-800 text-gray-300 active:scale-90 transition-transform">
+              🔄
             </button>
           </div>
 
-          {/* Barcode Captured Badge */}
-          {intakeMethod === 'with-barcode' && barcodeStep === 'capturing' && (
-            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold font-mono text-xs px-4 py-1.5 rounded-full shadow-xl animate-slideDown">
-              <span>📦 CODE: {currentScannedBarcode}</span>
-              <button onClick={() => { setBarcodeStep('scanning'); setCurrentScannedBarcode(''); }} className="bg-black/20 text-[9px] px-1.5 py-0.5 rounded-md font-sans ml-1.5 hover:bg-black/40 active:scale-90 transition-transform">Re-scan</button>
-            </div>
-          )}
-
-          {/* Viewfinder Area */}
-          <div className="flex-1 flex items-center justify-center my-2 overflow-hidden relative">
-            <div className="w-full h-full bg-neutral-950 rounded-2xl overflow-hidden shadow-2xl relative border border-neutral-800 flex items-center justify-center">
-              
-              {/* 🌟 `@yudiel/react-qr-scanner` စနစ်ကို ယခင်ဖိုင်အတိုင်း စနစ်တကျ ပြောင်းလဲအသုံးပြုထားခြင်း */}
-              {intakeMethod === 'with-barcode' && barcodeStep === 'scanning' ? (
-                <div className="absolute inset-0 w-full h-full z-10 bg-black">
-                  <Scanner
-                    onScan={(detectedCodes) => {
-                      if (detectedCodes && detectedCodes.length > 0) {
-                        const text = detectedCodes[0]?.rawValue || detectedCodes[0]?.text;
-                        if (text) {
-                          playBeepSound();
-                          setCurrentScannedBarcode(text);
-                          setBarcodeStep('capturing'); // ဓာတ်ပုံရိုက်မည့် Native ကင်မရာအဆင့်သို့ ကူးပြောင်းမည်
-                        }
-                      }
-                    }}
-                    onError={(error) => console.error("Scanner Error:", error)}
-                    styles={{
-                      container: { width: '100%', height: '100%' },
-                      video: { objectFit: 'cover' }
-                    }}
-                  />
-                  
-                  {/* Scanning Laser Focus Overlay */}
-                  <div className="absolute inset-0 z-20 flex flex-col items-center justify-center pointer-events-none">
-                    <div className="w-[75%] max-w-[300px] aspect-[2/1] border-2 border-orange-500 rounded-xl relative overflow-hidden bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.6)]">
-                      <div className="w-full h-[2px] bg-orange-500 shadow-[0_0_15px_3px_rgba(249,115,22,0.8)] absolute animate-scan-laser"></div>
-                    </div>
-                    
-                    {/* Manual Input Trigger */}
-                    <div className="mt-8 bg-black/80 px-5 py-3 rounded-full text-white text-xs font-bold flex gap-4 items-center pointer-events-auto border border-neutral-700 shadow-xl">
-                      <span className="animate-pulse">📦 Barcode ဖတ်နေသည်...</span>
-                      <div className="w-px h-4 bg-neutral-600"></div>
-                      <button 
-                        onClick={() => {
-                          const code = window.prompt('Barcode နံပါတ်ကို ကိုယ်တိုင်ရိုက်ထည့်ပါ:');
-                          if(code?.trim()) { setCurrentScannedBarcode(code.trim()); setBarcodeStep('capturing'); }
-                        }} 
-                        className="text-orange-400 active:scale-90 transition-transform border border-orange-500/30 px-3 py-1 rounded bg-orange-500/10"
-                      >
-                        စာရိုက်မည်
-                      </button>
-                    </div>
+          {/* Viewport Render (ဒီနေရာတွင် Scanner သက်သက်၊ Camera သက်သက် ခွဲထုတ်ထားပါသည်) */}
+          <div className="flex-1 w-full bg-neutral-950 relative flex items-center justify-center overflow-hidden min-h-[60vh]">
+            {intakeMethod === 'with-barcode' && barcodeStep === 'scanning' ? (
+              /* 📸 QR / Barcode Scanner သက်သက် Render ဧရိယာ */
+              <div className="w-full h-full absolute inset-0 z-10 flex flex-col justify-center bg-black">
+                <Scanner 
+                  onScan={handleCameraScan}
+                  allowMultiple={false}
+                  scanDelay={300}
+                  styles={{
+                    container: { width: '100%', height: '100%' }
+                  }}
+                />
+                <div className="absolute bottom-16 inset-x-0 text-center z-20 px-6">
+                  <div className="inline-block bg-neutral-900/90 text-white font-medium text-xs px-4 py-2.5 rounded-xl border border-neutral-800/80 shadow-2xl backdrop-blur-md">
+                    ပါဆယ်ပေါ်ရှိ Barcode / QR ကို အလယ်ကွက်ထဲ ပြပေးပါဗျာ
                   </div>
                 </div>
-              ) : (
-                <>
-                  {/* ဓာတ်ပုံရိုက်ရန်အတွက် သီးသန့်အလုပ်လုပ်မည့် Native High-res Camera Feed */}
-                  <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" playsInline muted autoPlay />
-                  <canvas ref={canvasRef} className="hidden" />
-                </>
-              )}
+              </div>
+            ) : (
+              /* 📷 ဓာတ်ပုံရိုက်ကူးမည့် Native Camera သက်သက် Render ဧရိယာ */
+              <>
+                <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" playsInline muted autoPlay />
+                <canvas ref={canvasRef} className="hidden" />
+                
+                {/* Flash Effect Node */}
+                <div ref={shutterFlashRef} className="absolute inset-0 bg-white z-40 hidden" />
 
-            </div>
+                {intakeMethod === 'with-barcode' && currentScannedBarcode && (
+                  <div className="absolute top-16 left-4 right-4 z-20">
+                    <div className="bg-orange-500 text-neutral-950 text-[11px] font-black uppercase px-3 py-1.5 rounded-lg shadow-lg border border-orange-400/30 tracking-wider flex items-center justify-between animate-fade-in">
+                      <span>LINKED BARCODE: {currentScannedBarcode}</span>
+                      <span className="bg-neutral-950 text-orange-400 text-[9px] px-1.5 py-0.5 rounded">READY TO SNAP</span>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
-          {/* Bottom Controls Panel */}
-          <div className="flex flex-col gap-3 flex-shrink-0 pb-2">
+          {/* Controls Bottom Section */}
+          <div className="flex flex-col gap-3 flex-shrink-0 pb-4 bg-black/40 backdrop-blur z-20 pt-2">
             
-            {/* Captured Thumbnails */}
+            {/* Thumbnails list */}
             {capturedImages.length > 0 && (
-              <div className="flex items-center gap-2 overflow-x-auto px-3 py-2 bg-neutral-900/50 backdrop-blur rounded-xl border border-neutral-800/50 max-w-full mx-1">
+              <div className="flex items-center gap-2 overflow-x-auto px-3 py-2 bg-neutral-900/50 backdrop-blur rounded-xl border border-neutral-800/50 max-w-full mx-2">
                 {capturedImages.map((img, idx) => (
-                  <div key={img.id} onClick={() => { setFlowMode('preview'); setCurrentIdx(idx); stopCamera(); }} className="relative w-14 h-14 rounded-lg overflow-hidden border border-neutral-700 flex-shrink-0 cursor-pointer active:scale-95 transition-transform">
-                    <img src={img.preview} className="w-full h-full object-cover" alt="" />
-                    <button onClick={(e) => deleteImage(img.id, e)} className="absolute top-0.5 right-0.5 bg-black/80 border border-neutral-700 rounded w-4 h-4 flex items-center justify-center text-red-400 font-bold text-[10px]">✕</button>
-                    <div className="absolute bottom-0.5 left-0.5 bg-black/60 text-[8px] px-1 rounded text-gray-300">{idx + 1}</div>
-                    {img.barcode && (<div className="absolute bottom-0.5 right-0.5 bg-orange-500 text-[6px] px-0.5 rounded text-white font-mono max-w-[32px] truncate">{img.barcode}</div>)}
+                  <div 
+                    key={img.id} 
+                    onClick={() => { setFlowMode('preview'); setCurrentIdx(idx); stopCamera(); }}
+                    className="relative w-14 h-14 rounded-lg overflow-hidden border border-neutral-700/80 bg-neutral-800 flex-shrink-0 cursor-pointer group"
+                  >
+                    <img src={img.preview} alt="" className="w-full h-full object-cover" />
+                    {img.barcode && (
+                      <div className="absolute bottom-0 inset-x-0 bg-orange-500 text-neutral-950 text-[8px] font-black text-center truncate py-0.5 px-0.5">
+                        {img.barcode}
+                      </div>
+                    )}
+                    <button 
+                      onClick={(e) => deleteImage(img.id, e)}
+                      className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-600 rounded-full text-[9px] font-bold flex items-center justify-center text-white"
+                    >
+                      ×
+                    </button>
                   </div>
                 ))}
               </div>
             )}
 
-            {/* Shutter Button Row */}
-            <div className="flex justify-between items-center px-6 pt-1">
-              <button onClick={() => { if(window.confirm('ထွက်ချင်တာ သေချာပါသလား?')) { setCapturedImages([]); router.push('/'); } }} className="w-12 h-12 rounded-full bg-neutral-900/80 border border-neutral-800 flex items-center justify-center active:scale-90 transition-transform">
-                <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
+            {/* Shutter Main Trigger Buttons */}
+            <div className="flex items-center justify-between px-8 pt-1">
+              {/* Gallery upload */}
+              <label className="w-11 h-11 bg-neutral-900 rounded-full border border-neutral-800 flex items-center justify-center active:scale-90 transition cursor-pointer text-base">
+                🖼️
+                <input type="file" accept="image/*" multiple onChange={handleGallerySelect} className="hidden" />
+              </label>
 
+              {/* Central Capture / Status Indicator Button */}
               {intakeMethod === 'with-barcode' && barcodeStep === 'scanning' ? (
-                <button disabled className="w-20 h-20 bg-neutral-800 rounded-full flex items-center justify-center border-4 border-neutral-900 opacity-60">
-                   <span className="w-14 h-14 rounded-full border-2 border-neutral-700 bg-neutral-800 flex items-center justify-center text-[10px] font-bold text-neutral-500">SCAN FIRST</span>
-                </button>
+                <div className="w-18 h-18 bg-orange-500/20 rounded-full flex items-center justify-center border border-orange-500/30">
+                  <div className="w-14 h-14 bg-gradient-to-r from-orange-500 to-amber-500 rounded-full flex items-center justify-center animate-pulse text-xs font-black text-neutral-950">
+                    SCAN
+                  </div>
+                </div>
               ) : (
-                <button onClick={capturePhoto} className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.4)] border-4 border-neutral-800 active:scale-90 transition-transform">
-                  <span className="w-14 h-14 rounded-full border-2 border-black bg-white block" />
+                <button 
+                  onClick={capturePhoto}
+                  className="w-18 h-18 bg-white/10 rounded-full flex items-center justify-center border border-white/30 active:scale-90 transition-transform"
+                >
+                  <div className="w-14 h-14 bg-white rounded-full border-4 border-black" />
                 </button>
               )}
 
-              <button onClick={() => fileInputRef.current?.click()} className="w-12 h-12 rounded-full bg-neutral-900/80 border border-neutral-800 flex flex-col items-center justify-center active:scale-90 transition-transform text-orange-400">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                <span className="text-[8px] text-gray-400 font-medium mt-0.5">Gallery</span>
-              </button>
+              {/* Preview Nav Button */}
+              {capturedImages.length === 0 ? (
+                <div className="w-11 h-11 opacity-0" />
+              ) : (
+                <button 
+                  onClick={() => { setFlowMode('preview'); stopCamera(); }}
+                  className="w-11 h-11 bg-neutral-900 rounded-full border border-neutral-800 flex items-center justify-center active:scale-90 transition text-sm font-bold relative text-orange-400"
+                >
+                  ➡️
+                  <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-orange-500 text-neutral-950 font-black text-[10px] flex items-center justify-center rounded-full border-2 border-black">{capturedImages.length}</span>
+                </button>
+              )}
             </div>
 
-            {/* Editor Open Trigger */}
-            {capturedImages.length > 0 && (
-              <button onClick={() => { setFlowMode('preview'); stopCamera(); }} className="w-full bg-neutral-900 border border-neutral-800 py-2 rounded-xl text-orange-500 font-bold text-center active:scale-98 transition flex items-center justify-center gap-2">
-                <span>Open Preview Editor</span><span className="bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full">{capturedImages.length}</span>
-              </button>
-            )}
           </div>
         </div>
       )}
 
-      {/* ၂။ PREVIEW / EDIT MODE */}
+      {/* PREVIEW / EDIT MODE */}
       {flowMode === 'preview' && currentImgObj && (
         <div className="flex-1 flex flex-col bg-black justify-between p-3 relative h-full">
           <style>{`
@@ -582,80 +602,175 @@ export default function IntakePage() {
             .animate-slide-in-right { animation: slideInFromRight 0.28s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
             .animate-slide-in-left { animation: slideInFromLeft 0.28s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
           `}</style>
-          
-          <div className="flex justify-between items-center px-1 py-1 flex-shrink-0">
-            <button onClick={() => { setFlowMode('camera'); setDrawingText(false); if (intakeMethod === 'with-barcode') setBarcodeStep('scanning'); }} className="w-9 h-9 rounded-full bg-neutral-900/80 flex items-center justify-center border border-neutral-800 text-gray-300 active:scale-90 transition-transform">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+
+          {/* Top Bar Actions */}
+          <div className="flex items-center justify-between pb-2 border-b border-neutral-900">
+            <button 
+              onClick={() => { setFlowMode('camera'); }} 
+              className="text-xs bg-neutral-900 border border-neutral-800 px-3 py-1.5 rounded-xl font-bold text-gray-300 active:scale-95"
+            >
+              📷 ဓာတ်ပုံထပ်ရိုက်မည်
             </button>
-            <span className="text-gray-400 font-bold text-xs tracking-wider uppercase bg-neutral-900 px-3 py-1 rounded-full border border-neutral-800/80">Editing Mode</span>
-            <button onClick={() => fileInputRef.current?.click()} className="w-8 h-8 rounded-full bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold text-xs">+</button>
+            <div className="text-xs font-bold text-gray-400">ပုံရိပ်စစ်ဆေးခြင်း ({currentIdx + 1}/{capturedImages.length})</div>
+            <button 
+              onClick={(e) => deleteImage(currentImgObj.id, e)} 
+              className="text-xs bg-red-950/40 border border-red-900/40 px-3 py-1.5 rounded-xl font-bold text-red-400 active:scale-95"
+            >
+              ဖျက်မည်
+            </button>
           </div>
 
-          <div className="flex-1 flex items-center justify-center my-2 overflow-hidden relative touch-none"
+          {/* Barcode Tag Indicator */}
+          {currentImgObj.barcode && (
+            <div className="mt-2 mx-1 bg-neutral-900 border border-orange-500/30 rounded-xl p-2.5 flex items-center justify-between text-xs animate-fade-in">
+              <span className="text-gray-400 font-medium">ချိတ်ဆက်ထားသော Barcode ID:</span>
+              <span className="font-black text-orange-400 tracking-wider font-mono text-sm">{currentImgObj.barcode}</span>
+            </div>
+          )}
+
+          {/* Interactive Annotation Stage Component Container */}
+          <div 
+            className="flex-1 my-3 flex items-center justify-center relative touch-none bg-neutral-950 rounded-2xl border border-neutral-900"
             onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
             onTouchEnd={(e) => {
               if (touchStartX.current === null) return;
-              const touchEndX = e.changedTouches[0].clientX;
-              const diffX = touchStartX.current - touchEndX;
-              if (Math.abs(diffX) > 50) {
-                if (diffX > 0 && currentIdx < capturedImages.length - 1) { setSlideDirection('next'); setCurrentIdx(prev => prev + 1); setDrawingText(false); } 
-                else if (diffX < 0 && currentIdx > 0) { setSlideDirection('prev'); setCurrentIdx(prev => prev - 1); setDrawingText(false); }
-              }
+              const diffX = touchStartX.current - e.changedTouches[0].clientX;
               touchStartX.current = null;
+              if (Math.abs(diffX) > 60) {
+                if (diffX > 0 && currentIdx < capturedImages.length - 1) {
+                  setSlideDirection('next');
+                  setCurrentIdx(prev => prev + 1);
+                } else if (diffX < 0 && currentIdx > 0) {
+                  setSlideDirection('prev');
+                  setCurrentIdx(prev => prev - 1);
+                }
+              }
             }}
           >
-            <div key={currentIdx} className={`bg-neutral-950 rounded-xl overflow-hidden flex items-center justify-center border border-neutral-800 shadow-2xl relative ${slideDirection === 'next' ? 'animate-slide-in-right' : 'animate-slide-in-left'}`} style={{ width: stageDimensions.width, height: stageDimensions.height }}>
-              <Stage ref={stageRef} width={stageDimensions.width} height={stageDimensions.height}>
+            <div className={`overflow-hidden rounded-lg shadow-2xl relative ${slideDirection === 'next' ? 'animate-slide-in-right' : 'animate-slide-in-left'}`} key={currentImgObj.id}>
+              <Stage width={stageDimensions.width} height={stageDimensions.height} ref={stageRef}>
                 <Layer>
-                  {konvaImage && <KonvaImage image={konvaImage} width={stageDimensions.width} height={stageDimensions.height} />}
+                  {konvaImage && (
+                    <KonvaImage 
+                      image={konvaImage} 
+                      width={stageDimensions.width} 
+                      height={stageDimensions.height} 
+                      crop={currentImgObj.croppedAreaPixels ? {
+                        x: (currentImgObj.croppedAreaPixels.x / 100) * konvaImage.width,
+                        y: (currentImgObj.croppedAreaPixels.y / 100) * konvaImage.height,
+                        width: (currentImgObj.croppedAreaPixels.width / 100) * konvaImage.width,
+                        height: (currentImgObj.croppedAreaPixels.height / 100) * konvaImage.height,
+                      } : undefined}
+                    />
+                  )}
                   {currentImgObj.textAnnotations.map((ann) => (
-                    <KonvaText key={ann.id} id={ann.id} text={ann.text} x={ann.x} y={ann.y} draggable fontSize={22} fontStyle="bold" fill="white" onDragEnd={(e) => handleAnnotationDrag(ann.id, e.target.x(), e.target.y())} onClick={() => { if(window.confirm('ဖျက်ချင်ပါသလား?')) removeAnnotation(ann.id); }} onTap={() => { if(window.confirm('ဖျက်ချင်ပါသလား?')) removeAnnotation(ann.id); }} />
+                    <KonvaText
+                      key={ann.id} id={ann.id} text={ann.text} x={ann.x} y={ann.y}
+                      fontSize={21} fill="#ffffff" fontStyle="bold" draggable
+                      onDragEnd={(e) => handleAnnotationDrag(ann.id, e.target.x(), e.target.y())}
+                      onDblClick={() => deleteAnnotation(ann.id)}
+                      onTouchEnd={(e) => {
+                        if (e.target === e.currentTarget) {
+                          const now = Date.now();
+                          const lastTouch = (e.currentTarget as any).lastTouchTime || 0;
+                          if (now - lastTouch < 300) { deleteAnnotation(ann.id); }
+                          (e.currentTarget as any).lastTouchTime = now;
+                        }
+                      }}
+                    />
                   ))}
                 </Layer>
               </Stage>
             </div>
-          </div>
 
-          <div className="flex flex-col gap-2 bg-black flex-shrink-0">
-            {currentImgObj.barcode && (
-              <div className="text-center py-1 animate-slideUp">
-                <span className="bg-orange-500/10 border border-orange-500/20 text-orange-400 font-mono text-xs px-3 py-1 rounded-full font-bold">📦 Barcode: {currentImgObj.barcode}</span>
-              </div>
-            )}
-
+            {/* Custom Interactive Text Area Overlays */}
             {drawingText && (
-              <div className="flex gap-2 items-center p-2 bg-neutral-900 rounded-xl border border-neutral-800">
-                <input type="text" autoFocus className="w-full px-3 py-2 bg-neutral-950 border border-neutral-700 rounded-lg text-white text-sm outline-none focus:border-orange-500" value={newText} onChange={e => setNewText(e.target.value)} placeholder="စာသားထည့်ပါ..." />
-                <button onClick={addTextToCanvas} className="bg-orange-500 text-white font-bold px-4 py-2 rounded-lg shadow active:scale-95 transition-transform">Add</button>
+              <div className="absolute inset-x-3 bottom-3 p-3 bg-neutral-900/95 backdrop-blur-xl rounded-xl border border-neutral-800 shadow-2xl flex flex-col gap-2 z-40 animate-fade-in">
+                <input 
+                  type="text" autoFocus
+                  className="w-full px-3 py-2 bg-neutral-950 border border-neutral-700 rounded-lg text-white text-sm outline-none focus:border-orange-500"
+                  value={newText} onChange={e => setNewText(e.target.value)}
+                  placeholder="စာသားထည့်ပါ (စာသားကို ပွတ်ဆွဲရွှေ့နိုင်သည်)"
+                />
+                <div className="flex gap-2 justify-end">
+                  <button onClick={() => setDrawingText(false)} className="px-3 py-1.5 text-xs text-gray-400 hover:text-white">ပယ်ဖျက်</button>
+                  <button onClick={addTextToCanvas} className="px-4 py-1.5 text-xs bg-orange-500 text-neutral-950 font-bold rounded-md">ထည့်မည်</button>
+                </div>
               </div>
             )}
-
-            {capturedImages.length > 1 && (
-              <div className="flex gap-1.5 justify-center py-1">
-                {capturedImages.map((f, i) => <button key={f.id} onClick={() => { setSlideDirection(i > currentIdx ? 'next' : 'prev'); setCurrentIdx(i); setDrawingText(false); }} className={`h-1.5 rounded-full transition-all duration-200 ${i === currentIdx ? 'w-6 bg-orange-500' : 'w-2 bg-neutral-700'}`} />)}
-              </div>
-            )}
-
-            <div className="px-1 py-1">
-              <label className="text-[10px] text-orange-400 font-bold block mb-1 uppercase tracking-wider">💬 Note to Data Entry</label>
-              <input type="text" className="w-full px-3 py-2.5 bg-neutral-900/90 border border-neutral-800 rounded-xl text-white text-xs outline-none focus:border-blue-500 transition-colors shadow-inner placeholder-neutral-500" value={batchNote} onChange={(e) => setBatchNote(e.target.value)} placeholder="ဥပမာ - COD ၅သောင်းပါ..." />
-            </div>
-
-            <div className="flex items-center justify-around px-4 py-2 border-t border-neutral-900/60 bg-neutral-950/40 rounded-xl backdrop-blur-md">
-              <button onClick={() => { setCurrentCropOrder(currentImgObj); setShowCropModal(true); }} className="w-12 h-12 flex flex-col items-center justify-center text-neutral-400 hover:text-white active:scale-90 transition-transform">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 4h10v10M4 6v14h14M16 20h2M20 16v2" /></svg>
-                <span className="text-[9px] text-gray-500 mt-0.5">Crop</span>
-              </button>
-              <button onClick={() => setDrawingText(!drawingText)} className={`w-12 h-12 flex flex-col items-center justify-center transition-all ${drawingText ? 'text-orange-500' : 'text-neutral-400 hover:text-white active:scale-90'}`}>
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.3}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                <span className="text-[9px] text-gray-500 mt-0.5">Text</span>
-              </button>
-              <button onClick={handleFinalUploadAll} className="w-12 h-12 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg active:scale-90 hover:bg-blue-600 transition-all flex-shrink-0">
-                <svg className="w-6 h-6 transform stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
-              </button>
-            </div>
           </div>
 
+          {/* Meta Configuration Panel Layout */}
+          <div className="flex flex-col gap-2.5 bg-neutral-950/60 p-3 rounded-2xl border border-neutral-900/80 mb-2">
+            
+            {/* Batch Level Form Inputs */}
+            <div>
+              <label className="block text-[10px] uppercase font-bold tracking-wider text-neutral-500 mb-1">စုပေါင်းမှတ်ချက် (Batch Note)</label>
+              <input 
+                type="text" value={batchNote} onChange={e => setBatchNote(e.target.value)}
+                placeholder="ဥပမာ - အထုပ်ပျက်စီးမှုစစ်ဆေးပြီး၊ အရေးကြီးပါဆယ်..."
+                className="w-full bg-neutral-900 border border-neutral-800 text-neutral-200 placeholder-neutral-600 rounded-xl px-3 py-2 text-xs outline-none focus:border-orange-500/50 transition-all"
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-1 gap-4">
+              {/* Quality Selector Control */}
+              <div className="flex bg-neutral-900 p-0.5 rounded-lg border border-neutral-800 w-1/2">
+                <button onClick={() => setCapturedImages(capturedImages.map((img, i) => i === currentIdx ? { ...img, quality: 'SD' } : img))} className={`flex-1 text-center py-1 text-[10px] font-bold rounded-md transition-all ${currentImgObj.quality === 'SD' ? 'bg-neutral-800 text-orange-400 shadow' : 'text-neutral-500'}`}>SD</button>
+                <button onClick={() => setCapturedImages(capturedImages.map((img, i) => i === currentIdx ? { ...img, quality: 'HD' } : img))} className={`flex-1 text-center py-1 text-[10px] font-bold rounded-md transition-all ${currentImgObj.quality === 'HD' ? 'bg-neutral-800 text-orange-400 shadow' : 'text-neutral-500'}`}>HD</button>
+              </div>
+
+              {/* Annotation Action Buttons Trigger Panels */}
+              <div className="flex gap-2 w-1/2 justify-end">
+                <button 
+                  onClick={() => { setCurrentCropOrder(currentImgObj); setShowCropModal(true); }}
+                  className="px-3 py-1.5 bg-neutral-900 border border-neutral-800 text-neutral-300 font-bold text-xs rounded-xl flex items-center gap-1.5 active:scale-95 transition-all"
+                >
+                  ✂️ ဖြတ်မည်
+                </button>
+                <button 
+                  onClick={() => setDrawingText(!drawingText)}
+                  className={`px-3 py-1.5 border font-bold text-xs rounded-xl flex items-center gap-1.5 active:scale-95 transition-all ${drawingText ? 'bg-orange-500/10 border-orange-500 text-orange-400' : 'bg-neutral-900 border-neutral-800 text-neutral-300'}`}
+                >
+                  ✍️ စာသားထည့်
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Global Final Action Control CTA Buttons */}
+          <button 
+            onClick={handleFinalSubmit}
+            className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 text-neutral-950 font-black rounded-xl shadow-xl active:scale-[0.98] transition-transform text-sm tracking-wide uppercase"
+          >
+            ပါဆယ်မှတ်တမ်းတင်ခြင်း အတည်ပြုမည် ({capturedImages.length} ပုံ)
+          </button>
+        </div>
+      )}
+
+      {/* MODAL LIGHTBOX SYSTEM FOR ADVANCED EASY CROP STYLING */}
+      {showCropModal && currentCropOrder && (
+        <div className="absolute inset-0 bg-neutral-950 z-50 flex flex-col justify-between animate-fade-in">
+          <div className="p-4 border-b border-neutral-900 flex justify-between items-center bg-black">
+            <h3 className="text-sm font-bold text-gray-300">ပုံရိပ်ဖြတ်တောက်ပြင်ဆင်ခြင်း</h3>
+            <button onClick={() => { setShowCropModal(false); setCurrentCropOrder(null); }} className="text-xs text-neutral-500 hover:text-white">ပိတ်မည်</button>
+          </div>
+          <div className="flex-1 relative bg-black">
+            <EasyCrop
+              image={currentCropOrder.preview} crop={cropState} zoom={zoomState} aspect={3 / 4}
+              onCropChange={setCropState} onZoomChange={setZoomState} onCropComplete={handleCropComplete}
+            />
+          </div>
+          <div className="p-4 bg-black border-t border-neutral-900 flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-gray-500">ချဲ့ရန်:</span>
+              <input type="range" min={1} max={3} step={0.1} value={zoomState} onChange={(e) => setZoomState(Number(e.target.value))} className="flex-1 h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-orange-500" />
+            </div>
+            <button onClick={handleCropSave} className="w-full py-3 bg-orange-500 text-neutral-950 font-bold text-xs rounded-xl active:scale-95 transition">
+              ဖြတ်တောက်မှု အတည်ပြုသိမ်းဆည်းမည်
+            </button>
+          </div>
         </div>
       )}
 
