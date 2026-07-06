@@ -185,50 +185,65 @@ export default function IntakePage() {
     setCameraActive(false);
   }, []);
 
-  // 🌟 Live Barcode Scanner Logic (ကင်မရာမှတစ်ဆင့် တိုက်ရိုက်ဖတ်ခြင်း)
+  // 🌟 Live Barcode Scanner Logic (အဆင့်မြှင့်တင်ထားသော ပုံစံသစ်)
   useEffect(() => {
-    let scanInterval: NodeJS.Timeout;
+    let isScanning = true;
+    let timeoutId: NodeJS.Timeout;
     let scanCanvas: HTMLCanvasElement | null = null;
 
     const startScanner = async () => {
+      // ၁။ Library ကို စက္ကန့်ပိုင်းအတွင်း dynamic အလုပ်လုပ်အောင် ခေါ်ယူမည်
       if (!codeReader.current) {
-        const { BrowserMultiFormatReader } = await import('@zxing/library');
-        codeReader.current = new BrowserMultiFormatReader();
+        try {
+          const { BrowserMultiFormatReader } = await import('@zxing/library');
+          codeReader.current = new BrowserMultiFormatReader();
+        } catch (err) {
+          console.error("Failed to load ZXing library", err);
+          return;
+        }
       }
 
-      // မမြင်ရတဲ့ Offscreen Canvas တစ်ခု ဆောက်လိုက်မယ်
       scanCanvas = document.createElement('canvas');
 
-      scanInterval = setInterval(() => {
+      // ၂။ Loop ပတ်ပြီး စကန်ဖတ်မည့် အစိတ်အပိုင်း
+      const scanLoop = async () => {
+        if (!isScanning) return;
+
         if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
           const video = videoRef.current;
           
           if (scanCanvas) {
-            // ကင်မရာရဲ့ Resolution အတိုင်း Canvas ဆိုဒ်ကို ချိန်မယ်
             scanCanvas.width = video.videoWidth;
             scanCanvas.height = video.videoHeight;
             const ctx = scanCanvas.getContext('2d');
             
             if (ctx) {
-              // ဗီဒီယိုရဲ့ လက်ရှိ Frame ပုံရိပ်ကို Canvas ထဲ ကူးထည့်မယ်
               ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
               
               try {
-                // 🚀 ဗီဒီယိုကို သွားမထိတော့ဘဲ Canvas ပုံကနေပဲ Barcode ဖတ်ခိုင်းမယ်
-                const result = codeReader.current.decodeFromCanvas(scanCanvas);
-                if (result) {
+                // 🚀 `await` ကိုသုံးပြီး Barcode ရှာဖွေတွေ့ရှိမှုကို အမှန်တကယ် စောင့်ဆိုင်းခြင်း
+                const result = await codeReader.current.decodeFromCanvas(scanCanvas);
+                if (result && isScanning) {
                   const text = result.getText();
-                  playBeepSound(); // ဖတ်မိကြောင်း အသံပေးမည်
+                  playBeepSound(); 
                   setCurrentScannedBarcode(text);
                   setBarcodeStep('capturing'); // ဓာတ်ပုံရိုက်ရန် အဆင့်သို့ ကူးမည်
+                  return; // အောင်မြင်သွားပါက လက်ရှိ loop ကို ရပ်တန့်မည်
                 }
               } catch (error) {
-                // Barcode ရှာမတွေ့သေးရင် (Exception တက်ရင်) ဘာမှမလုပ်ဘဲ ကျော်သွားမယ်
+                // Barcode ရှာမတွေ့သေးပါက error ပြစ်မည်ဖြစ်၍ မည်သည့်အရာမျှ မလုပ်ဘဲ ကျော်သွားမည်
               }
             }
           }
         }
-      }, 450); // 450ms တိုင်း တစ်ခါ စစ်ဆေးမည်
+
+        // စကန်ဖတ်ခြင်း မပြီးမချင်း 350ms ခြားပြီး နောက်တစ်ကြိမ် ထပ်မံလုပ်ဆောင်မည် (Overlapping လုံးဝမဖြစ်စေရန်)
+        if (isScanning) {
+          timeoutId = setTimeout(scanLoop, 350);
+        }
+      };
+
+      scanLoop();
     };
 
     if (flowMode === 'camera' && intakeMethod === 'with-barcode' && barcodeStep === 'scanning' && cameraActive) {
@@ -236,7 +251,8 @@ export default function IntakePage() {
     }
 
     return () => {
-      if (scanInterval) clearInterval(scanInterval);
+      isScanning = false;
+      if (timeoutId) clearTimeout(timeoutId);
     };
   }, [flowMode, intakeMethod, barcodeStep, cameraActive]);
 
@@ -519,7 +535,7 @@ export default function IntakePage() {
             </div>
           )}
 
-          {/* Viewfinder Area (Used for both Camera & Scanner) */}
+          {/* Viewfinder Area */}
           <div className="flex-1 flex items-center justify-center my-2 overflow-hidden relative">
             <div className="w-full h-full bg-neutral-950 rounded-2xl overflow-hidden shadow-2xl relative border border-neutral-800 flex items-center justify-center">
               
@@ -577,7 +593,6 @@ export default function IntakePage() {
                 <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
 
-              {/* 🌟 Scanning Mode တွင် Shutter ကို မှိန်ထားမည် */}
               {intakeMethod === 'with-barcode' && barcodeStep === 'scanning' ? (
                 <button disabled className="w-20 h-20 bg-neutral-800 rounded-full flex items-center justify-center border-4 border-neutral-900 opacity-60">
                    <span className="w-14 h-14 rounded-full border-2 border-neutral-700 bg-neutral-800 flex items-center justify-center text-[10px] font-bold text-neutral-500">SCAN FIRST</span>
