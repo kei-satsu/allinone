@@ -31,25 +31,16 @@ export default function IntakePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const touchStartX = useRef<number | null>(null);
 
-const handleTouchStart = (e: React.TouchEvent) => {
-  touchStartX.current = e.touches[0].clientX;
-};
-
-const handleTouchEnd = () => {
-  if (touchStartX.current === null) return;
-  
-  // လက်ရှိ preview container ကို swipe လုပ်တဲ့အခါ text dragging နဲ့ မရှုပ်ထွေးစေဖို့ touchEnd event ကို inline ထဲမှာ ဖမ်းယူတွက်ချက်ပါမည်။
-  touchStartX.current = null;
-};
-
   // State Management
   const [capturedImages, setCapturedImages] = useState<CapturedFile[]>([]);
   const [currentIdx, setCurrentIdx] = useState<number>(0); 
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState('');
   const [userBranch, setUserBranch] = useState('MDY');
   
-  
+  // 🌟 Background Upload Queue States (အသစ်တိုးထားသော State များ)
+  const [isBackgroundUploading, setIsBackgroundUploading] = useState(false);
+  const [backgroundUploadCount, setBackgroundUploadCount] = useState(0); 
+  const [backgroundUploadStatus, setBackgroundUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+
   // Camera States
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraSupported, setCameraSupported] = useState(true);
@@ -63,7 +54,7 @@ const handleTouchEnd = () => {
   const [drawingText, setDrawingText] = useState(false);
   const [newText, setNewText] = useState('');
 
-  // ✨ Global Batch Note State (Data Entry သမားအတွက် ချန်မည့် Message)
+  // Global Batch Note State
   const [batchNote, setBatchNote] = useState('');
 
   // Real Crop States
@@ -112,7 +103,7 @@ const handleTouchEnd = () => {
     return () => stopCamera();
   }, []);
 
-  // Hide mobile dock during camera mode so camera UI remains unobstructed
+  // Hide mobile dock during camera mode
   useEffect(() => {
     setHideMobileDock(flowMode === 'camera');
   }, [flowMode, setHideMobileDock]);
@@ -374,26 +365,38 @@ const handleTouchEnd = () => {
     });
   };
 
-  // ✨ Upload Logic (အသစ်ပြင်ဆင်ထားသော စာတိုပါ တစ်ခါတည်းသိမ်းမည့် အပိုင်း)
+  // ✨ BACKGROUND UPLOAD LOGIC
   const handleFinalUploadAll = async () => {
     if (capturedImages.length === 0) return;
-    setUploading(true);
-    setUploadProgress('Preparing media...');
     
+    // ၁။ တင်မည့် ပုံစာရင်းနှင့် Note ကို သိမ်းထားလိုက်ပါမည်
+    const imagesToUpload = [...capturedImages];
+    const currentNote = batchNote;
+
+    // ၂။ UI ကို Camera ဆီ ချက်ချင်းပြန်ပို့ပြီး ပုံဟောင်းများကို ရှင်းလင်းပါမည် (ချက်ချင်းဆက်ရိုက်နိုင်ရန်)
+    setCapturedImages([]);
+    setBatchNote('');
+    setFlowMode('camera');
+    startCamera();
+
+    // ၃။ Background State များ စတင်ဖွင့်လှစ်ခြင်း
+    setIsBackgroundUploading(true);
+    setBackgroundUploadCount(imagesToUpload.length);
+    setBackgroundUploadStatus('uploading');
+
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
     if (!cloudName) {
       alert('Cloudinary Cloud Name not set.');
-      setUploading(false);
+      setBackgroundUploadStatus('error');
+      setTimeout(() => setIsBackgroundUploading(false), 3000);
       return;
     }
 
     try {
-      for (let i = 0; i < capturedImages.length; i++) {
-        const imgObj = capturedImages[i];
-        setUploadProgress(`Uploading (${i + 1}/${capturedImages.length})...`);
+      for (let i = 0; i < imagesToUpload.length; i++) {
+        const imgObj = imagesToUpload[i];
         
         let fileToUpload: Blob | File = imgObj.file;
-
         if (imgObj.textAnnotations.length > 0) {
           fileToUpload = await bakeImageWithText(imgObj);
         }
@@ -408,40 +411,62 @@ const handleTouchEnd = () => {
         );
         const cloudinaryData = await cloudinaryRes.json();
         const imageUrl = cloudinaryData.secure_url;
+        
         if (!imageUrl) throw new Error('Cloudinary upload failed');
 
-        // ✨ ကုဒ်အသစ် - 'uploader_note' column ထဲသို့ စာတိုကို ပုံတိုင်းအတွက် ထည့်သွင်းသိမ်းဆည်းခြင်း
         const { error } = await supabase.from('orders').insert([
           {
             image_url: imageUrl,
             branch: userBranch,
             status: 'Pending',
             received_date: new Date().toISOString().split('T')[0],
-            uploader_note: batchNote.trim() || null, 
+            uploader_note: currentNote.trim() || null, 
           },
         ]);
         if (error) throw new Error(`DB Error: ${error.message}`);
+        
+        // တစ်ပုံတင်ပြီးတိုင်း အရေအတွက် တစ်ခု လျှော့ပြပါမည်
+        setBackgroundUploadCount(prev => prev - 1);
       }
 
-      setUploadProgress('Success!');
-      setTimeout(() => {
-        setCapturedImages([]);
-        setBatchNote(''); // ✨ တင်ပြီးရင် Message ကို clear လုပ်ပေးခြင်း
-        setUploading(false);
-        setUploadProgress('');
-        setFlowMode('camera');
-        startCamera();
-      }, 1200);
+      // အားလုံးအောင်မြင်သွားပါက
+      setBackgroundUploadStatus('success');
+      setTimeout(() => setIsBackgroundUploading(false), 3000);
+
     } catch (error: any) {
-      console.error(error);
-      alert(error.message || 'Upload failed');
-      setUploading(false);
+      console.error('Background Upload Error:', error);
+      setBackgroundUploadStatus('error');
+      setTimeout(() => setIsBackgroundUploading(false), 5000);
     }
   };
 
   return (
     <div className="h-[100dvh] w-full flex flex-col bg-black font-sans select-none overflow-hidden text-sm text-white relative">
       
+      {/* 🌟 Background Upload Indicator Badge */}
+      {isBackgroundUploading && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[300] flex items-center gap-2 px-3 py-1.5 bg-neutral-900/90 backdrop-blur-md border border-neutral-700/50 rounded-full shadow-lg transition-all">
+          {backgroundUploadStatus === 'uploading' && (
+            <>
+              <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <span className="text-[10px] font-bold text-blue-400 tracking-wider">UPLOADING {backgroundUploadCount} ITEMS</span>
+            </>
+          )}
+          {backgroundUploadStatus === 'success' && (
+            <>
+              <svg className="w-3.5 h-3.5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+              <span className="text-[10px] font-bold text-green-400 tracking-wider">SUCCESS!</span>
+            </>
+          )}
+          {backgroundUploadStatus === 'error' && (
+            <>
+              <svg className="w-3.5 h-3.5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              <span className="text-[10px] font-bold text-red-400 tracking-wider">UPLOAD FAILED</span>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Hidden Gallery Input */}
       <input 
         type="file" 
@@ -574,199 +599,185 @@ const handleTouchEnd = () => {
       )}
 
       {/* ၂။ CLEAN PREVIEW / EDIT MODE */}
-{/* ၂။ CLEAN PREVIEW / EDIT MODE */}
-{flowMode === 'preview' && currentImgObj && (
-  <div className="flex-1 flex flex-col bg-black justify-between p-3 relative h-full">
-    
-    {/* 💡 Animation အတွက် လိုအပ်သော CSS အား ဤနေရာတွင် တိုက်ရိုက်ထည့်သွင်းထားပါသည် */}
-    <style>{`
-      @keyframes slideInFromRight {
-        from { transform: translateX(100%); opacity: 0.5; }
-        to { transform: translateX(0); opacity: 1; }
-      }
-      @keyframes slideInFromLeft {
-        from { transform: translateX(-100%); opacity: 0.5; }
-        to { transform: translateX(0); opacity: 1; }
-      }
-      .animate-slide-in-right {
-        animation: slideInFromRight 0.28s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-      }
-      .animate-slide-in-left {
-        animation: slideInFromLeft 0.28s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-      }
-    `}</style>
-    
-    {/* Editor Header */}
-    <div className="flex justify-between items-center px-1 py-1 flex-shrink-0">
-      <button onClick={() => { setFlowMode('camera'); setDrawingText(false); startCamera(); }} className="w-9 h-9 rounded-full bg-neutral-900/80 flex items-center justify-center border border-neutral-800 text-gray-300 active:scale-90 transition-transform">
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-      </button>
-      <span className="text-gray-400 font-bold text-xs tracking-wider uppercase bg-neutral-900 px-3 py-1 rounded-full border border-neutral-800/80">Editing Mode ({userBranch})</span>
-      <button onClick={() => fileInputRef.current?.click()} className="w-8 h-8 rounded-full bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold text-xs">
-        +
-      </button>
-    </div>
-
-    {/* Canvas Preview Container */}
-    <div 
-      className="flex-1 flex items-center justify-center my-2 overflow-hidden relative touch-none"
-      onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
-      onTouchEnd={(e) => {
-        if (touchStartX.current === null) return;
-        const touchEndX = e.changedTouches[0].clientX;
-        const diffX = touchStartX.current - touchEndX;
-        const minSwipeDistance = 50; 
-
-        if (Math.abs(diffX) > minSwipeDistance) {
-          if (diffX > 0) {
-            // ➡️ ဘယ်ဘက်သို့ ပွတ်ဆွဲလျှင် (Next Image -> ညာဘက်မှ ဝဲဝင်လာမည်)
-            if (currentIdx < capturedImages.length - 1) {
-              setSlideDirection('next');
-              setCurrentIdx(prev => prev + 1);
-              setDrawingText(false);
+      {flowMode === 'preview' && currentImgObj && (
+        <div className="flex-1 flex flex-col bg-black justify-between p-3 relative h-full">
+          
+          {/* Animation CSS */}
+          <style>{`
+            @keyframes slideInFromRight {
+              from { transform: translateX(100%); opacity: 0.5; }
+              to { transform: translateX(0); opacity: 1; }
             }
-          } else {
-            // ⬅️ ညာဘက်သို့ ပွတ်ဆွဲလျှင် (Previous Image -> ဘယ်ဘက်မှ ဝဲဝင်လာမည်)
-            if (currentIdx > 0) {
-              setSlideDirection('prev');
-              setCurrentIdx(prev => prev - 1);
-              setDrawingText(false);
+            @keyframes slideInFromLeft {
+              from { transform: translateX(-100%); opacity: 0.5; }
+              to { transform: translateX(0); opacity: 1; }
             }
-          }
-        }
-        touchStartX.current = null;
-      }}
-    >
-      {/* 💡 key={currentIdx} ကို သုံးထားပြီး Slide Direction အလိုက် Animation Class အလုပ်လုပ်ပါမည် */}
-      <div 
-        key={currentIdx}
-        className={`bg-neutral-950 rounded-xl overflow-hidden flex items-center justify-center border border-neutral-800 shadow-2xl relative ${
-          slideDirection === 'next' ? 'animate-slide-in-right' : 'animate-slide-in-left'
-        }`}
-        style={{ width: stageDimensions.width, height: stageDimensions.height }}
-      >
-        <Stage ref={stageRef} width={stageDimensions.width} height={stageDimensions.height}>
-          <Layer>
-            {konvaImage && (
-              <KonvaImage image={konvaImage} width={stageDimensions.width} height={stageDimensions.height} />
-            )}
-            {currentImgObj.textAnnotations.map((ann) => (
-              <KonvaText
-                key={ann.id}
-                id={ann.id}
-                text={ann.text}
-                x={ann.x}
-                y={ann.y}
-                draggable
-                fontSize={22}
-                fontStyle="bold"
-                fill="white"
-                onDragEnd={(e) => handleAnnotationDrag(ann.id, e.target.x(), e.target.y())}
-                onClick={() => {
-                  if(window.confirm('ဒီစာသားကို ဖျက်ချင်ပါသလား?')) removeAnnotation(ann.id);
-                }}
-                onTap={() => {
-                  if(window.confirm('ဒီစာသားကို ဖျက်ချင်ပါသလား?')) removeAnnotation(ann.id);
-                }}
-              />
-            ))}
-          </Layer>
-        </Stage>
-
-        {/* Upload Loader overlay */}
-        {uploading && (
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex flex-col justify-center items-center gap-3 z-50">
-            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-orange-500"></div>
-            <p className="text-sm font-semibold tracking-wide text-orange-400">{uploadProgress}</p>
+            .animate-slide-in-right {
+              animation: slideInFromRight 0.28s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            }
+            .animate-slide-in-left {
+              animation: slideInFromLeft 0.28s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            }
+          `}</style>
+          
+          {/* Editor Header */}
+          <div className="flex justify-between items-center px-1 py-1 flex-shrink-0">
+            <button onClick={() => { setFlowMode('camera'); setDrawingText(false); startCamera(); }} className="w-9 h-9 rounded-full bg-neutral-900/80 flex items-center justify-center border border-neutral-800 text-gray-300 active:scale-90 transition-transform">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+            </button>
+            <span className="text-gray-400 font-bold text-xs tracking-wider uppercase bg-neutral-900 px-3 py-1 rounded-full border border-neutral-800/80">Editing Mode ({userBranch})</span>
+            <button onClick={() => fileInputRef.current?.click()} className="w-8 h-8 rounded-full bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold text-xs">
+              +
+            </button>
           </div>
-        )}
-      </div>
-    </div>
 
-    {/* Interactive Tools Panel */}
-    <div className="flex flex-col gap-2 bg-black flex-shrink-0">
-      
-      {/* Floating Text Input Bar */}
-      {drawingText && (
-        <div className="flex gap-2 items-center p-2 bg-neutral-900 rounded-xl border border-neutral-800 animate-slideUp">
-          <input 
-            type="text" 
-            autoFocus
-            className="w-full px-3 py-2 bg-neutral-950 border border-neutral-700 rounded-lg text-white text-sm outline-none focus:border-orange-500" 
-            value={newText} 
-            onChange={e => setNewText(e.target.value)} 
-            placeholder="ပုံပေါ်တွင် တင်မည့်စာသား ရိုက်ထည့်ပါ..." 
-          />
-          <button onClick={addTextToCanvas} className="bg-orange-500 text-white font-bold px-4 py-2 rounded-lg shadow active:scale-95 transition-transform">Add</button>
+          {/* Canvas Preview Container */}
+          <div 
+            className="flex-1 flex items-center justify-center my-2 overflow-hidden relative touch-none"
+            onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
+            onTouchEnd={(e) => {
+              if (touchStartX.current === null) return;
+              const touchEndX = e.changedTouches[0].clientX;
+              const diffX = touchStartX.current - touchEndX;
+              const minSwipeDistance = 50; 
+
+              if (Math.abs(diffX) > minSwipeDistance) {
+                if (diffX > 0) {
+                  if (currentIdx < capturedImages.length - 1) {
+                    setSlideDirection('next');
+                    setCurrentIdx(prev => prev + 1);
+                    setDrawingText(false);
+                  }
+                } else {
+                  if (currentIdx > 0) {
+                    setSlideDirection('prev');
+                    setCurrentIdx(prev => prev - 1);
+                    setDrawingText(false);
+                  }
+                }
+              }
+              touchStartX.current = null;
+            }}
+          >
+            <div 
+              key={currentIdx}
+              className={`bg-neutral-950 rounded-xl overflow-hidden flex items-center justify-center border border-neutral-800 shadow-2xl relative ${
+                slideDirection === 'next' ? 'animate-slide-in-right' : 'animate-slide-in-left'
+              }`}
+              style={{ width: stageDimensions.width, height: stageDimensions.height }}
+            >
+              <Stage ref={stageRef} width={stageDimensions.width} height={stageDimensions.height}>
+                <Layer>
+                  {konvaImage && (
+                    <KonvaImage image={konvaImage} width={stageDimensions.width} height={stageDimensions.height} />
+                  )}
+                  {currentImgObj.textAnnotations.map((ann) => (
+                    <KonvaText
+                      key={ann.id}
+                      id={ann.id}
+                      text={ann.text}
+                      x={ann.x}
+                      y={ann.y}
+                      draggable
+                      fontSize={22}
+                      fontStyle="bold"
+                      fill="white"
+                      onDragEnd={(e) => handleAnnotationDrag(ann.id, e.target.x(), e.target.y())}
+                      onClick={() => {
+                        if(window.confirm('ဒီစာသားကို ဖျက်ချင်ပါသလား?')) removeAnnotation(ann.id);
+                      }}
+                      onTap={() => {
+                        if(window.confirm('ဒီစာသားကို ဖျက်ချင်ပါသလား?')) removeAnnotation(ann.id);
+                      }}
+                    />
+                  ))}
+                </Layer>
+              </Stage>
+            </div>
+          </div>
+
+          {/* Interactive Tools Panel */}
+          <div className="flex flex-col gap-2 bg-black flex-shrink-0">
+            
+            {/* Floating Text Input Bar */}
+            {drawingText && (
+              <div className="flex gap-2 items-center p-2 bg-neutral-900 rounded-xl border border-neutral-800 animate-slideUp">
+                <input 
+                  type="text" 
+                  autoFocus
+                  className="w-full px-3 py-2 bg-neutral-950 border border-neutral-700 rounded-lg text-white text-sm outline-none focus:border-orange-500" 
+                  value={newText} 
+                  onChange={e => setNewText(e.target.value)} 
+                  placeholder="ပုံပေါ်တွင် တင်မည့်စာသား ရိုက်ထည့်ပါ..." 
+                />
+                <button onClick={addTextToCanvas} className="bg-orange-500 text-white font-bold px-4 py-2 rounded-lg shadow active:scale-95 transition-transform">Add</button>
+              </div>
+            )}
+
+            {/* Pagination Bullet Indicators */}
+            {capturedImages.length > 1 && (
+              <div className="flex gap-1.5 justify-center py-1">
+                {capturedImages.map((f, i) => (
+                  <button 
+                    key={f.id} 
+                    onClick={() => { 
+                      setSlideDirection(i > currentIdx ? 'next' : 'prev');
+                      setCurrentIdx(i); 
+                      setDrawingText(false); 
+                    }}
+                    className={`h-1.5 rounded-full transition-all duration-200 ${i === currentIdx ? 'w-6 bg-orange-500' : 'w-2 bg-neutral-700'}`}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* ✨ Batch Note Input */}
+            <div className="px-1 py-1 animate-slideUp">
+              <label className="text-[10px] text-orange-400 font-bold block mb-1 uppercase tracking-wider">💬 Message to Data Entry Staff (ဤအုပ်စုရှိပုံအားလုံးအတွက်)</label>
+              <input 
+                type="text"
+                className="w-full px-3 py-2.5 bg-neutral-900/90 border border-neutral-800 rounded-xl text-white text-xs outline-none focus:border-blue-500 transition-colors shadow-inner placeholder-neutral-500"
+                value={batchNote}
+                onChange={(e) => setBatchNote(e.target.value)}
+                placeholder="ဥပမာ - COD ၅သောင်းပါသည်၊ ဂိတ်ခ ရှင်းပြီး၊ လိပ်စာမရှင်းပါ..."
+              />
+            </div>
+
+            {/* Bottom Floating Action Utility Row */}
+            <div className="flex items-center justify-around px-4 py-2 border-t border-neutral-900/60 bg-neutral-950/40 rounded-xl backdrop-blur-md">
+              
+              <button 
+                onClick={() => { setCurrentCropOrder(currentImgObj); setShowCropModal(true); }}
+                className="w-12 h-12 rounded-full flex flex-col items-center justify-center text-neutral-400 hover:text-white active:scale-90 transition-transform"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 4h10v10M4 6v14h14M16 20h2M20 16v2" />
+                </svg>
+                <span className="text-[9px] text-gray-500 mt-0.5">Crop</span>
+              </button>
+
+              <button 
+                onClick={() => setDrawingText(!drawingText)} 
+                className={`w-12 h-12 rounded-full flex flex-col items-center justify-center transition-all ${drawingText ? 'text-orange-500' : 'text-neutral-400 hover:text-white active:scale-90'}`}
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                <span className="text-[9px] text-gray-500 mt-0.5">Text</span>
+              </button>
+
+              <button 
+                onClick={handleFinalUploadAll} 
+                className="w-12 h-12 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg active:scale-90 hover:bg-blue-600 transition-all flex-shrink-0"
+              >
+                <svg className="w-6 h-6 transform stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
+              </button>
+
+            </div>
+          </div>
+
         </div>
       )}
-
-      {/* Pagination Bullet Indicators */}
-      {capturedImages.length > 1 && (
-        <div className="flex gap-1.5 justify-center py-1">
-          {capturedImages.map((f, i) => (
-            <button 
-              key={f.id} 
-              onClick={() => { 
-                // 💡 Bullet Indicator ကို နှိပ်ပြီး ပြောင်းရင်လည်း Index ကို နှိုင်းယှဉ်ပြီး Animation ဘက်လှည့်ပေးပါသည်
-                setSlideDirection(i > currentIdx ? 'next' : 'prev');
-                setCurrentIdx(i); 
-                setDrawingText(false); 
-              }}
-              className={`h-1.5 rounded-full transition-all duration-200 ${i === currentIdx ? 'w-6 bg-orange-500' : 'w-2 bg-neutral-700'}`}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* ✨ ကုဒ်အသစ် - Data Entry သမားအတွက် စာတိုချန်ရန် Input Box အကွက် */}
-      <div className="px-1 py-1 animate-slideUp">
-        <label className="text-[10px] text-orange-400 font-bold block mb-1 uppercase tracking-wider">💬 Message to Data Entry Staff (ဤအုပ်စုရှိပုံအားလုံးအတွက်)</label>
-        <input 
-          type="text"
-          className="w-full px-3 py-2.5 bg-neutral-900/90 border border-neutral-800 rounded-xl text-white text-xs outline-none focus:border-blue-500 transition-colors shadow-inner placeholder-neutral-500"
-          value={batchNote}
-          onChange={(e) => setBatchNote(e.target.value)}
-          placeholder="ဥပမာ - COD ၅သောင်းပါသည်၊ ဂိတ်ခ ရှင်းပြီး၊ လိပ်စာမရှင်းပါ..."
-        />
-      </div>
-
-      {/* Bottom Floating Action Utility Row */}
-      <div className="flex items-center justify-around px-4 py-2 border-t border-neutral-900/60 bg-neutral-950/40 rounded-xl backdrop-blur-md">
-        
-        <button 
-          onClick={() => { setCurrentCropOrder(currentImgObj); setShowCropModal(true); }}
-          className="w-12 h-12 rounded-full flex flex-col items-center justify-center text-neutral-400 hover:text-white active:scale-90 transition-transform"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.3}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 4h10v10M4 6v14h14M16 20h2M20 16v2" />
-          </svg>
-          <span className="text-[9px] text-gray-500 mt-0.5">Crop</span>
-        </button>
-
-        <button 
-          onClick={() => setDrawingText(!drawingText)} 
-          className={`w-12 h-12 rounded-full flex flex-col items-center justify-center transition-all ${drawingText ? 'text-orange-500' : 'text-neutral-400 hover:text-white active:scale-90'}`}
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.3}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-          </svg>
-          <span className="text-[9px] text-gray-500 mt-0.5">Text</span>
-        </button>
-
-        <button 
-          onClick={handleFinalUploadAll} 
-          disabled={uploading} 
-          className="w-12 h-12 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-lg active:scale-90 hover:bg-blue-600 transition-all disabled:bg-neutral-800 disabled:text-neutral-600 flex-shrink-0"
-        >
-          <svg className="w-6 h-6 transform stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
-        </button>
-
-      </div>
-    </div>
-
-  </div>
-)}
 
     </div>
   );
