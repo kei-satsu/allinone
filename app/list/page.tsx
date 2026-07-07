@@ -32,7 +32,8 @@ const COLUMN_DEFS = [
   { key: 'transit_to', label: 'Transit To', defaultVisible: false },
   { key: 'agent_fee', label: 'Agent Fee', defaultVisible: false },
   { key: 'remark', label: 'Remark', defaultVisible: false },
-  
+  { key: 'barcode', label: 'Barcode', defaultVisible: false },
+ 
 ]
 
 

@@ -95,11 +95,12 @@ export default function BulkUpdatePage() {
       return
     }
     setSearchLoading(true)
-    const { data, error } = await supabase
+   const { data, error } = await supabase
       .from('orders')
       .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
       .eq('branch', userBranch)
-      .or(`item_id.ilike.%${query}%,sender_name.ilike.%${query}%,receiver_name.ilike.%${query}%,receiver_phone.ilike.%${query}%`)
+      // ✨ အောက်တွင် barcode.ilike.%${query}% ကိုပါ တိုးပေးထားပါတယ်
+      .or(`item_id.ilike.%${query}%,barcode.ilike.%${query}%,sender_name.ilike.%${query}%,receiver_name.ilike.%${query}%,receiver_phone.ilike.%${query}%`)
       .order('created_at', { ascending: false })
 
     if (!error && data) setOrders(data)
@@ -133,7 +134,7 @@ export default function BulkUpdatePage() {
         .from('orders')
         .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
         .eq('branch', userBranch)
-        .eq('item_id', value)
+        .or(`item_id.eq.${value},barcode.eq.${value}`)
         .maybeSingle()
 
       if (error) {
@@ -165,7 +166,7 @@ export default function BulkUpdatePage() {
       .from('orders')
       .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
       .eq('branch', userBranch)
-      .eq('item_id', value)
+      .or(`item_id.eq.${value},barcode.eq.${value}`)
       .maybeSingle()
 
     if (error || !data) {
