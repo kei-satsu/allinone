@@ -343,53 +343,73 @@ export default function IntakePage() {
     });
   };
 
+  // 🌟 Cloudinary သို့ ပုံတင်ပြီး Supabase Database သို့ Data သွင်းမည့် Function အသစ်
   const startBackgroundUpload = async (finalImages: CapturedFile[]) => {
     setIsBackgroundUploading(true);
     setBackgroundUploadCount(finalImages.length);
     setBackgroundUploadStatus('uploading');
 
     try {
+      // 💡 သင့် Cloudinary ရဲ့ Cloud Name ကို ဤနေရာတွင် ထည့်ပေးပါ (သို့မဟုတ် .env ထဲတွင် ထည့်သုံးပါ)
+      const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'YOUR_CLOUD_NAME'; 
+      const uploadPreset = 'for_allinone'; // သင်သတ်မှတ်ထားသော Preset နာမည်
+
       for (let i = 0; i < finalImages.length; i++) {
         const imgObj = finalImages[i];
         let fileToUpload = imgObj.file;
 
+        // ၁။ ပုံပေါ်တွင် စာသားပါက တစ်ခါတည်း Canvas ဖြင့် ပေါင်းစပ် (Bake) မည်
         if (imgObj.textAnnotations.length > 0) {
           fileToUpload = (await bakeImageWithText(imgObj)) as File;
         }
 
-        const fileExt = 'jpg';
-        const fileName = `${userBranch}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
-        const filePath = `intake/${fileName}`;
+        // ၂။ Cloudinary သို့ တင်ရန် FormData ပြင်ဆင်ခြင်း
+        const formData = new FormData();
+        formData.append('file', fileToUpload);
+        formData.append('upload_preset', uploadPreset);
 
-        const { error: uploadError } = await supabase.storage
-          .from('parcel-images')
-          .upload(filePath, fileToUpload);
-
-        if (uploadError) throw uploadError;
-
-        const { data: publicUrlData } = supabase.storage
-          .from('parcel-images')
-          .getPublicUrl(filePath);
-
-        const publicUrl = publicUrlData?.publicUrl;
-
-        const { error: dbError } = await supabase.from('intake_records').insert({
-          branch: userBranch,
-          image_url: publicUrl,
-          barcode: imgObj.barcode || null,
-          note: batchNote.trim() || null,
-          quality: imgObj.quality,
-          metadata: {
-            cropped: !!imgObj.croppedAreaPixels,
-            annotations_count: imgObj.textAnnotations.length
+        // ၃။ Cloudinary Fetch API သုံးပြီး ပုံကို တိုက်ရိုက် Upload တင်ခြင်း
+        const response = await fetch(
+          `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+          {
+            method: 'POST',
+            body: formData,
           }
-        });
+        );
 
-        if (dbError) throw dbError;
-        setBackgroundUploadCount((prev) => Math.max(0, prev - 1));
+        if (!response.ok) {
+          throw new Error(`Cloudinary Upload Failed: ${response.statusText}`);
+        }
+
+        const cloudinaryData = await response.json();
+        const secureUrl = cloudinaryData.secure_url; // Cloudinary မှ ပုံလင့်ခ် ရရှိပြီ
+
+        // ၄။ ရရှိလာသော ပုံလင့်ခ်နှင့် အချက်အလက်များကို Supabase Database ('orders' table) ထဲသို့ Insert လုပ်ခြင်း
+        const { error: dbError } = await supabase
+          .from('orders')
+          .insert([
+            {
+              image_url: secureUrl,                                  // Cloudinary ပုံလင့်ခ်
+              branch: userBranch,                                    // လက်ရှိ Branch ကုဒ် (ဥပမာ - MDY)
+              status: 'Pending',                                     // အလိုအလျောက် Pending ပေးမည်
+              received_date: new Date().toISOString().split('T')[0], // ယနေ့ရက်စွဲ
+              uploader_note: batchNote || null,                      // ဝန်ထမ်းရေးမှတ်ထားသော Note (ရှိလျှင်)
+              barcode: imgObj.barcode || null,                       // စကင်ဖတ်ထားသော Barcode ID (ရှိလျှင်)
+            },
+          ]);
+
+        if (dbError) {
+          console.error("Supabase Database Insert Error:", dbError);
+          throw dbError;
+        }
       }
+
+      // 🎉 အားလုံး အောင်မြင်စွာ တင်ပြီးပါက စာရင်းများကို Clear လုပ်မည်
       setBackgroundUploadStatus('success');
-    } catch (err) {
+      setCapturedImages([]); // Preview ပြထားသော ပုံများ ရှင်းထုတ်မည်
+      setBatchNote('');      // Note စာသားကို ရှင်းထုတ်မည်
+    } catch (error) {
+      console.error('Background Upload Queue Error:', error);
       setBackgroundUploadStatus('error');
     } finally {
       setIsBackgroundUploading(false);
