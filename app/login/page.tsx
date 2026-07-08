@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase" // ✨ Supabase Client
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("") // ✨ Branch အစား Email State သို့ ပြောင်းလဲခြင်း
+  const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
@@ -15,7 +15,7 @@ export default function LoginPage() {
   const [currentDate, setCurrentDate] = useState("")
   
   const router = useRouter()
-  const emailInputRef = useRef<HTMLInputElement>(null) // Email field ကို focus ရန်
+  const emailInputRef = useRef<HTMLInputElement>(null)
 
   // ── Windows 10 Style Clock ──
   useEffect(() => {
@@ -44,6 +44,11 @@ export default function LoginPage() {
       try {
         const { data: { session } } = await supabase.auth.getSession()
         if (session) {
+          // 🏢 အကောင့်ဝင်ထားပြီးသား ဖြစ်နေရင်လည်း Metadata ထဲက Branch ကို ဖတ်ပြီး LocalStorage မှာ သိမ်းမည်
+          const activeUser = session.user
+          const assignedBranch = activeUser?.user_metadata?.branch || "MDY"
+          
+          localStorage.setItem("user_branch", assignedBranch)
           window.location.href = "/"
           return
         }
@@ -77,7 +82,6 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      // Supabase Auth သို့ User ရိုက်ထည့်လိုက်သော Email/Password တိုက်ရိုက်ပေးပို့ခြင်း
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password: password,
@@ -89,11 +93,14 @@ export default function LoginPage() {
         return
       }
 
-      if (data.session) {
-        // AppLayout UI နဲ့ အဆင်ပြေစေရန် Email ရဲ့ ရှေ့ဆုံးစာလုံးကိုယူပြီး user_branch သတ်မှတ်ပေးခြင်း
-        const prefix = email.split("@")[0].toUpperCase()
-        const assignedBranch = ["MDY", "YGN", "MAIN"].includes(prefix) ? prefix : "MAIN"
+      // ✨ အကောင့်ဝင်လိုက်တဲ့ User ရဲ့ data ထဲက user_metadata.branch ကို တိုက်ရိုက်ဖတ်ခြင်း
+      const loggedInUser = data.user || data.session?.user
+
+      if (loggedInUser) {
+        // Database ထဲက raw_user_meta_data.branch ကို ယူပါတယ် (မရှိရင် Default MDY ဟု သတ်မှတ်မည်)
+        const assignedBranch = loggedInUser.user_metadata?.branch || "MDY"
         
+        // localStorage ထဲသိမ်းပြီး Dashboard သို့ လွှဲပေးခြင်း
         localStorage.setItem("user_branch", assignedBranch)
         window.location.href = "/"
       }
@@ -125,7 +132,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen relative overflow-hidden select-none font-[system-ui,-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif] bg-gradient-to-br from-white to-gray-50">
       
-      {/* ── Subtle Background Patterns ── */}
+      {/* Background Patterns */}
       <div className="absolute inset-0 z-0">
         <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-orange-500/10 rounded-full blur-[120px]" />
         <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] bg-amber-500/10 rounded-full blur-[100px]" />
@@ -137,7 +144,7 @@ export default function LoginPage() {
         />
       </div>
 
-      {/* ── Lock Screen Clock ── */}
+      {/* Clock */}
       <div className="absolute top-12 md:top-16 w-full text-center z-10 pointer-events-none px-4 flex flex-col items-center animate-in fade-in slide-in-from-top-4 duration-1000">
         <div className="text-6xl md:text-8xl font-extralight tracking-tight text-gray-800 drop-shadow-sm">
           {currentTime}
@@ -147,16 +154,13 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* ── Login Panel ── */}
+      {/* Login Panel */}
       <div className="absolute inset-0 flex items-center justify-center z-20 p-4">
         <div className="w-full max-w-[380px] animate-in fade-in zoom-in-95 duration-700 ease-out mt-24">
           <div className="bg-white/80 backdrop-blur-xl border border-gray-200/60 rounded-2xl shadow-2xl shadow-black/5 overflow-hidden relative">
-            
-            {/* Top Shine Effect */}
             <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-orange-500/50 to-transparent" />
 
             <div className="p-6 sm:p-8">
-              {/* ── Avatar / Logo ── */}
               <div className="flex flex-col items-center mb-8">
                 <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-lg shadow-orange-500/20 mb-4 rotate-3 hover:rotate-0 transition-transform duration-300">
                   <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -167,7 +171,6 @@ export default function LoginPage() {
                 <p className="text-gray-500 text-sm mt-1">Sign in to your account</p>
               </div>
 
-              {/* ── Error Alert ── */}
               <div className={`transition-all duration-300 ease-out ${error ? "opacity-100 translate-y-0 max-h-20 mb-5" : "opacity-0 -translate-y-2 max-h-0 overflow-hidden mb-0"}`}>
                 <div className="bg-red-50 border border-red-200 text-red-600 text-sm py-2.5 px-3 rounded-lg flex items-center gap-2 font-medium">
                   <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -177,10 +180,7 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* ── Form ── */}
               <form onSubmit={handleLogin} className="space-y-4">
-                
-                {/* ── ✨ Email Input ── */}
                 <div>
                   <div className="relative">
                     <input
@@ -200,7 +200,6 @@ export default function LoginPage() {
                   </div>
                 </div>
 
-                {/* Password Input */}
                 <div>
                   <div className="relative group">
                     <input
@@ -263,7 +262,6 @@ export default function LoginPage() {
               </form>
             </div>
 
-            {/* ── System Tray Footer ── */}
             <div className="bg-gray-50 border-t border-gray-200 px-6 py-3 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <svg className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

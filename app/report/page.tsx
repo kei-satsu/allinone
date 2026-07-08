@@ -25,6 +25,7 @@ const COLUMN_DEFS = [
   { key: 'deliver_rider', label: 'Deliver By', defaultVisible: true },
   { key: 'deliver_date', label: 'Deliver Date', defaultVisible: true },
   { key: 'note', label: 'Note', defaultVisible: true },
+  { key: 'transit_to', label: 'Transit To', defaultVisible: false },
 ]
 
 export default function DailyReport() {
@@ -147,8 +148,9 @@ export default function DailyReport() {
           deliver_rider:riders!orders_deliver_rider_id_fkey(name)
         `)
         .eq('is_deleted', false)
-        .or(`branch.eq.${activeBranch},transit_to.eq.${activeBranch}`)
-        .or(`deliver_date.eq.${activeDate},and(fee_type.in.(Cash,Kpay),received_date.eq.${activeDate})`)
+        // ✨ ဒီနေရာမှာ Variables တွေကို "" ထဲထည့်ပေးလိုက်ပါပြီ
+        .or(`and(branch.eq."${activeBranch}",transit_to.is.null),and(branch.neq."${activeBranch}",transit_to.eq."${activeBranch}")`)
+        .or(`deliver_date.eq."${activeDate}",and(fee_type.in.(Cash,Kpay),received_date.eq."${activeDate}")`)
         .order('created_at', { ascending: false })
 
       if (ordersError) {
@@ -158,7 +160,7 @@ export default function DailyReport() {
         setReportData(ordersData || [])
       }
 
-      // ၂။ Handovers စာရင်းဆွဲထုတ်ခြင်း
+      // ၂။ Handovers စာရင်းဆွဲထုတ်ခြင်း (.eq မှာတော့ "" ထည့်စရာမလိုပါ)
       const { data: handoversData, error: handoversError } = await supabase
         .from('cash_handovers')
         .select('*')

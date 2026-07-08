@@ -25,7 +25,7 @@ const COLUMN_DEFS = [
   { key: 'pickup_rider', label: 'Pickup By', defaultVisible: false },
   { key: 'deliver_rider', label: 'Deliver By', defaultVisible: false },
   { key: 'deliver_date', label: 'Deliver Date', defaultVisible: false },
-  { key: 'cleard_date', label: 'Cleared Date', defaultVisible: false },
+  { key: 'cleared_date', label: 'Cleared Date', defaultVisible: false },
   { key: 'note', label: 'Note', defaultVisible: false },
   { key: 'created_at', label: 'Created At', defaultVisible: false },
   { key: 'transit_date', label: 'Transit Date', defaultVisible: false },

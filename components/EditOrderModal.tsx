@@ -250,17 +250,19 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
       const newNote = formData.note === 'RT' ? 'Return (RT)' : (formData.note || 'Normal');
       changes.push(`⚠️ Note Utility: "${oldNote}" ➔ "${newNote}"`);
     }
+    
+    // 💸 Cash Event ပြင်ဆင်မှုတွင် သတ်မှတ်လိုက်သော ရက်စွဲကိုပါ ထည့်သွင်းမှတ်တမ်းတင်ခြင်း
     if ((orderData.cleared_date || '') !== (formData.cleared_date || '')) {
-      const oldClear = orderData.cleared_date ? 'Cleared' : 'Uncleared';
-      const newClear = formData.cleared_date ? 'Cleared' : 'Uncleared';
+      const oldClear = orderData.cleared_date ? `Cleared (${orderData.cleared_date})` : 'Uncleared';
+      const newClear = formData.cleared_date ? `Cleared (${formData.cleared_date})` : 'Uncleared';
       changes.push(`💸 Cash Event: "${oldClear}" ➔ "${newClear}"`);
     }
+    
     if (orderData.image_url !== formData.image_url) {
       const imgStatus = !formData.image_url ? 'Voucher image removed' : 'New voucher image uploaded';
       changes.push(`🖼️ Attachment: "${imgStatus}"`);
     }
     
-    // 🌟 ဖြည့်စွက်ချက် - Remark ပြောင်းလဲမှုအား Audit History ထဲထည့်ခြင်း
     if ((orderData.remark || '') !== (formData.remark || '')) {
       changes.push(`📝 Remark: "${orderData.remark || 'N/A'}" ➔ "${formData.remark || 'Deleted'}"`);
     }
@@ -435,7 +437,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
               </div>
             </div>
 
-            {/* 🌟 ဖြည့်စွက်ချက် - Remark Section UI (Receiver အောက်တွင် ထည့်ထားပါသည်) */}
+            {/* Remark Section UI */}
             <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-xs">
               <label className={labelStyle}>Remark (အထွေထွေမှတ်ချက်)</label>
               <textarea 
@@ -523,10 +525,31 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                 </div>
                 <div>
                   <label className={labelStyle}>Cash Event</label>
-                  <select value={formData.cleared_date ? "yes" : "no"} onChange={e => setFormData({...formData, cleared_date: e.target.value === "yes" ? new Date().toISOString().split('T')[0] : ""})} className={winSelect}>
+                  <select 
+                    value={formData.cleared_date ? "yes" : "no"} 
+                    onChange={e => setFormData({
+                      ...formData, 
+                      cleared_date: e.target.value === "yes" ? new Date().toISOString().split('T')[0] : ""
+                    })} 
+                    className={winSelect}
+                  >
                     <option value="no">Not Cleared</option>
                     <option value="yes">Cleared</option>
                   </select>
+
+                  {/* ✨ Cleared Date Picker: Cleared ဖြစ်မှ အောက်ကနေ ရက်စွဲရွေးရန် ပေါ်လာမည် */}
+                  {formData.cleared_date && (
+                    <div className="mt-2">
+                      <label className="block text-gray-500 font-medium mb-1 text-[10px] uppercase tracking-wide">Cleared Date</label>
+                      <input 
+                        type="date" 
+                        value={formData.cleared_date} 
+                        onChange={e => setFormData({...formData, cleared_date: e.target.value})} 
+                        className={`${winInput} font-mono`}
+                        required
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

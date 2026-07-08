@@ -15,7 +15,7 @@ interface BranchInfo { code: string; displayName: string; color: string }
 const BRANCH_MAP: Record<string, BranchInfo> = {
   MDY: { code: "MDY", displayName: "Mandalay Branch", color: "from-orange-500 to-amber-500" },
   YGN: { code: "YGN", displayName: "Yangon Branch", color: "from-sky-500 to-blue-600" },
-  MAIN: { code: "MAIN", displayName: "Main Office", color: "from-purple-600 to-indigo-700" },
+  ADMIN: { code: "ADMIN", displayName: "ADMIN", color: "from-purple-600 to-indigo-700" },
 }
 
 const DEFAULT_BRANCH: BranchInfo = {
@@ -132,37 +132,48 @@ const MENU_ITEMS: MenuItem[] = [
   },
 ]
 
-// ──────────────────────────────────────
-// Custom Hook: Auth & Branch
-// ──────────────────────────────────────
+// ✨ AppLayout.tsx မှာ အစားထိုးရမယ့် useAuth Hook အမှန်ဖြစ်ပါတယ်
+// ✨ AppLayout.tsx ရဲ့ useAuth Hook အသစ် (Admin Switcher Support)
 function useAuth(redirectIfMissing: boolean) {
   const [userBranch, setUserBranch] = useState<string | null>(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("user_branch")
+     const [realBranch, setRealBranch] = useState<string | null>(null) 
     }
     return null
   })
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [realBranch, setRealBranch] = useState<string | null>(null) // 🌟 အကောင့်ရဲ့ တကယ့် ရာထူး/Branch ကို မှတ်ရန်
   const [isReady, setIsReady] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
   const hasRedirected = useRef(false)
-
-  const getBranchFromEmail = (email?: string) => {
-    if (!email) return null
-    const prefix = email.split("@")[0].toUpperCase()
-    return ["MDY", "YGN", "MAIN"].includes(prefix) ? prefix : "MAIN"
-  }
 
   useEffect(() => {
     const initializeAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession()
         if (session?.user) {
-          const currentBranch = getBranchFromEmail(session.user.email)
-          setUserBranch(currentBranch)
-          if (currentBranch) localStorage.setItem("user_branch", currentBranch)
+          const metadataBranch = session.user.user_metadata?.branch || "MDY"
+          setRealBranch(metadataBranch)
+          setUserEmail(session.user.email || null)
+
+          // Admin ဖြစ်ခဲ့ရင် localStorage ထဲက ရွေးထားတဲ့ branch အတိုင်းပြပေးမယ်၊ မရှိရင် Default "MDY" ပြပေးမယ်
+          if (metadataBranch === "ADMIN") {
+            const stored = localStorage.getItem("user_branch")
+            if (stored && stored !== "ADMIN") {
+              setUserBranch(stored)
+            } else {
+              setUserBranch("MDY")
+              localStorage.setItem("user_branch", "MDY")
+            }
+          } else {
+            setUserBranch(metadataBranch)
+            localStorage.setItem("user_branch", metadataBranch)
+          }
         } else {
           setUserBranch(null)
+          setRealBranch(null)
           localStorage.removeItem("user_branch")
         }
       } catch (error) {
@@ -176,11 +187,26 @@ function useAuth(redirectIfMissing: boolean) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
-        const currentBranch = getBranchFromEmail(session.user.email)
-        setUserBranch(currentBranch)
-        if (currentBranch) localStorage.setItem("user_branch", currentBranch)
+        const metadataBranch = session.user.user_metadata?.branch || "MDY"
+        setRealBranch(metadataBranch)
+        setUserEmail(session.user.email || null)
+
+        if (metadataBranch === "ADMIN") {
+          const stored = localStorage.getItem("user_branch")
+          if (stored && stored !== "ADMIN") {
+            setUserBranch(stored)
+          } else {
+            setUserBranch("MDY")
+            localStorage.setItem("user_branch", "MDY")
+          }
+        } else {
+          setUserBranch(metadataBranch)
+          localStorage.setItem("user_branch", metadataBranch)
+        }
       } else {
         setUserBranch(null)
+        setRealBranch(null)
+        setUserEmail(null)
         localStorage.removeItem("user_branch")
         if (redirectIfMissing && pathname !== "/login") {
           router.replace("/login")
@@ -206,6 +232,13 @@ function useAuth(redirectIfMissing: boolean) {
     return BRANCH_MAP[userBranch] ?? { ...DEFAULT_BRANCH, code: userBranch, displayName: userBranch }
   }, [userBranch])
 
+  // 🔄 Branch ပြောင်းလဲပေးမည့် ဖန်ရှင်
+  const changeBranch = useCallback((newBranch: string) => {
+    setUserBranch(newBranch)
+    localStorage.setItem("user_branch", newBranch)
+    window.location.reload() // 🚀 အချက်အလက်တွေ ချက်ချင်းပြောင်းလဲသွားအောင် Page ကို Refresh လုပ်ပေးခြင်း
+  }, [])
+
   const logout = useCallback(async () => {
     try {
       await supabase.auth.signOut()
@@ -214,11 +247,12 @@ function useAuth(redirectIfMissing: boolean) {
       console.error("Sign out failed:", error)
     }
     setUserBranch(null)
+    setRealBranch(null)
     hasRedirected.current = false
     router.replace("/login")
   }, [router])
 
-  return { userBranch, branchInfo, isReady, isAuthenticated: !!userBranch, logout }
+  return { userEmail , userBranch, realBranch, branchInfo, isReady, isAuthenticated: !!userBranch, logout, changeBranch }
 }
 
 // ──────────────────────────────────────
@@ -321,11 +355,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [hideMobileDock, setHideMobileDock] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
   const isLoginPage = pathname === "/login"
   const isIntakePage = pathname === "/intake" 
   
   const isVocPage = pathname === "/voc"
-  const { branchInfo, isAuthenticated, isReady, logout } = useAuth(!isLoginPage)
+  const { userEmail , userBranch, realBranch, branchInfo, isAuthenticated, isReady, logout, changeBranch } = useAuth(!isLoginPage)
   const sidebarRef = useRef<HTMLElement>(null)
 
   const [mounted, setMounted] = useState(false)
@@ -363,6 +398,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (pathname !== "/intake") setHideMobileDock(false)
   }, [pathname])
 
+  useEffect(() => {
+  if (isReady && pathname === "/trash" && realBranch !== "ADMIN") {
+    router.replace("/")
+  }
+}, [isReady, pathname, realBranch, router])
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -390,6 +431,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (!mounted || !isReady) return <div className="w-full h-screen bg-[#f3f3f3]" />
   if (isLoginPage) return <div className="w-full min-h-screen">{children}</div>
   if (!isAuthenticated) return <div className="w-full min-h-screen bg-[#f3f3f3]" />
+
+  if (pathname === "/trash" && realBranch !== "ADMIN") {
+    return <div className="w-full h-screen bg-[#f3f3f3]" />
+  }
 
   const collapsed = !sidebarExpanded && !sidebarLocked
 
@@ -488,6 +533,37 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     </div>
   </div>
 
+  {/* 👑 ── ADMIN BRANCH SWITCHER (ထည့်သွင်းရမည့် ကုဒ်အသစ်ဖြစ်ပါတယ်) ── */}
+{realBranch === "ADMIN" && (!collapsed || isMobile) && (
+  <div className="px-4 pt-3 pb-2 border-b border-slate-100/50 flex flex-col gap-1.5 animate-in fade-in duration-200">
+    <span className="text-[10px] text-slate-400 font-bold tracking-wider uppercase px-1 flex items-center gap-1">
+      ⚙️ Admin View Node
+    </span>
+    <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100/80 rounded-2xl border border-slate-200/30 shadow-inner">
+      <button
+        onClick={() => changeBranch("MDY")}
+        className={`py-1.5 text-xs font-black rounded-xl transition-all duration-200 ${
+          userBranch === "MDY"
+            ? "bg-white text-orange-600 shadow-sm scale-[1.02]"
+            : "text-slate-500 hover:text-slate-800"
+        }`}
+      >
+        MDY
+      </button>
+      <button
+        onClick={() => changeBranch("YGN")}
+        className={`py-1.5 text-xs font-black rounded-xl transition-all duration-200 ${
+          userBranch === "YGN"
+            ? "bg-white text-blue-600 shadow-sm scale-[1.02]"
+            : "text-slate-500 hover:text-slate-800"
+        }`}
+      >
+        YGN
+      </button>
+    </div>
+  </div>
+)}
+
   {/* 🧭 iOS Navigation List */}
   <nav className={`flex-1 mt-3 overflow-y-auto custom-scrollbar ${
     isMobile 
@@ -497,6 +573,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         : "space-y-1 px-3"
   }`}>
     {MENU_ITEMS.map(item => {
+
+
+if (item.path === "/trash" && realBranch !== "ADMIN") {
+      return null
+    }
+
       // 🌟 မိမိလမ်းကြောင်း သို့မဟုတ် Sub-menu လမ်းကြောင်းတစ်ခုခု ရောက်နေရင် Active ဖြစ်သည်ဟု သတ်မှတ်မည်
       const isParentActive = pathname === item.path
       const isChildActive = item.children?.some(child => pathname === child.path) ?? false
@@ -529,7 +611,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className={`flex flex-col min-w-0 transition-all duration-200 ${
         collapsed && !isMobile ? "w-0 opacity-0 overflow-hidden" : "w-auto opacity-100"
       }`}>
-        <span className="text-xs font-bold text-slate-800 truncate">Staff Active</span>
+        <span className="text-xs font-bold text-slate-800 truncate" title={userEmail || ""}>
+      {userEmail || "Staff Active"}
+    </span>
         <span className="text-[10px] text-slate-400 font-medium uppercase truncate tracking-tight">{branchInfo.displayName}</span>
       </div>
     </div>

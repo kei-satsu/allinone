@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbo",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
+    "@ducanh2912/next-pwa": "^10.2.9",
     "@supabase/supabase-js": "^2.105.4",
     "@tailwindcss/oxide": "^4.3.0",
     "@yudiel/react-qr-scanner": "^2.6.0",
