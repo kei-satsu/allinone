@@ -66,13 +66,13 @@ const BarcodePrinterPage = () => {
         if (svgElement) {
           let barcodeWidth = 1.8; 
           let barcodeHeight = labelSize.h * 1.5;
-          let fontSize = 14;
+          let fontSize = 18;
 
           // 🌟 100x150mm 2-Column အတွက် Barcode ကို အချိုးကျအောင် ချိန်ညှိခြင်း
           if (isA6Grid) {
             barcodeWidth = 2.0;   // မျဉ်းအထူ စကန်ဖတ်ရလွယ်စေရန်
             barcodeHeight = 60;   // 31.3mm အမြင့်ကွက်ထဲ ဆံ့စေရန် Pixel အမြင့်
-            fontSize = 12;
+            fontSize = 20;
           } else {
             if (labelSize.w <= 40) barcodeWidth = 1.3;
             else if (labelSize.w >= 60) barcodeWidth = 2.2;
