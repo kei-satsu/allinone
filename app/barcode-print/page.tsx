@@ -5,33 +5,38 @@ import JsBarcode from 'jsbarcode';
 
 const BarcodePrinterPage = () => {
   // --- States ---
+  // Default ကို User လိုချင်တဲ့ 100x150mm (A6 စာရွက်ကြီး) အဖြစ် တိုက်ရိုက် သတ်မှတ်ပေးထားပါတယ်
   const [printMode, setPrintMode] = useState<'thermal' | 'a4'>('thermal');
-  const [labelSize, setLabelSize] = useState({ w: 50, h: 30 }); // Default 50x30mm
-  const [printCount, setPrintCount] = useState<number>(10);
+  const [labelSize, setLabelSize] = useState({ w: 100, h: 150 }); 
+  const [printCount, setPrintCount] = useState<number>(16); // စမ်းသပ်ရလွယ်အောင် ၂ ရွက်စာ (၁၆ ခု) Default ထားပါတယ်
   const [generatedList, setGeneratedList] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
 
   const previewRef = useRef<HTMLDivElement>(null);
 
-  // 🌟 ပြင်ဆင်ချက် ၁: ကုတ်ကို တိုတိုကျစ်ကျစ်နှင့် လုံးဝမထပ်အောင် ဖန်တီးခြင်း
+  // 🌟 A6 2-Column စနစ် ဟုတ်မဟုတ် စစ်ဆေးခြင်း
+  const isA6Grid = labelSize.w === 100 && labelSize.h === 150;
+
+  // 💡 Array ကို အုပ်စုအလိုက် (Chunk) ခွဲပေးမည့် Helper Function (တစ်ရွက်စာ ၈ ခုစီ ခွဲရန်)
+  const chunkArray = (arr: string[], size: number) => {
+    return Array.from({ length: Math.ceil(arr.length / size) }, (v, i) =>
+      arr.slice(i * size, i * size + size)
+    );
+  };
+
+  // Unique ID Generator (Base36 ကုတ်တို)
   const generateBulkUniqueIDs = (count: number) => {
     const idList: string[] = [];
     const now = new Date();
-    
-    // 💡 အချိန်ကို Base36 (အက္ခရာ+ဂဏန်း) အဖြစ်ပြောင်းလိုက်သဖြင့် ကုတ်အရမ်းတိုသွားပါမည်
-    // ဥပမာ - "18F4A2" ပုံစံမျိုး ထွက်လာမည်
     const shortTimestamp = Math.floor(now.getTime() / 1000).toString(36).toUpperCase(); 
 
     for (let i = 0; i < count; i++) {
-      // အလှည့်စဉ်ကို 2 လုံး (သို့) 3 လုံးသာ ထားမည်
-      const serialNumber = i.toString().padStart(2, '0'); 
-      // PKG + အချိန်ကုတ် + အစဉ်လိုက်နံပါတ် (စုစုပေါင်း ၉-၁၀ လုံးခန့်သာ ရှိပါတော့မည်)
+      const serialNumber = i.toString().padStart(3, '0'); 
       idList.push(`PK${shortTimestamp}${serialNumber}`);
     }
     return idList;
   };
 
-  // 🔄 Generate ခလုတ် နှိပ်သောအခါ
   const handleGenerate = () => {
     if (printCount <= 0 || printCount > 500) {
       alert('၁ လုံး မှ ၅၀၀ အတွင်းသာ ထုတ်နိုင်ပါသည်။');
@@ -43,101 +48,179 @@ const BarcodePrinterPage = () => {
     setIsGenerating(false);
   };
 
-  // 🖼️ 🌟 ပြင်ဆင်ချက် ၂: Barcode SVG ပုံထွက်ကို Label Size အလိုက် အချိုးကျအောင် ချိန်ညှိခြင်း
+  // 🖼️ Barcode SVG များကို Size အလိုက် Render လုပ်ပေးခြင်း
   useEffect(() => {
     if (generatedList.length > 0) {
       generatedList.forEach((id) => {
         const svgElement = document.getElementById(`barcode-${id}`);
         if (svgElement) {
-          // Label အကျယ် (w) ပေါ်မူတည်၍ Barcode မျဉ်းအထူ (width) ကို ချိန်ညှိမည်
           let barcodeWidth = 1.8; 
-          if (labelSize.w <= 40) barcodeWidth = 1.3;
-          else if (labelSize.w >= 60) barcodeWidth = 2.2;
+          let barcodeHeight = labelSize.h * 1.5;
+          let fontSize = 14;
+
+          // 🌟 100x150mm 2-Column အတွက် Barcode ကို အချိုးကျအောင် ချိန်ညှိခြင်း
+          if (isA6Grid) {
+            barcodeWidth = 2.0;   // မျဉ်းအထူ စကန်ဖတ်ရလွယ်စေရန်
+            barcodeHeight = 60;   // 31.3mm အမြင့်ကွက်ထဲ ဆံ့စေရန် Pixel အမြင့်
+            fontSize = 12;
+          } else {
+            if (labelSize.w <= 40) barcodeWidth = 1.3;
+            else if (labelSize.w >= 60) barcodeWidth = 2.2;
+            if (labelSize.w <= 40) fontSize = 11;
+          }
 
           JsBarcode(svgElement, id, {
             format: 'CODE128',
-            width: barcodeWidth, // 👈 မျဉ်းအထူကို လိုက်ဖက်အောင်ထားမည်
-            height: labelSize.h * 1.5, // 👈 အပေါ်အောက် အပြည့်နီးပါး ဖြစ်အောင် မြှင့်ပေးထားသည်
+            width: barcodeWidth,
+            height: barcodeHeight,
             displayValue: true,
-            fontSize: labelSize.w <= 40 ? 11 : 14, // စာလုံးဆိုဒ်
+            fontSize: fontSize,
             textMargin: 4,
             margin: 5
           });
         }
       });
     }
-  }, [generatedList, labelSize]);
+  }, [generatedList, labelSize, isA6Grid]);
 
-  // 🖨️ 1. PC ဖြင့် ပရင့်ထုတ်ခြင်း (Thermal နှင့် A4 နှစ်မျိုးလုံး အလုပ်လုပ်သည်)
+  // 🖨️ 1. PC ဖြင့် ပရင့်ထုတ်ခြင်း
   const handlePCPrint = () => {
     if (generatedList.length === 0) return alert('ကျေးဇူးပြု၍ Barcode များ အရင် Generate လုပ်ပါ။');
 
-    const printContent = previewRef.current?.innerHTML;
-    if (!printContent) return;
+    const printWindow = window.open('', '_blank', 'width=900,height=800');
+    if (!printWindow) return;
 
-    const printWindow = window.open('', '_blank', 'width=800,height=800');
-    if (printWindow) {
-      const printCSS = printMode === 'thermal' 
-        ? `
-          @page { size: ${labelSize.w}mm ${labelSize.h}mm; margin: 0; }
-          body { margin: 0; padding: 0; background: white; }
-          .grid-container { display: block; }
-          .label-box { width: ${labelSize.w}mm; height: ${labelSize.h}mm; display: flex; flex-direction: column; justify-content: center; align-items: center; page-break-after: always; overflow: hidden; }
-        `
-        : `
-          @page { size: A4; margin: 10mm; }
-          body { margin: 0; background: white; }
-          .grid-container { display: flex; flex-wrap: wrap; gap: 2mm; justify-content: flex-start; }
-          .label-box { width: ${labelSize.w}mm; height: ${labelSize.h}mm; border: 1px dashed #ccc; display: flex; flex-direction: column; justify-content: center; align-items: center; box-sizing: border-box; }
-        `;
+    let printHTML = '';
 
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Print Barcodes</title>
-            <style>
-              ${printCSS}
-              /* 🌟 ပြင်ဆင်ချက် ၃: ပရင့်ထုတ်ရာတွင်ပါ စာသားနှင့် ပုံ အချိုးကျအောင် ပြင်ဆင်ခြင်း */
-              .title { font-size: ${labelSize.w <= 40 ? '9px' : '11px'}; font-weight: bold; font-family: sans-serif; text-transform: uppercase; margin-bottom: 2px; }
-              svg { max-width: 95%; max-height: 75%; object-fit: contain; }
-            </style>
-          </head>
-          <body>
-            <div class="grid-container">
-              ${generatedList.map(id => `
-                <div class="label-box">
-                  <div class="title">ALL IN ONE Express</div>
-                  ${document.getElementById(`barcode-${id}`)?.outerHTML || ''}
-                </div>
-              `).join('')}
+    if (isA6Grid) {
+      // 🌟 100x150mm အတွက် တစ်ရွက်ကို ၈ ခုစီ (2 Columns x 4 Rows) အုပ်စုခွဲ၍ စီပေးခြင်း
+      const pages = chunkArray(generatedList, 8);
+      
+      printHTML = pages.map(pageElements => `
+        <div class="page-sheet-a6">
+          ${pageElements.map(id => `
+            <div class="label-box-64">
+              <div class="title">ALL IN ONE Express</div>
+              ${document.getElementById(`barcode-${id}`)?.outerHTML || ''}
             </div>
-            <script>
-              window.onload = function() { window.print(); setTimeout(function(){ window.close(); }, 500); };
-            </script>
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
+          `).join('')}
+        </div>
+      `).join('');
+    } else {
+      // ရိုးရိုး Single Label သို့မဟုတ် A4 Mode
+      printHTML = `
+        <div class="grid-container">
+          ${generatedList.map(id => `
+            <div class="label-box">
+              <div class="title">ALL IN ONE Express</div>
+              ${document.getElementById(`barcode-${id}`)?.outerHTML || ''}
+            </div>
+          `).join('')}
+        </div>
+      `;
     }
+
+    const printCSS = isA6Grid 
+      ? `
+        @page { size: 100mm 150mm; margin: 0; }
+        body { margin: 0; padding: 0; background: white; font-family: sans-serif; }
+        .page-sheet-a6 { 
+          width: 100mm; 
+          height: 150mm; 
+          display: grid; 
+          grid-template-columns: repeat(2, 1fr); 
+          gap: 2mm; 
+          padding: 2mm; 
+          box-sizing: border-box; 
+          page-break-after: always;
+          align-content: start;
+        }
+        .label-box-64 { 
+          width: 47mm; 
+          height: 31.3mm; /* 🌟 6:4 Ratio အကျဆုံး စကေး */
+          border: 1px dashed #bbb; 
+          display: flex; 
+          flex-direction: column; 
+          justify-content: center; 
+          align-items: center; 
+          box-sizing: border-box; 
+          overflow: hidden;
+          background: white;
+        }
+        .title { font-size: 10px; font-weight: bold; text-transform: uppercase; margin-bottom: 1px; }
+        svg { max-width: 95%; max-height: 70%; object-fit: contain; }
+      `
+      : `
+        @page { size: ${printMode === 'thermal' ? `${labelSize.w}mm ${labelSize.h}mm` : 'A4'}; margin: ${printMode === 'thermal' ? '0' : '10mm'}; }
+        body { margin: 0; background: white; font-family: sans-serif; }
+        .grid-container { display: flex; flex-wrap: wrap; gap: 2mm; justify-content: flex-start; }
+        .label-box { width: ${labelSize.w}mm; height: ${labelSize.h}mm; border: ${printMode === 'a4' ? '1px dashed #ccc' : 'none'}; display: flex; flex-direction: column; justify-content: center; align-items: center; box-sizing: border-box; ${printMode === 'thermal' ? 'page-break-after: always;' : ''} overflow: hidden; }
+        .title { font-size: ${labelSize.w <= 40 ? '9px' : '11px'}; font-weight: bold; text-transform: uppercase; margin-bottom: 2px; }
+        svg { max-width: 95%; max-height: 75%; object-fit: contain; }
+      `;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Print Barcodes</title>
+          <style>${printCSS}</style>
+        </head>
+        <body>
+          ${printHTML}
+          <script>
+            window.onload = function() { window.print(); setTimeout(function(){ window.close(); }, 500); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
-  // 📱 2. Mobile ဖုန်းဖြင့် ပရင့်ထုတ်ခြင်း (GP Printer Thermal အတွက်သာ)
+  // 📱 2. Mobile ဖုန်းဖြင့် ပရင့်ထုတ်ခြင်း (TSPL Command - 2 Column စနစ်တွက်ချက်မှု)
   const handleMobileThermalPrint = () => {
     if (generatedList.length === 0) return alert('ကျေးဇူးပြု၍ Barcode များ အရင် Generate လုပ်ပါ။');
     
     let masterTsplCommand = '';
-    generatedList.forEach((id) => {
-      // 🌟 ပြင်ဆင်ချက် ၄: TSPL Command တွင် Barcode အမြင့်ကို ချိန်ညှိခြင်း
-      const tsplBarcodeHeight = Math.floor(labelSize.h * 2.5); // အပေါ်အောက် ပိုပြည့်အောင် ဆွဲဆန့်သည်
-      
-      masterTsplCommand += 
-        `SIZE ${labelSize.w} mm, ${labelSize.h} mm\r\n` +
-        `GAP 2 mm\r\n` +
-        `CLS\r\n` +
-        `TEXT 30,10,"2",0,1,1,"ALL IN ONE DELI"\r\n` + 
-        `BARCODE 15,45,"128",${tsplBarcodeHeight},1,0,2,2,"${id}"\r\n` +
-        `PRINT 1\r\n`;
-    });
+
+    if (isA6Grid) {
+      // 🌟 A6 စာရွက်ကြီးတစ်ခုထဲမှာ Barcode ၈ ခုကို 2 Columns နေရာချပေးခြင်း (Dots ဖြင့် တွက်ချက်သည် - 1mm = 8 dots)
+      const pages = chunkArray(generatedList, 8);
+
+      pages.forEach((pageItems) => {
+        masterTsplCommand += 
+          `SIZE 100 mm, 150 mm\r\n` +
+          `GAP 2 mm\r\n` +
+          `CLS\r\n`;
+
+        pageItems.forEach((id, index) => {
+          const col = index % 2;        // 0 သို့မဟုတ် 1 (ဘယ်/ညာ ကော်လံ)
+          const row = Math.floor(index / 2); // 0, 1, 2, 3 (အတန်းအလှည့်)
+
+          // ကော်လံအလိုက် X နေရာချခြင်း (ဘယ်ဘက် = အနားသတ် 32 dots၊ ညာဘက် = အနားသတ် 424 dots)
+          const x = col === 0 ? 32 : 424;
+          // အတန်းအလိုက် Y နေရာချခြင်း (တစ်တန်းလျှင် 280 dots စီ ကွာဝေးစေမည်)
+          const y = 40 + (row * 280);
+
+          masterTsplCommand += 
+            `TEXT ${x + 40},${y},"2",0,1,1,"ALL IN ONE DELI"\r\n` + 
+            `BARCODE ${x},${y + 35},"128",90,1,0,2,2,"${id}"\r\n`;
+        });
+
+        masterTsplCommand += `PRINT 1\r\n`;
+      });
+    } else {
+      // ရိုးရိုး Single Label ပုံစံအတိုင်း ထုတ်ခြင်း
+      generatedList.forEach((id) => {
+        const tsplBarcodeHeight = Math.floor(labelSize.h * 2.5);
+        masterTsplCommand += 
+          `SIZE ${labelSize.w} mm, ${labelSize.h} mm\r\n` +
+          `GAP 2 mm\r\n` +
+          `CLS\r\n` +
+          `TEXT 30,10,"2",0,1,1,"ALL IN ONE DELI"\r\n` + 
+          `BARCODE 15,45,"128",${tsplBarcodeHeight},1,0,2,2,"${id}"\r\n` +
+          `PRINT 1\r\n`;
+      });
+    }
 
     try {
       const base64Command = btoa(masterTsplCommand);
@@ -185,10 +268,10 @@ const BarcodePrinterPage = () => {
                 setLabelSize({ w, h });
               }}
             >
-              <option value="40x30">40mm x 30mm (အသေးစား)</option>
+              <option value="100x150">100mm x 150mm (A6 စာရွက်ကြီး - 2 Column Grid)</option>
               <option value="50x30">50mm x 30mm (စံသတ်မှတ်ချက်)</option>
+              <option value="40x30">40mm x 30mm (အသေးစား)</option>
               <option value="60x40">60mm x 40mm (အလတ်စား)</option>
-              <option value="100x150">100mm x 150mm (A6 စာရွက်ကြီး)</option>
             </select>
           </div>
 
@@ -231,30 +314,58 @@ const BarcodePrinterPage = () => {
           
           {/* Instructions Box */}
           <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl mb-4 flex-shrink-0">
-            <h3 className="text-blue-800 font-bold mb-2">📌 အသုံးပြုနည်းလမ်းညွှန်</h3>
-            <ul className="text-sm text-blue-700 space-y-1 ml-4 list-disc">
-              <li><b>PC Thermal ဖြင့်ထုတ်ရန်:</b> "Thermal Sticker" ရွေးပါ။ Print နှိပ်လျှင် Printer Settings တွင် Label Size အတိအကျနှင့် Margins: None ရွေးပေးပါ။</li>
-              <li><b>PC ရိုးရိုး Printer ဖြင့်ထုတ်ရန် (A4):</b> "Standard A4" ရွေးပါ။ A4 စာရွက်ပေါ်တွင် Label များ အံဝင်ခွင်ကျ အလိုအလျောက် စီသွားပါမည်။</li>
-              <li><b>ဖုန်းဖြင့်ထုတ်ရန်:</b> ဖုန်းထဲတွင် <a href="https://play.google.com/store/apps/details?id=ru.a402d.rawbtprinter" target="_blank" className="underline font-bold text-orange-600">RawBT App</a> ဒေါင်းလုဒ်ဆွဲထားပါ။ OTG/Bluetooth ဖြင့် ပရင်တာချိတ်ထားပြီး "Print via Phone" ကိုနှိပ်ပါ။</li>
+            <h3 className="text-blue-800 font-bold mb-1">📌 {isA6Grid ? 'A6 (2-Column) Layout စနစ် ဖွင့်ထားပါသည်' : 'အသုံးပြုနည်းလမ်းညွှန်'}</h3>
+            <p className="text-xs text-blue-700 mb-2">
+              {isA6Grid 
+                ? '၁၀၀x၁၅၀mm စာရွက်ကြီးပေါ်တွင် တစ်ရွက်လျှင် ဘားကုဒ် ၈ ခုစီ (6:4 Ratio အကြီးဆုံးဆိုဒ်) အလိုအလျောက် ခွဲပေးသွားပါမည်။'
+                : 'ရွေးချယ်ထားသော Label Size အတိုင်း ပရင့်ထုတ်ပေးပါမည်။'}
+            </p>
+            <ul className="text-xs text-blue-600 space-y-1 ml-4 list-disc">
+              <li><b>PC Print အကြံပြုချက်:</b> ပရင့်ဆွဲတင်သည့်အခါ ဆက်တင်ထဲတွင် <b>Margins: None</b> ထားပေးရန် မမေ့ပါနှင့်။</li>
+              <li><b>ဖုန်းဖြင့်ထုတ်ရန်:</b> ဖုန်းထဲတွင် RawBT App ရှိရပါမည်။</li>
             </ul>
           </div>
 
           <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3">Live Preview (နမူနာမြင်ကွင်း)</h2>
           
           {/* Grid Preview Area (Scrollable) */}
-          <div className="flex-1 overflow-y-auto bg-white border border-slate-200 rounded-xl p-4 shadow-inner">
+          <div className="flex-1 overflow-y-auto bg-slate-200 border border-slate-300 rounded-xl p-4 shadow-inner flex justify-center">
             {generatedList.length === 0 ? (
               <div className="w-full h-full flex items-center justify-center text-slate-400">Generate ခလုတ်ကို အရင်နှိပ်ပေးပါဗျာ...</div>
+            ) : isA6Grid ? (
+              /* 🌟 100x150mm စနစ်အတွက် Preview ကို တစ်ရွက်ချင်းစီ Grid ကွက်တိပုံစံ ပြသခြင်း */
+              <div ref={previewRef} className="flex flex-col gap-6 items-center w-full">
+                {chunkArray(generatedList, 8).map((pageItems, pIdx) => (
+                  <div 
+                    key={pIdx}
+                    className="bg-white shadow-md border border-neutral-400 relative grid grid-cols-2 gap-[2mm] p-[2mm] content-start"
+                    style={{ width: '100mm', height: '150mm', minHeight: '150mm' }}
+                  >
+                    {pageItems.map((id) => (
+                      <div 
+                        key={id}
+                        className="flex flex-col items-center justify-center border border-dashed border-slate-300 bg-white overflow-hidden"
+                        style={{ width: '47mm', height: '31.3mm' }} // 6:4 Ratio ကွက်တိ
+                      >
+                        <span className="text-[9px] font-bold uppercase mb-0.5 text-neutral-700">ALL IN ONE Express</span>
+                        <svg id={`barcode-${id}`} className="max-w-full h-auto"></svg>
+                      </div>
+                    ))}
+                    <div className="absolute bottom-1 right-2 text-[9px] text-gray-400 font-mono">Page {pIdx + 1}</div>
+                  </div>
+                ))}
+              </div>
             ) : (
+              /* ရိုးရိုး Single Label သို့မဟုတ် A4 ပုံမှန် Preview */
               <div 
                 ref={previewRef} 
-                className={`flex flex-wrap gap-2 ${printMode === 'thermal' ? 'flex-col items-center' : 'justify-start'}`}
+                className={`flex flex-wrap gap-2 w-full ${printMode === 'thermal' ? 'flex-col items-center' : 'justify-start'}`}
               >
                 {generatedList.map((id) => (
                   <div 
                     key={id} 
-                    className="flex flex-col items-center justify-center border-2 border-dashed border-slate-300 bg-white"
-                    style={{ width: `${labelSize.w}mm`, height: `${labelSize.h}mm` }} // Preview တွင် အပြင်ဆိုဒ်အတိုင်း ပြသမည်
+                    className="flex flex-col items-center justify-center border border-dashed border-slate-300 bg-white"
+                    style={{ width: `${labelSize.w}mm`, height: `${labelSize.h}mm` }}
                   >
                     <span className="text-[10px] font-bold uppercase mb-1">ALL IN ONE Express</span>
                     <svg id={`barcode-${id}`} className="max-w-full h-auto"></svg>
