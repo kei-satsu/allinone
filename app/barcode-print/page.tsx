@@ -24,15 +24,25 @@ const BarcodePrinterPage = () => {
     );
   };
 
-  // Unique ID Generator (Base36 ကုတ်တို)
+ // 💡 ထပ်နိုင်ကိန်း လုံးဝမရှိဘဲ Barcode အလျား အတိုဆုံးဖြစ်စေမည့် Pure Numeric Generator
   const generateBulkUniqueIDs = (count: number) => {
     const idList: string[] = [];
     const now = new Date();
-    const shortTimestamp = Math.floor(now.getTime() / 1000).toString(36).toUpperCase(); 
+    
+    // ၁။ ၂၀၂၆ ခုနှစ် ဇန်နဝါရီ ၁ ရက်နေ့ရဲ့ Unix Timestamp စက္ကန့် (Custom Epoch)
+    const epochSeconds = 1767225600; 
+    const currentSeconds = Math.floor(now.getTime() / 1000);
+    
+    // ၂။ လက်ရှိအချိန်ထဲက Epoch ကို နှုတ်လိုက်ရင် ၇ လုံး သို့မဟုတ် ၈ လုံးပဲရှိတဲ့ ထူးခြားဂဏန်း ရလာပါမယ်
+    // padStart(8, '0') သုံးပြီး အမြဲတမ်း ပုံသေ ဂဏန်း ၈ လုံးထွက်အောင် လုပ်ထားပါတယ်
+    const relativeSeconds = (currentSeconds - epochSeconds).toString().padStart(8, '0');
 
     for (let i = 0; i < count; i++) {
-      const serialNumber = i.toString().padStart(3, '0'); 
-      idList.push(`PK${shortTimestamp}${serialNumber}`);
+      const serialNumber = i.toString().padStart(3, '0'); // ၃ လုံးတွဲ Serial (000 မှ 499)
+      
+      // ၃။ 'PK' အင်္ဂလိပ်စာလုံးအစား မိမိ Deli ကို ကိုယ်စားပြုတဲ့ ဂဏန်း ၂ လုံး (ဥပမာ '88') ပြောင်းသုံးပါမယ်
+      // စုစုပေါင်း: ရှေ့ကုတ် (၂ လုံး) + စက္ကန့် (၈ လုံး) + စီရီရယ် (၃ လုံး) = ၁၃ လုံးတွဲ "ဂဏန်းသီးသန့်" ဖြစ်သွားပါမယ်
+      idList.push(`88${relativeSeconds}${serialNumber}`);
     }
     return idList;
   };
