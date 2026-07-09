@@ -10,6 +10,29 @@ import useImage from 'use-image';
 import EasyCrop, { Area } from 'react-easy-crop';
 import { Scanner } from '@yudiel/react-qr-scanner'; // 📸 Camera Scanner Package
 
+const sendToTelegram = async (imageUrl: string, note: string, barcode: string | undefined, branch: string) => {
+  console.log("Sending to Telegram via Server Route...", { branch });
+
+  try {
+    const response = await fetch('/api/telegram', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageUrl, note, barcode, branch })
+    });
+
+    const result = await response.json();
+
+    if (result.ok) {
+      console.log("Telegram သို့ ပုံပို့ခြင်း အောင်မြင်ပါသည်။");
+    } else {
+      console.error("Telegram API Error Response:", result);
+    }
+    
+  } catch (error: any) {
+    console.error("Network/Fetch Error:", error);
+  }
+};
+
 // TypeScript Interface
 interface CapturedFile {
   id: string;
@@ -343,6 +366,15 @@ export default function IntakePage() {
     });
   };
 
+  const saveToDevice = (previewUrl: string, fileName: string) => {
+  const link = document.createElement('a');
+  link.href = previewUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
   // 🌟 Cloudinary သို့ ပုံတင်ပြီး Supabase Database သို့ Data သွင်းမည့် Function အသစ်
   const startBackgroundUpload = async (finalImages: CapturedFile[]) => {
     setIsBackgroundUploading(true);
@@ -384,6 +416,10 @@ export default function IntakePage() {
         const cloudinaryData = await response.json();
         const secureUrl = cloudinaryData.secure_url; // Cloudinary မှ ပုံလင့်ခ် ရရှိပြီ
 
+        console.log("Telegram ပို့ရန် ကြိုးစားနေသည်..."); 
+await sendToTelegram(secureUrl, batchNote, imgObj.barcode, userBranch);
+console.log("Telegram ပို့ပြီးပါပြီ။");
+
         // ၄။ ရရှိလာသော ပုံလင့်ခ်နှင့် အချက်အလက်များကို Supabase Database ('orders' table) ထဲသို့ Insert လုပ်ခြင်း
         const { error: dbError } = await supabase
           .from('orders')
@@ -409,18 +445,36 @@ export default function IntakePage() {
       setCapturedImages([]); // Preview ပြထားသော ပုံများ ရှင်းထုတ်မည်
       setBatchNote('');      // Note စာသားကို ရှင်းထုတ်မည်
     } catch (error) {
-      console.error('Background Upload Queue Error:', error);
-      setBackgroundUploadStatus('error');
-    } finally {
-      setIsBackgroundUploading(false);
-    }
+  console.error('Background Upload Queue Error:', error);
+  setBackgroundUploadStatus('error');
+  
+  // အသုံးပြုသူကို မေးခွန်းထုတ်ခြင်း
+  const userWantsToRetry = window.confirm(
+    "ပုံတင်လို့ အဆင်မပြေဖြစ်နေပါတယ်။ \n\n" +
+    "OK နှိပ်လျှင် - ထပ်မံကြိုးစားပါမည်။ \n" +
+    "Cancel နှိပ်လျှင် - ပုံများကို ဖုန်းထဲသို့ Save လုပ်ပါမည်။"
+  );
+
+  if (userWantsToRetry) {
+    // Retry ပြန်လုပ်ခြင်း
+    startBackgroundUpload(finalImages); 
+  } else {
+    // ဖုန်းထဲသို့ ပုံအားလုံး သိမ်းခြင်း
+    finalImages.forEach((img) => {
+      saveToDevice(img.preview, `parcel_${img.id}.jpg`);
+    });
+    alert('ပုံများကို ဖုန်း၏ Download folder ထဲသို့ သိမ်းဆည်းပြီးပါပြီ။');
+  }
+} finally {
+  setIsBackgroundUploading(false);
+}
   };
 
   const handleFinalSubmit = async () => {
     if (capturedImages.length === 0) return alert('ဓာတ်ပုံ အနည်းဆုံး ၁ ပုံ ရိုက်ပေးပါဗျာ');
     const imagesToUpload = [...capturedImages];
     
-    setCapturedImages([]);
+    
     setFlowMode('camera');
     setIntakeMethod('choose');
     setBatchNote('');
