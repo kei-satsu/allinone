@@ -139,17 +139,19 @@ export default function DailyReport() {
 
     try {
       // ၁။ Orders များအားဆွဲထုတ်ခြင်း
-      const { data: ordersData, error: ordersError } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          pickup_rider:riders!orders_pickup_rider_id_fkey(name),
-          deliver_rider:riders!orders_deliver_rider_id_fkey(name)
-        `)
-        .eq('is_deleted', false)
-        .or(`branch.eq.${activeBranch},transit_to.eq.${activeBranch}`)
-        .or(`deliver_date.eq.${activeDate},and(fee_type.in.(Cash,Kpay),received_date.eq.${activeDate})`)
-        .order('created_at', { ascending: false })
+const { data: ordersData, error: ordersError } = await supabase
+  .from('orders')
+  .select(`
+    *,
+    pickup_rider:riders!orders_pickup_rider_id_fkey(name),
+    deliver_rider:riders!orders_deliver_rider_id_fkey(name)
+  `)
+  .eq('is_deleted', false)
+  .eq('branch', activeBranch)        // 🎯 ၁။ branch က activeBranch (ဥပမာ- YGN) နဲ့တင် ကွက်တိတူရမယ် (ဒါကြောင့် MDY တွေ လုံးဝမလာတော့ပါ)
+  .not('transit_to', 'is', null)     // 🎯 ၂။ transit_to က null (အလွတ်) မဖြစ်ရဘူး (မြို့တစ်ခုခု ဖြည့်ထားရမယ်)
+  .neq('transit_to', '')             // စာသားအလွတ် "" ဖြစ်နေရင်လည်း ဖယ်ထုတ်မယ်
+  .eq('deliver_date', activeDate)    // 🎯 ၃။ deliver_date က ရွေးထားတဲ့ ရက်စွဲနဲ့ ကွက်တိ တူရမယ်
+  .order('created_at', { ascending: false })
 
       if (ordersError) {
         console.error('Orders Error:', ordersError)
