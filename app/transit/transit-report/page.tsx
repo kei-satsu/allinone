@@ -19,12 +19,17 @@ const COLUMN_DEFS = [
   { key: 'cod_amount', label: 'COD (Ks)', defaultVisible: true },
   { key: 'deli_fee', label: 'Deli Fee (Ks)', defaultVisible: true },
   { key: 'total_amount', label: 'Total (Ks)', defaultVisible: true },
+  { key: 'agent_fee', label: 'Agent Fee', defaultVisible: true },
   { key: 'status', label: 'Status', defaultVisible: true },
   { key: 'image_url', label: 'Photo', defaultVisible: true }, 
   { key: 'pickup_rider', label: 'Pickup By', defaultVisible: true },
   { key: 'deliver_rider', label: 'Deliver By', defaultVisible: true },
   { key: 'deliver_date', label: 'Deliver Date', defaultVisible: true },
   { key: 'note', label: 'Note', defaultVisible: true },
+  { key: 'transit_date', label: 'Transit Date', defaultVisible: false },
+  { key: 'transit_to', label: 'Transit To', defaultVisible: false },
+  { key: 'remark', label: 'Remark', defaultVisible: false },
+
 ]
 
 export default function DailyReport() {
@@ -272,6 +277,26 @@ const { data: ordersData, error: ordersError } = await supabase
       setSubmitting(false)
     }
   }
+  // agent fee တည်းဖြတ်မှုအတွက်
+  const [agentFeeValues, setAgentFeeValues] = useState<Record<string, string>>({});
+
+  const updateAgentFee = async (orderId: string, newValue: string) => {
+  const numValue = newValue === '' ? null : Number(newValue);
+  // Optimistic update - အရင် UI မှာပြောင်း
+  setReportData(prev =>
+    prev.map(o => (o.id === orderId ? { ...o, agent_fee: numValue } : o))
+  );
+  // Database update
+  const { error } = await supabase
+    .from('orders')
+    .update({ agent_fee: numValue })
+    .eq('id', orderId);
+  if (error) {
+    alert('Update failed: ' + error.message);
+    // Rollback - မူလဒေတာပြန်ယူမယ် (သို့မဟုတ် refetch)
+    fetchData();
+  }
+};
 
   // Cell Rendering Styles
   const renderCell = (o: any, key: string) => {
@@ -325,6 +350,36 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
         {o[key]?.toLocaleString() || '0'} Ks
       </span>
     )
+
+if (key === 'agent_fee') {
+  const currentVal = agentFeeValues[o.id] ?? (o.agent_fee != null ? o.agent_fee.toString() : '');
+  return (
+    <input
+      type="number"
+      className="w-20 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-orange-500 bg-white"
+      value={currentVal}
+      onChange={(e) => setAgentFeeValues(prev => ({ ...prev, [o.id]: e.target.value }))}
+      onBlur={() => {
+        const newVal = agentFeeValues[o.id] ?? (o.agent_fee != null ? o.agent_fee.toString() : '');
+        // မပြောင်းဘူးဆိုရင် ဘာမှမလုပ်
+        if (newVal !== (o.agent_fee != null ? o.agent_fee.toString() : '')) {
+          updateAgentFee(o.id, newVal);
+        }
+        // state ထဲက ဖယ်ထုတ် (optional: လိုင်းအားလုံး refresh ဖြစ်အောင်)
+        setAgentFeeValues(prev => {
+          const copy = { ...prev };
+          delete copy[o.id];
+          return copy;
+        });
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+      }}
+      onClick={(e) => e.stopPropagation()} // row click မဖြစ်အောင်
+    />
+  );
+}
+
     if (key === 'fee_type') return <span className="bg-gray-100 px-2 py-0.5 rounded text-[10px] font-medium text-gray-600 border border-gray-200">{o[key] || '-'}</span>
     if (key === 'pickup_rider') return <span className="text-gray-600">{o.pickup_rider?.name || '-'}</span>
     if (key === 'deliver_rider') return <span className="text-gray-600">{o.deliver_rider?.name || '-'}</span>
@@ -432,7 +487,7 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
                       <input 
                         type="checkbox" 
                         className="mr-2 w-4 h-4 text-orange-500 rounded border-gray-300 accent-orange-500"
-                        checked={visibleCols[col.key]} 
+                        checked={visibleCols[col.key] || false } 
                         onChange={() => setVisibleCols(prev => ({ ...prev, [col.key]: !prev[col.key] }))}
                         disabled={col.key === 'item_id'} 
                       />

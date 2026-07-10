@@ -148,10 +148,9 @@ export default function DailyReport() {
           deliver_rider:riders!orders_deliver_rider_id_fkey(name)
         `)
         .eq('is_deleted', false)
-        // ✨ ဒီနေရာမှာ Variables တွေကို "" ထဲထည့်ပေးလိုက်ပါပြီ
-        .or(`and(branch.eq."${activeBranch}",transit_to.is.null),and(branch.neq."${activeBranch}",transit_to.eq."${activeBranch}")`)
-        .or(`deliver_date.eq."${activeDate}",and(fee_type.in.(Cash,Kpay),received_date.eq."${activeDate}")`)
-        .order('created_at', { ascending: false })
+// ✨ Logic အသစ်အရ Master .or() တစ်ခုတည်းအောက်မှာ စုစည်းပေးလိုက်ပါပြီ
+.or(`and(deliver_date.eq."${activeDate}",or(and(branch.eq."${activeBranch}",transit_to.is.null),and(branch.neq."${activeBranch}",transit_to.eq."${activeBranch}"))),and(fee_type.in.(Cash,Kpay),received_date.eq."${activeDate}",or(branch.eq."${activeBranch}",transit_to.eq."${activeBranch}"))`)
+.order('created_at', { ascending: false })
 
       if (ordersError) {
         console.error('Orders Error:', ordersError)
@@ -372,7 +371,7 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
     .filter(o => 
       o.received_date === selectedDate && 
       (o.fee_type === 'Cash' || o.fee_type === 'Kpay') && 
-      o.sender_loc === userBranch
+      o.receiver_loc === userBranch
     )
     .reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
 
@@ -381,7 +380,7 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
     .filter(o => 
       o.received_date === selectedDate && 
       (o.fee_type === 'Cash' || o.fee_type === 'Kpay') && 
-      o.sender_loc === oppositeCity
+      o.receiver_loc === oppositeCity
     )
     .reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
 
