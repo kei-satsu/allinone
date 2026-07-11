@@ -36,6 +36,8 @@ export default function PendingEntry() {
   const [persistSenderName, setPersistSenderName] = useState('')
   const [persistSenderLoc, setPersistSenderLoc] = useState('MDY')
   const [persistPickupRiderId, setPersistPickupRiderId] = useState('')
+  const [persistSenderPhone, setPersistSenderPhone] = useState('')
+  const [persistSenderId, setPersistSenderId] = useState<string | null>(null)
 
   // ── Processed history (undo stack) ──
   const [processedStack, setProcessedStack] = useState<string[]>([])
@@ -333,6 +335,7 @@ useEffect(() => {
     setSearchQuery(item.sender_name || '')
     setFormData(prev => ({
       received_date: item.received_date || today,
+      sender_id: persistSenderId ?? item.sender_id ?? null,
       sender_name: persistSenderName || item.sender_name || '',
       sender_phone: item.sender_phone || '',
       sender_loc: persistSenderLoc || item.sender_loc || userBranch,
@@ -350,15 +353,15 @@ useEffect(() => {
       deliver_date: item.deliver_date || '',
       note: item.note || '',
       cleared_date: item.cleared_date || '',
-      sender_id: item.sender_id || null,
+      
       branch: item.branch || userBranch,
       image_url: item.image_url || '',
       remark: item.remark || ''
     }))
 
     if (shouldFocusInput) {
-      setTimeout(() => senderInputRef.current?.focus(), 50)
-    } else {
+  setTimeout(() => receiverNameRef.current?.focus(), 50)
+} else {
       if (document.activeElement instanceof HTMLElement) {
         document.activeElement.blur() // Arrow Key နဲ့ အမြန်ကျော်ရင် focus ဖြုတ်ပေးထားမယ်
       }
@@ -421,11 +424,13 @@ useEffect(() => {
     else if (s.length >= 8) formatted = `${s.slice(0, 2)}-${s.slice(2, 5)}-${s.slice(5, 8)}-${s.slice(8, 11)}`
     setSelectedSenderId('')
     setFormData(prev => ({ ...prev, sender_id: null, sender_phone: formatted }))
+    setPersistSenderPhone(formatted)
   }
 
   const handleSenderSelection = (senderId: string) => {
     if (!senderId) {
       setSelectedSenderId('')
+       setPersistSenderId(null) // ID ပါ ဖျက်မယ်
       setFormData(prev => ({ ...prev, sender_id: null, sender_name: '', sender_phone: '' }))
       return
     }
@@ -437,6 +442,11 @@ useEffect(() => {
     setSearchQuery(selected.name || '')
     setActiveSuggestionIndex(-1)
     setShowSenderDropdown(false)
+    // ✨ Persist သိမ်းရန်
+  setPersistSenderId(senderId)
+  setPersistSenderName(selected.name ?? '')
+  setPersistSenderPhone(selected.phone ?? '')
+  setPersistSenderLoc(selected.LOC ?? '') // LOC ဆိုသည်မှာ sender location
     setFormData(prev => ({
       ...prev,
       sender_id: selected.id,
@@ -444,8 +454,8 @@ useEffect(() => {
       sender_phone: selected.phone ?? '',
       sender_loc: selected.LOC ?? (prev.sender_loc || 'MDY')
     }))
-    setTimeout(() => receiverNameRef.current?.focus(), 30)
-  }
+     setTimeout(() => receiverNameRef.current?.focus(), 30) // cursor ကို receiver name သို့ ပြောင်း
+}
 
   
   
@@ -846,6 +856,8 @@ useEffect(() => {
                 value={searchQuery || formData.sender_name}
                 onChange={e => {
                   const v = e.target.value
+                   setPersistSenderName(v) 
+                  setPersistSenderId(null) 
                   setShowAllSuggestions(false)
                   setSearchQuery(v)
                   const q = v.trim().toLowerCase()
@@ -962,36 +974,36 @@ useEffect(() => {
             <input type="text" value={formData.receiver_phone} onChange={handlePhoneChange} className={`${winInput} font-mono`} required disabled={!selectedItem} />
           </div>
           <div>
-            <div className="flex justify-between items-center mb-1.5">
-              <label className="block text-gray-600 font-semibold uppercase text-xs tracking-wide">City</label>
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(true)}
-                className="text-[11px] text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1 bg-blue-50 hover:bg-blue-100/80 px-2 py-1 rounded-lg border border-blue-200 transition-all active:scale-95"
-              >
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-                Add New City
-              </button>
-            </div>
-            <select 
-              value={formData.receiver_loc} 
-              onChange={e => setFormData({...formData, receiver_loc: e.target.value})} 
-              className={winSelect}  
-              disabled={!selectedItem} 
-              onFocus={handleSelectFocus}
-            >
-              <option value="">-- Select City --</option>
-              {cities.map((city) => (
-                <option key={city["C.ID"]} value={city["C.ID"]}>{city.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelStyle}>Address</label>
-            <input type="text" value={formData.receiver_address} onChange={e => setFormData({...formData, receiver_address: e.target.value})} className={winInput} disabled={!selectedItem} placeholder="လမ်း၊ အိမ်နံပါတ်၊ ရပ်ကွက် ဖြည့်သွင်းရန်" />
-          </div>
+  <label className={labelStyle}>Address</label>
+  <input type="text" value={formData.receiver_address} onChange={e => setFormData({...formData, receiver_address: e.target.value})} className={winInput} disabled={!selectedItem} placeholder="လမ်း၊ အိမ်နံပါတ်၊ ရပ်ကွက် ဖြည့်သွင်းရန်" />
+</div>
+<div>
+  <div className="flex justify-between items-center mb-1.5">
+    <label className="block text-gray-600 font-semibold uppercase text-xs tracking-wide">City</label>
+    <button
+      type="button"
+      onClick={() => setIsModalOpen(true)}
+      className="text-[11px] text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1 bg-blue-50 hover:bg-blue-100/80 px-2 py-1 rounded-lg border border-blue-200 transition-all active:scale-95"
+    >
+      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+      </svg>
+      Add New City
+    </button>
+  </div>
+  <select 
+    value={formData.receiver_loc} 
+    onChange={e => setFormData({...formData, receiver_loc: e.target.value})} 
+    className={winSelect}  
+    disabled={!selectedItem} 
+    onFocus={handleSelectFocus}
+  >
+    <option value="">-- Select City --</option>
+    {cities.map((city) => (
+      <option key={city["C.ID"]} value={city["C.ID"]}>{city.name}</option>
+    ))}
+  </select>
+</div>
         </div>
       </div>
     </div>

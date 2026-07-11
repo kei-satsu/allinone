@@ -26,6 +26,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
   const [resetKey, setResetKey] = useState<number>(Date.now())
 
   const [formData, setFormData] = useState({
+    sender_id: '', // sender_id ထည့်သွင်းထားသည်
     received_date: '',
     sender_name: '',
     sender_phone: '', 
@@ -53,6 +54,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
   useEffect(() => {
     if (orderData && isOpen) {
       setFormData({
+        sender_id: orderData.sender_id || '', // မူရင်း order ရဲ့ sender_id ကို ရယူခြင်း
         received_date: orderData.received_date || '',
         sender_name: orderData.sender_name || '',
         sender_phone: orderData.sender_phone || '',
@@ -106,9 +108,11 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     fetchRiders()
   }, [formData.branch, isOpen])
 
-  // 3. Sender ရှာဖွေခြင်းနှင့် ရွေးချယ်ခြင်းယန္တရား (page.tsx ကဲ့သို့ ပြင်ဆင်ထားသည်)
+  // 3. Sender ရှာဖွေခြင်းနှင့် ရွေးချယ်ခြင်းယန္တရား
   const handleSenderNameChange = (val: string) => {
-    setFormData(prev => ({ ...prev, sender_name: val }))
+    // စာရိုက်နေစဉ်အတွင်း တန်ဖိုးအသစ်မရွေးရသေးသဖြင့် sender_id ကို reset ချထားမည်
+    setFormData(prev => ({ ...prev, sender_name: val, sender_id: '' }))
+    
     if (val.trim() === '') {
       setFilteredSenders([])
       setShowSenderDropdown(false)
@@ -125,6 +129,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
   const selectSender = (selectedSender: any) => {
     setFormData(prev => ({
       ...prev,
+      sender_id: selectedSender.id, // ရွေးချယ်လိုက်သော Sender ၏ ID ကို ထည့်သွင်းခြင်း
       sender_name: selectedSender.name,
       sender_phone: selectedSender.phone || '',
       sender_loc: selectedSender.location || prev.sender_loc
@@ -165,29 +170,19 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
   // 6. Update Submission & History Log Generator
   const handleUpdateSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
     if (!formData.sender_name || !formData.receiver_name || !formData.receiver_phone) {
         alert("လိုအပ်သောအချက်အလက်များ ပြည့်စုံစွာဖြည့်ပါ!")
         return;
     }
 
-    setLoading(true)
-
-    // ─── 📥 SENDER အသစ်ဖြစ်ပါက AUTO INSERT လုပ်ခြင်း ───
-    try {
-      const isExistingSender = senders.some(
-        s => s.name?.toLowerCase().trim() === formData.sender_name.toLowerCase().trim()
-      )
-
-      if (!isExistingSender && formData.sender_name.trim() !== '') {
-        await supabase.from('senders').insert({
-          name: formData.sender_name.trim(),
-          phone: formData.sender_phone,
-          location: formData.sender_loc
-        })
-      }
-    } catch (err) {
-      console.error("Auto-saving new sender failed:", err)
+    // List ထဲမှ ပေးပို့သူ (Sender) ကို သေချာစွာ မရွေးချယ်ထားပါက တားဆီးရန် Validation
+    if (!formData.sender_id) {
+        alert("ကျေးဇူးပြု၍ ပေးပို့သူ (Sender) ကို List ကျလာသည့်အထဲမှ သေချာစွာ နှိပ်၍ရွေးချယ်ပေးပါ!")
+        return;
     }
+
+    setLoading(true)
 
     // ── 📝 History Audit Log Generation ──
     let changes: string[] = [];
@@ -209,8 +204,8 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
       const newRider = riders.find(r => r.id === formData.deliver_rider_id)?.name || 'Removed';
       changes.push(`🚴 Delivery Rider: "${oldRider}" ➔ "${newRider}"`);
     }
-    if (orderData.sender_name !== formData.sender_name) {
-      changes.push(`📤 Sender Name: "${orderData.sender_name}" ➔ "${formData.sender_name}"`);
+    if (orderData.sender_id !== formData.sender_id) {
+      changes.push(`📤 Sender Changed: "${orderData.sender_name || 'N/A'}" ➔ "${formData.sender_name}"`);
     }
     if (orderData.sender_phone !== formData.sender_phone) {
       changes.push(`📞 Sender Phone: "${orderData.sender_phone || 'N/A'}" ➔ "${formData.sender_phone}"`);
@@ -250,19 +245,15 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
       const newNote = formData.note === 'RT' ? 'Return (RT)' : (formData.note || 'Normal');
       changes.push(`⚠️ Note Utility: "${oldNote}" ➔ "${newNote}"`);
     }
-    
-    // 💸 Cash Event ပြင်ဆင်မှုတွင် သတ်မှတ်လိုက်သော ရက်စွဲကိုပါ ထည့်သွင်းမှတ်တမ်းတင်ခြင်း
     if ((orderData.cleared_date || '') !== (formData.cleared_date || '')) {
       const oldClear = orderData.cleared_date ? `Cleared (${orderData.cleared_date})` : 'Uncleared';
       const newClear = formData.cleared_date ? `Cleared (${formData.cleared_date})` : 'Uncleared';
       changes.push(`💸 Cash Event: "${oldClear}" ➔ "${newClear}"`);
     }
-    
     if (orderData.image_url !== formData.image_url) {
       const imgStatus = !formData.image_url ? 'Voucher image removed' : 'New voucher image uploaded';
       changes.push(`🖼️ Attachment: "${imgStatus}"`);
     }
-    
     if ((orderData.remark || '') !== (formData.remark || '')) {
       changes.push(`📝 Remark: "${orderData.remark || 'N/A'}" ➔ "${formData.remark || 'Deleted'}"`);
     }
@@ -283,6 +274,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
 
     const updatedHistory = [...(orderData.history || []), newLogEntry];
 
+    // payload တွင် formData တစ်ခုလုံးပါသွားသဖြင့် sender_id လည်း auto ပါဝင်သွားမည်ဖြစ်သည်
     const payload = {
         ...formData,
         pickup_rider_id: formData.pickup_rider_id || null,
@@ -361,16 +353,21 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="relative">
                   <label className={labelStyle}>Sender Name <span className="text-red-500">*</span></label>
-                  <input 
-                    type="text" 
-                    value={formData.sender_name} 
-                    onChange={e => handleSenderNameChange(e.target.value)}
-                    onFocus={() => { if (formData.sender_name) setShowSenderDropdown(true) }}
-                    onBlur={() => setTimeout(() => setShowSenderDropdown(false), 200)}
-                    className={winInput} 
-                    placeholder="ရှာဖွေရန် အမည်ရိုက်ပါ..."
-                    required 
-                  />
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      value={formData.sender_name} 
+                      onChange={e => handleSenderNameChange(e.target.value)}
+                      onFocus={() => { if (formData.sender_name) setShowSenderDropdown(true) }}
+                      onBlur={() => setTimeout(() => setShowSenderDropdown(false), 200)}
+                      className={`${winInput} ${formData.sender_id ? 'border-emerald-500 bg-emerald-50/20' : ''}`} 
+                      placeholder="ရှာဖွေရန် အမည်ရိုက်ပါ..."
+                      required 
+                    />
+                    {formData.sender_id && (
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-emerald-600 text-xs font-bold">✓ Selected</span>
+                    )}
+                  </div>
                   {/* Dropdown Overlay */}
                   {showSenderDropdown && filteredSenders.length > 0 && (
                     <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
@@ -393,17 +390,19 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                   <input 
                     type="text" 
                     value={formData.sender_phone} 
-                    onChange={e => setFormData({...formData, sender_phone: e.target.value})} 
-                    className={`${winInput} font-mono`} 
+                    className={`${winInput} font-mono bg-gray-50`} 
                     placeholder="ပေးပို့သူ ဖုန်းနံပါတ်"
+                    readOnly
                   />
                 </div>
                 <div>
                   <label className={labelStyle}>Sender Office Location</label>
-                  <select value={formData.sender_loc} onChange={e => setFormData({...formData, sender_loc: e.target.value})} className={winSelect}>
-                    <option value="MDY">MANDALAY</option>
-                    <option value="YGN">YANGON</option>
-                  </select>
+                  <input 
+                    type="text" 
+                    value={formData.sender_loc === 'MDY' ? 'MANDALAY' : formData.sender_loc === 'YGN' ? 'YANGON' : formData.sender_loc} 
+                    className={`${winInput} bg-gray-50 font-semibold`}
+                    readOnly
+                  />
                 </div>
               </div>
             </div>
@@ -537,7 +536,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                     <option value="yes">Cleared</option>
                   </select>
 
-                  {/* ✨ Cleared Date Picker: Cleared ဖြစ်မှ အောက်ကနေ ရက်စွဲရွေးရန် ပေါ်လာမည် */}
+                  {/* ✨ Cleared Date Picker */}
                   {formData.cleared_date && (
                     <div className="mt-2">
                       <label className="block text-gray-500 font-medium mb-1 text-[10px] uppercase tracking-wide">Cleared Date</label>
