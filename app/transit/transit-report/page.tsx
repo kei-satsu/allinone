@@ -40,6 +40,7 @@ export default function DailyReport() {
   const [selectedDate, setSelectedDate] = useState(today)
   const [reportData, setReportData] = useState<any[]>([])
   const [riders, setRiders] = useState<any[]>([])
+  const [cities, setCities] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [userBranch, setUserBranch] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
@@ -117,6 +118,7 @@ export default function DailyReport() {
     
     setUserBranch(storedBranch)
     fetchRiders()
+    fetchCities()
 
     // LocalStorage ထဲတွင် ရွေးခဲ့ဖူးသော Date ရှိမရှိ စစ်ဆေးခြင်း
     const savedDate = localStorage.getItem('transit_selected_date')
@@ -186,10 +188,15 @@ const { data: ordersData, error: ordersError } = await supabase
     }
   }
 
-  const fetchRiders = async () => {
-    const { data, error } = await supabase.from('riders').select('*')
-    if (data) setRiders(data)
-  }
+const fetchRiders = async () => {
+  const { data, error } = await supabase.from('riders').select('*')
+  if (data) setRiders(data)
+}
+
+const fetchCities = async () => {
+  const { data, error } = await supabase.from('cities').select('*')
+  if (data) setCities(data)
+}
 
   // ── History Log System ──
   const appendLog = (currentHistory: any[], action: string, note: string) => {
@@ -704,51 +711,43 @@ if (key === 'agent_fee') {
 
               {/* တွက်ချက်ခြင်းနှင့် Layout တည်ဆောက်ခြင်းအပိုင်း */}
               {(() => {
-                let grandTotalToPay = 0;
-                let grandTotalCashIn = 0;
-                let grandTotalOop = 0;
-                let grandTotalGap = 0;
+                let grandTotal = 0;
+                let grandAgentDeli = 0;
+                let grandOfficeDeli = 0;
+                let grandActualTotal = 0;
 
                 // 1. Rider တစ်ယောက်ချင်းစီရဲ့ Data တွက်ချက်ခြင်းအပိုင်း
-                const rows = riders.map(rider => {
-                  const riderOrders = reportData.filter(o => 
-  o.deliver_rider_id === rider.id && 
-  o.status === 'Delivered' && 
-  o.deliver_date === selectedDate
-);
-                  const totalToPay = riderOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
-                  const riderHandovers = handovers.filter(h => h.rider_name === rider.name);
-                  const cashIn = riderHandovers.filter(h => h.transaction_type === 'Cash-in').reduce((sum, h) => sum + (h.amount || 0), 0);
-                  const oop = riderHandovers.filter(h => h.transaction_type === 'OOP').reduce((sum, h) => sum + (h.amount || 0), 0);
-                  const gap = totalToPay - (cashIn + oop);
+                const rows = cities.map(city => {
+  const transitOrders = reportData.filter(o => 
+    o.transit_to === city["C.ID"] && 
+    o.status === 'Delivered' && 
+    o.deliver_date === selectedDate
+  );
+                  const total = transitOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
+                  const cityDeliFeeSum = transitOrders.reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
+                  const cityAgentTotal = transitOrders.reduce((sum, o) => sum + (Number(o.agent_fee) || 0), 0);
+                  const netDeliFee = cityDeliFeeSum - cityAgentTotal;
+                  const actualTotal = total - cityAgentTotal
 
-                  if (totalToPay === 0 && cashIn === 0 && oop === 0) return null;
+                  if (total === 0 && cityDeliFeeSum === 0) return null;
 
-                  grandTotalToPay += totalToPay;
-                  grandTotalCashIn += cashIn;
-                  grandTotalOop += oop;
-                  grandTotalGap += gap;
-
-                  let gapColor = "text-green-600";
-                  if (gap > 0) gapColor = "text-red-600 font-bold";
-                  else if (gap < 0) gapColor = "text-amber-600 font-bold";
+                  grandTotal += total;
+                  grandAgentDeli += cityAgentTotal;
+                  grandOfficeDeli += netDeliFee;
+                  grandActualTotal += actualTotal;
 
                   return (
-                    <tr key={rider.id} className="hover:bg-blue-50/30 transition-colors">
-                      <td className="px-2 py-1.5 font-semibold text-gray-900 truncate" title={rider.name}>👤 {rider.name}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-gray-900">{totalToPay.toLocaleString()}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-blue-600">{cashIn.toLocaleString()}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-purple-600">{oop.toLocaleString()}</td>
-                      <td className={`px-2 py-1.5 text-right font-mono ${gapColor}`}>
-                        {gap > 0 ? `+${gap.toLocaleString()}` : gap.toLocaleString()}
-                      </td>
+                    <tr key={city["C.ID"]} className="hover:bg-blue-50/30 transition-colors">
+                      <td className="px-2 py-1.5 font-semibold text-gray-900 truncate" title={city.name}>👤 {city.name}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-gray-900">{total.toLocaleString()}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-blue-600">{cityAgentTotal.toLocaleString()}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-purple-600">{netDeliFee.toLocaleString()}</td>
+                      <td className={`px-2 py-1.5 text-right font-mono`}> {actualTotal.toLocaleString()} </td>
                     </tr>
                   );
                 }).filter(Boolean);
 
-                let totalGapColor = "text-green-700";
-                if (grandTotalGap > 0) totalGapColor = "text-red-700";
-                else if (grandTotalGap < 0) totalGapColor = "text-amber-700";
+               
 
                 return (
                   <div className="flex-1 min-h-0 flex flex-col rounded border border-blue-200 bg-white mx-1 mb-1 z-10 shadow-inner">
@@ -758,11 +757,11 @@ if (key === 'agent_fee') {
                       <table className="w-full text-left text-[11px] whitespace-nowrap table-fixed">
                         <thead className="bg-blue-50/50 text-gray-600 font-bold uppercase text-[9px] tracking-wider border-b border-blue-100 sticky top-0 z-10">
                           <tr>
-                            <th className="px-2 py-2 w-[24%]">Rider Name</th>
+                            <th className="px-2 py-2 w-[24%]">City</th>
                             <th className="px-2 py-2 text-right w-[19%]">Total</th>
-                            <th className="px-2 py-2 text-right w-[19%]">အပ်ငွေ</th>
-                            <th className="px-2 py-2 text-right w-[19%]">စိုက်ငွေ</th>
-                            <th className="px-2 py-2 text-right w-[19%]">ကွာဟချက်</th>
+                            <th className="px-2 py-2 text-right w-[19%]">Agent Deli</th>
+                            <th className="px-2 py-2 text-right w-[19%]">Office Deli</th>
+                            <th className="px-2 py-2 text-right w-[19%]">Actural Total</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 text-gray-700 font-medium">
@@ -785,12 +784,10 @@ if (key === 'agent_fee') {
                         <tbody>
                           <tr className="font-bold">
                             <td className="px-2 py-2 text-blue-900 font-bold w-[24%]">Total</td>
-                            <td className="px-2 py-2 text-right font-mono text-blue-900 w-[19%]">{grandTotalToPay.toLocaleString()}</td>
-                            <td className="px-2 py-2 text-right font-mono text-blue-700 w-[19%]">{grandTotalCashIn.toLocaleString()}</td>
-                            <td className="px-2 py-2 text-right font-mono text-purple-700 w-[19%]">{grandTotalOop.toLocaleString()}</td>
-                            <td className={`px-2 py-2 text-right font-mono w-[19%] ${totalGapColor}`}>
-                              {grandTotalGap > 0 ? `+${grandTotalGap.toLocaleString()}` : grandTotalGap.toLocaleString()}
-                            </td>
+                            <td className="px-2 py-2 text-right font-mono text-blue-900 w-[19%]">{grandTotal.toLocaleString()}</td>
+                            <td className="px-2 py-2 text-right font-mono text-blue-700 w-[19%]">{grandAgentDeli.toLocaleString()}</td>
+                            <td className="px-2 py-2 text-right font-mono text-purple-700 w-[19%]">{grandOfficeDeli.toLocaleString()}</td>
+                            <td className={`px-2 py-2 text-right font-mono w-[19%] `}> {grandActualTotal.toLocaleString()} </td>
                           </tr>
                         </tbody>
                       </table>

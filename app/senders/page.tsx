@@ -1,47 +1,142 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase"; // 💡 Supabase လမ်းကြောင်းမှန်အောင် ပြင်ပေးပါ
+import { supabase } from "@/lib/supabase"; 
+import SenderModal from "@/components/SenderModal"; 
 
 export default function SendersDashboard() {
+  // ─── States ───
   const [senders, setSenders] = useState<any[]>([]);
+  const [filteredSenders, setFilteredSenders] = useState<any[]>([]);
   const [selectedSender, setSelectedSender] = useState<any | null>(null);
   const [orders, setOrders] = useState<any[]>([]);
+  const [realBranch, setRealBranch] = useState<string | null>(null);
+
+  const [orderSearchTerm, setOrderSearchTerm] = useState("");
   const [loadingSenders, setLoadingSenders] = useState(true);
   const [loadingOrders, setLoadingOrders] = useState(false);
+  
+  // Search & Filter States
+  const [searchTerm, setSearchTerm] = useState("");
+  const [activeBranch, setActiveBranch] = useState("MDY"); 
+  const [activeTab, setActiveTab] = useState<"uncleared" | "cleared" | "not_delivered">("uncleared");
 
-  // ၁။ စပွင့်ပွင့်ချင်း Senders စာရင်းကို ဆွဲထုတ်မည်
+  // Modal States
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<"add" | "edit">("add");
+
+  // Multiple Ways Selection & Clearing Date States
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [clearedDateInput, setClearedDateInput] = useState<string>(
+    new Date().toISOString().split("T")[0]
+  );
+  const [clearing, setClearing] = useState(false);
+
   useEffect(() => {
-    const fetchSenders = async () => {
-      setLoadingSenders(true);
-      const { data, error } = await supabase
-        .from("senders")
-        .select("*")
-        .order("name", { ascending: true }); // နာမည်အလိုက် စီထားသည်
+    setSelectedOrderIds([]);
+  }, [activeTab, activeBranch, selectedSender]);
 
-      if (error) {
-        console.error("Error fetching senders:", error);
-      } else {
-        setSenders(data || []);
+  // 💡 အကောင့်ဝင်ထားသူသည် Admin ဟုတ်/မဟုတ် စစ်ဆေးရန် useEffect
+useEffect(() => {
+  const checkUserRole = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user?.user_metadata) {
+      // user_metadata ထဲက branch တန်ဖိုးကို ယူသည် (ဥပမာ- "ADMIN", "MDY", "YGN")
+      setRealBranch(session.user.user_metadata.branch || "MDY");
+    }
+  };
+  
+  checkUserRole();
+}, []);
+
+  // 🌟 ၁။ Senders List ဆွဲထုတ်စဉ်မှာတင် သက်ဆိုင်ရာ Orders အခြေအနေကို ပါဝင်စစ်ဆေးပြီး အမှန်တကယ် ကျန်/မကျန် တွက်ချက်ခြင်း
+  const fetchSenders = async () => {
+    setLoadingSenders(true);
+    
+    // orders ဇယားထဲက status နဲ့ cleared_date ကိုပါ ပူးတွဲဆွဲထုတ်စစ်ဆေးသည်
+    const { data, error } = await supabase
+      .from("senders")
+      .select("*, orders(id, status, cleared_date)")
+      .eq("LOC", activeBranch);
+
+    if (error) {
+      console.error("Error fetching senders:", error);
+    } else {
+      // စာရင်းမရှင်းရသေးသည့် အထုပ် ရှိ/မရှိ အစစ်အမှန်ကို ရှာဖွေတွက်ချက်သည်
+      const processedSenders = (data || []).map((sender) => {
+        // စာရင်းမရှင်းရသေးသည့်အထုပ် (Delivered ဖြစ်ပြီး cleared_date မရှိတာ)
+        const unclearedCount = sender.orders?.filter(
+          (o: any) => o.status === "Delivered" && !o.cleared_date
+        ).length || 0;
+        
+        // 💡 မပို့ရသေးသည့်အထုပ် (Status က Delivered မဟုတ်တာ အားလုံး)
+        const notDeliveredCount = sender.orders?.filter(
+          (o: any) => o.status !== "Delivered"
+        ).length || 0;
+        
+        return {
+          ...sender,
+          unclearedCount,
+          notDeliveredCount, // ဒေတာထဲသို့ ထည့်သွင်းသည်
+          hasUncleared: unclearedCount > 0,
+        };
+      });
+
+      // 🔥 Sorting Logic: Uncleared ကျန်သည့်သူကို ထိပ်ဆုံးတင်မည်၊ ပြီးမှ နာမည်အလိုက် စီမည်
+      processedSenders.sort((a, b) => {
+        if (a.hasUncleared && !b.hasUncleared) return -1;
+        if (!a.hasUncleared && b.hasUncleared) return 1;
+        return (a.name || "").localeCompare(b.name || "", "my");
+      });
+
+      setSenders(processedSenders);
+      setFilteredSenders(processedSenders);
+
+      // ညာဘက်မှာ လက်ရှိရွေးထားတဲ့ Sender ရှိနေရင် ဘယ်ဘက် Sidebar မှာလည်း Status ချက်ချင်း Update ဖြစ်စေရန်
+      if (selectedSender) {
+        const updated = processedSenders.find((s) => s.id === selectedSender.id);
+        if (updated) setSelectedSender(updated);
       }
-      setLoadingSenders(false);
-    };
+    }
+    setLoadingSenders(false);
+  };
 
+  useEffect(() => {
     fetchSenders();
-  }, []);
+  }, [activeBranch]);
 
-  // ၂။ Sender တစ်ယောက်ကို နှိပ်လိုက်တဲ့အခါ သူ့ရဲ့ Orders တွေကို ဆွဲထုတ်မည်
+  // ၂။ Search Term အလိုက် စစ်ထုတ်ခြင်း
+  useEffect(() => {
+    const delayDebounce = setTimeout(() => {
+      if (!searchTerm.trim()) {
+        setFilteredSenders(senders);
+      } else {
+        const lower = searchTerm.toLowerCase();
+        const filtered = senders.filter(
+          (s) =>
+            s.name?.toLowerCase().includes(lower) ||
+            s.phone?.toLowerCase().includes(lower)
+        );
+        setFilteredSenders(filtered);
+      }
+    }, 200); 
+
+    return () => clearTimeout(delayDebounce);
+  }, [searchTerm, senders]);
+
+  // ၃။ Sender ကို နှိပ်လျှင် ပါဆယ်စာရင်းဆွဲထုတ်ခြင်း
   const handleSenderClick = async (sender: any) => {
     setSelectedSender(sender);
     setLoadingOrders(true);
-    setOrders([]); // အဟောင်းတွေကို ရှင်းထုတ်မည်
+    setOrders([]); 
+    setSelectedOrderIds([]); 
+    setOrderSearchTerm("");
 
-    // 💡 orders table ထဲက sender_id နဲ့ သွားတိုက်ပြီး ဆွဲထုတ်ပါမည်
     const { data, error } = await supabase
       .from("orders")
       .select("*")
       .eq("sender_id", sender.id)
-      .order("created_at", { ascending: false }); // နောက်ဆုံးလာအပ်တဲ့အထုပ်ကို အပေါ်ဆုံးမှာပြမည်
+      .order("created_at", { ascending: false });
 
     if (error) {
       console.error("Error fetching orders:", error);
@@ -51,60 +146,199 @@ export default function SendersDashboard() {
     setLoadingOrders(false);
   };
 
+  // 💡 ရှာဖွေမှုစာသားအလိုက် Way ID နှင့် Receiver အချက်အလက်များကို စစ်ထုတ်ခြင်း Logic
+  const filteredOrders = orders.filter((order) => {
+    if (!orderSearchTerm.trim()) return true; // ရှာဖွေစာသားမရှိရင် အကုန်ပြမည်
+    
+    const searchLower = orderSearchTerm.toLowerCase();
+    
+    return (
+      (order.item_id || "").toLowerCase().includes(searchLower) ||
+      (order.id || "").toLowerCase().includes(searchLower) ||
+      (order.receiver_name || "").toLowerCase().includes(searchLower) ||
+      (order.receiver_phone || "").toLowerCase().includes(searchLower) ||
+      (order.receiver_loc || "").toLowerCase().includes(searchLower)
+    );
+  });
+
+  // Tab အလိုက် ခွဲထုတ်ရာတွင် filteredOrders ကို အခြေခံ၍ စစ်ထုတ်မည်
+  const unclearedOrders = filteredOrders.filter(
+    (o) => o.status === "Delivered" && !o.cleared_date
+  );
+  const clearedOrders = filteredOrders.filter((o) => o.cleared_date);
+
+  // 💡 Not Delivered အထုပ်များ ခွဲထုတ်ခြင်း
+  const notDeliveredOrders = filteredOrders.filter(
+    (o) => o.status !== "Delivered"
+  );
+
+  // 🌟 ၄။ Bulk Clear လုပ်ပြီးချိန်မှာ ဘယ်ဘက်ခြမ်းက ကတ်တွေပါ အလိုအလျောက် Live Update ဖြစ်သွားစေရန် ထည့်သွင်းခြင်း
+  const handleBulkClear = async () => {
+    if (selectedOrderIds.length === 0) return;
+    if (!clearedDateInput) {
+      alert("ကျေးဇူးပြု၍ ရက်စွဲရွေးချယ်ပေးပါရန်။");
+      return;
+    }
+
+    setClearing(true);
+    const { error } = await supabase
+      .from("orders")
+      .update({ cleared_date: clearedDateInput })
+      .in("id", selectedOrderIds);
+
+    setClearing(false);
+
+    if (error) {
+      console.error("Error clearing orders:", error);
+      alert("စာရင်းရှင်းရာတွင် အမှားအယွင်းရှိခဲ့ပါသည်: " + error.message);
+    } else {
+      setSelectedOrderIds([]);
+      // 🔥 ဒေတာနှစ်ခုလုံးကို ပြိုင်တူ Refresh ပြန်လုပ်ပေးလို့ Badge တွေအမှားအယွင်းမရှိ ချက်ချင်းပြောင်းလဲသွားပါမည်
+      await fetchSenders();
+      if (selectedSender) {
+        handleSenderClick(selectedSender);
+      }
+    }
+  };
+
+  const totalSelectedCod = unclearedOrders
+    .filter((o) => selectedOrderIds.includes(o.id))
+    .reduce((sum, o) => sum + (Number(o.cod_amount) || 0), 0);
+
+  const handleModalSuccess = () => {
+    setIsModalOpen(false);
+    fetchSenders();
+    if (selectedSender) {
+      handleSenderClick(selectedSender);
+    }
+  };
+  
+  const getDisplayOrders = () => {
+    if (activeTab === "uncleared") return unclearedOrders;
+    if (activeTab === "cleared") return clearedOrders;
+    return notDeliveredOrders; // "not_delivered" ဖြစ်လျှင် ပြရန်
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 p-6 font-sans">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-slate-50 p-4 font-sans w-full">
+      <div className="w-full space-y-4">
         
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-blue-100 text-blue-600 rounded-xl">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
+        {/* ─── TOP BAR HEADER ─── */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-orange-100 text-orange-600 rounded-xl">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-slate-800">Senders Finance Dashboard</h1>
+              <p className="text-xs text-slate-500">ပို့ဆောင်သူများ၏ စစာရင်းရှင်းလင်းမှု အခြေအနေများကို စီမံခန့်ခွဲရန်</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800">Senders Dashboard</h1>
-            <p className="text-sm text-slate-500">ပို့ဆောင်သူစာရင်းနှင့် သူတို့၏ အထုပ် (Way) များ</p>
+
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 self-start sm:self-center">
+            <button
+              onClick={() => { setActiveBranch("MDY"); setSelectedSender(null); setOrders([]); }}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                activeBranch === "MDY" ? "bg-white text-orange-600 shadow-sm" : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              MANDALAY
+            </button>
+            <button
+              onClick={() => { setActiveBranch("YGN"); setSelectedSender(null); setOrders([]); }}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                activeBranch === "YGN" ? "bg-white text-purple-600 shadow-sm" : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              YANGON
+            </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* GRID LAYOUT */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
           
-          {/* ── 👈 ဘယ်ဘက်ခြမ်း: SENDERS စာရင်း ── */}
-          <div className="lg:col-span-1 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col h-[75vh]">
-            <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-              <h2 className="font-semibold text-slate-700 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                Sender List ({senders.length})
-              </h2>
+          {/* ─── 👈 ဘယ်ဘက်ခြမ်း: SENDERS LIST & SEARCH ─── */}
+          <div className="lg:col-span-1 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col h-[82vh]">
+            
+            <div className="p-4 border-b border-slate-100 bg-slate-50/50 space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="font-bold text-slate-700 text-sm flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${activeBranch === 'MDY' ? 'bg-orange-500' : 'bg-purple-500'}`}></span>
+                  Sender List ({filteredSenders.length})
+                </h2>
+                <button
+                  onClick={() => { setModalMode("add"); setIsModalOpen(true); }}
+                  className="px-2.5 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
+                >
+                  + Add Sender
+                </button>
+              </div>
+
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="ရှာဖွေရန်... (အမည် သို့ ဖုန်းနံပါတ်)"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-slate-800"
+                />
+                <svg className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            {/* Senders Loop Area */}
+            <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar bg-slate-50/40">
               {loadingSenders ? (
-                <div className="text-center py-10 text-slate-400 text-sm animate-pulse">
-                  ဒေတာများကို ဆွဲယူနေပါသည်...
-                </div>
+                <div className="text-center py-10 text-slate-400 text-xs animate-pulse">ဒေတာများကို ဆွဲယူနေပါသည်...</div>
+              ) : filteredSenders.length === 0 ? (
+                <div className="text-center py-10 text-slate-400 text-xs">ရှာဖွေမှုမတွေ့ရှိပါ။</div>
               ) : (
-                senders.map((sender) => (
+                filteredSenders.map((sender) => (
                   <button
                     key={sender.id}
                     onClick={() => handleSenderClick(sender)}
-                    className={`w-full text-left p-4 rounded-xl transition-all border ${
+                    className={`w-full text-left p-3.5 rounded-xl transition-all border border-l-4 ${
+                      sender.hasUncleared 
+                        ? "border-l-orange-500 bg-white" 
+                        : "border-l-emerald-500 bg-white opacity-90"
+                    } ${
                       selectedSender?.id === sender.id
-                        ? "bg-blue-50 border-blue-200 shadow-sm ring-1 ring-blue-500/10"
-                        : "bg-white border-slate-100 hover:border-blue-100 hover:bg-slate-50"
+                        ? "bg-orange-50/90 ring-2 ring-orange-500/30 border-orange-300"
+                        : "hover:bg-slate-50"
                     }`}
                   >
-                    <div className="font-bold text-slate-800 text-sm mb-1">{sender.name}</div>
-                    <div className="flex items-center gap-3 text-xs text-slate-500 font-mono">
-                      <span className="flex items-center gap-1">
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                        {sender.phone === "EMPTY" || !sender.phone ? "No Phone" : sender.phone}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                        {sender.LOC}
-                      </span>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="font-bold text-slate-800 text-sm truncate">{sender.name}</div>
+                      
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {/* 💡 Not Delivered Badge */}
+                        {sender.notDeliveredCount > 0 && (
+                          <span className="px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded-md text-[10px] font-bold border border-amber-100">
+                            💡 {sender.notDeliveredCount} ပို့ရန်ကျန်
+                          </span>
+                        )}
+
+                        {/* Uncleared သို့မဟုတ် Cleared Badge */}
+                        {sender.hasUncleared ? (
+                          <span className="px-1.5 py-0.5 bg-rose-50 text-rose-600 rounded-md text-[10px] font-bold border border-rose-100 animate-pulse">
+                            🔴 {sender.unclearedCount} ထုပ်ကျန်
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded-md text-[10px] font-bold border border-emerald-100">
+                            🟢 Cleared
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3 text-[11px] text-slate-500 font-medium">
+                      <span className="font-mono">📞 {sender.phone === "EMPTY" || !sender.phone ? "No Phone" : sender.phone}</span>
+                      <span>📍 {sender.LOC || "-"}</span>
                     </div>
                   </button>
                 ))
@@ -112,78 +346,214 @@ export default function SendersDashboard() {
             </div>
           </div>
 
-          {/* ── 👉 ညာဘက်ခြမ်း: ORDERS (WAYS) စာရင်း ── */}
-          <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col h-[75vh] overflow-hidden">
+          {/* ─── 👉 ညာဘက်ခြမ်း: ORDERS DETAILS TABLE ─── */}
+          <div className="lg:col-span-3 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col h-[82vh] overflow-hidden">
             {selectedSender ? (
               <>
-                {/* ညာဘက် Header */}
-                <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                {/* Header */}
+                <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-50/40">
                   <div>
-                    <h2 className="text-lg font-bold text-slate-800">{selectedSender.name} ၏ အထုပ်များ</h2>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Total Ways: <span className="font-bold text-blue-600">{orders.length}</span>
+                    <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                      👤 {selectedSender.name}
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5 font-medium">
+                      ဖုန်း - <span className="font-mono text-slate-700">{selectedSender.phone}</span> | ရုံးခွဲ - <span className="text-slate-700">{selectedSender.LOC}</span>
                     </p>
                   </div>
+                  {realBranch === "ADMIN" && (
+                  <button
+                    onClick={() => { setModalMode("edit"); setIsModalOpen(true); }}
+                    className="px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold shadow-sm transition-colors"
+                  >
+                    ✏️ Edit Sender Info
+                  </button>
+                  )}
                 </div>
 
-                {/* Table Data */}
-                <div className="flex-1 overflow-auto">
-                  {loadingOrders ? (
-                    <div className="flex items-center justify-center h-full text-slate-400 text-sm animate-pulse">
-                      အထုပ်စာရင်းကို ရှာဖွေနေပါသည်...
+                {/* Tabs & Way Search Box */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 px-4 bg-white sticky top-0 z-20 gap-2 py-2 sm:py-0">
+                  
+                  {/* Left Side: Tabs */}
+                  <div className="flex">
+                    <button
+                      onClick={() => setActiveTab("uncleared")}
+                      className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+                        activeTab === "uncleared" ? "border-orange-500 text-orange-600" : "border-transparent text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      🔴 Uncleared
+                      <span className={`px-1.5 py-0.5 text-[10px] rounded-full ${activeTab === 'uncleared' ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>
+                        {unclearedOrders.length}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("cleared")}
+                      className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+                        activeTab === "cleared" ? "border-emerald-500 text-emerald-600" : "border-transparent text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      🟢 Cleared
+                      <span className={`px-1.5 py-0.5 text-[10px] rounded-full ${activeTab === 'cleared' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-600'}`}>
+                        {clearedOrders.length}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("not_delivered")}
+                      className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+                        activeTab === "not_delivered" ? "border-amber-500 text-amber-600" : "border-transparent text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      🟡 Not Delivered
+                      <span className={`px-1.5 py-0.5 text-[10px] rounded-full ${activeTab === 'not_delivered' ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-600'}`}>
+                        {notDeliveredOrders.length}
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Right Side: Way Search Box */}
+                  <div className="relative w-full sm:w-72 my-1.5">
+                    <input
+                      type="text"
+                      placeholder="Way ID၊ အမည်၊ ဖုန်း၊ မြို့နယ် ဖြင့် ရှာရန်..."
+                      value={orderSearchTerm}
+                      onChange={(e) => setOrderSearchTerm(e.target.value)}
+                      className="w-full pl-8 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-slate-800 font-medium"
+                    />
+                    <svg className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+
+                </div>
+
+                {/* Date Picker Action Bar */}
+                {activeTab === "uncleared" && selectedOrderIds.length > 0 && (
+                  <div className="bg-orange-50 border-b border-orange-100 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 animate-fadeIn">
+                    <div className="text-xs font-semibold text-orange-800">
+                      Selected: <span className="font-mono bg-orange-200/60 px-1.5 py-0.5 rounded text-orange-700">{selectedOrderIds.length}</span> ထုပ် | 
+                      စုစုပေါင်း COD: <span className="font-mono text-sm ml-1 text-orange-600 font-bold">{totalSelectedCod.toLocaleString()} Ks</span>
                     </div>
-                  ) : orders.length > 0 ? (
-                    <table className="w-full text-left border-collapse">
-                      <thead className="bg-slate-50 sticky top-0 shadow-sm z-10">
+                    <div className="flex items-center gap-2 self-end sm:self-center">
+                      <input
+                        type="date"
+                        value={clearedDateInput}
+                        onChange={(e) => setClearedDateInput(e.target.value)} // 💡 Fix typo 'e.with.value' to 'e.target.value'
+                        className="px-3 py-1.5 bg-white border border-orange-200 rounded-xl text-xs font-semibold text-slate-800"
+                      />
+                      <button
+                        onClick={handleBulkClear}
+                        disabled={clearing}
+                        className="px-4 py-1.5 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                      >
+                        {clearing ? "Saving..." : "Clear Selected"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ─── 💡 Table Layout With Proper Curly Braces `{ }` ─── */}
+                <div className="flex-1 overflow-auto custom-scrollbar">
+                  {getDisplayOrders().length > 0 ? (
+                    <table className="w-full text-left border-collapse whitespace-nowrap">
+                      <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-100 sticky top-0 z-10 shadow-sm">
                         <tr>
-                          <th className="px-5 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200"># Way ID</th>
-                          <th className="px-5 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Receiver / Destination</th>
-                          <th className="px-5 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Date</th>
-                          {/* လိုအပ်ပါက ငွေပမာဏ (သို့) အခြား Column များ ဤနေရာတွင် ထပ်ထည့်နိုင်ပါသည် */}
+                          {activeTab === "uncleared" && (
+                            <th className="px-4 py-3 text-center w-12">
+                              <input
+                                type="checkbox"
+                                checked={unclearedOrders.length > 0 && selectedOrderIds.length === unclearedOrders.length}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedOrderIds(unclearedOrders.map((o) => o.id));
+                                  } else {
+                                    setSelectedOrderIds([]);
+                                  }
+                                }}
+                                className="rounded border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
+                              />
+                            </th>
+                          )}
+                          <th className="px-5 py-3">Way ID</th>
+                          <th className="px-5 py-3">Receiver & Destination</th>
+                          <th className="px-5 py-3 text-right">COD (Ks)</th>
+                          <th className="px-5 py-3 text-right">Deli Fee (Ks)</th>
+                          <th className="px-5 py-3 text-center">Fee Type</th>
+                          <th className="px-5 py-3 text-right">Total (Ks)</th>
+                          <th className="px-5 py-3">Deli Date</th>
+                          <th className="px-5 py-3">Status</th>
+                          {activeTab === "cleared" && <th className="px-5 py-3">Cleared Date</th>}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {orders.map((order, index) => (
-                          <tr key={order.id || index} className="hover:bg-slate-50/70 transition-colors">
-                            <td className="px-5 py-4 whitespace-nowrap text-sm font-mono font-medium text-slate-700">
-                              {order.id} {/* 💡 အစ်ကို့ table ရဲ့ way id ပေါ်မူတည်ပြီး ပြင်ပါ */}
+                      <tbody className="divide-y divide-slate-100 text-slate-700 text-xs font-medium">
+                        {getDisplayOrders().map((order, index) => (
+                          <tr key={order.id || index} className="hover:bg-slate-50/60 transition-colors">
+                            {activeTab === "uncleared" && (
+                              <td className="px-4 py-3.5 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedOrderIds.includes(order.id)}
+                                  onChange={() => {
+                                    if (selectedOrderIds.includes(order.id)) {
+                                      setSelectedOrderIds(selectedOrderIds.filter((id) => id !== order.id));
+                                    } else {
+                                      setSelectedOrderIds([...selectedOrderIds, order.id]);
+                                    }
+                                  }}
+                                  className="rounded border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
+                                />
+                              </td>
+                            )}
+                            <td className="px-5 py-3.5 font-mono font-bold text-slate-900 text-xs">{order.item_id || order.id}</td>
+                            <td className="px-5 py-3.5">
+                              <div className="font-bold text-slate-800 text-xs">{order.receiver_name || "Unknown"}</div>
+                              <div className="text-[11px] text-slate-400 font-medium font-mono mt-0.5">
+                                {order.receiver_phone} ({order.receiver_loc || "No City"})
+                              </div>
                             </td>
-                            <td className="px-5 py-4">
-                              <div className="text-sm font-bold text-slate-800">{order.receiver_name || "Unknown"}</div>
-                              <div className="text-xs text-slate-500">{order.receiver_loc || "No Location"} - {order.receiver_phone}</div>
+                            <td className="px-5 py-3.5 text-right font-mono font-semibold text-slate-700">{order.cod_amount ? Number(order.cod_amount).toLocaleString() : "0"}</td>
+                            <td className="px-5 py-3.5 text-right font-mono text-slate-500">{order.deli_fee ? Number(order.deli_fee).toLocaleString() : "0"}</td>
+                            <td className="px-5 py-3.5 text-center">
+                              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold">{order.fee_type || "-"}</span>
                             </td>
-                            <td className="px-5 py-4 whitespace-nowrap text-sm text-slate-500">
-                              {new Date(order.created_at).toLocaleDateString()}
+                            <td className="px-5 py-3.5 text-right font-mono font-bold text-slate-900">{order.total_amount ? Number(order.total_amount).toLocaleString() : "0"}</td>
+                            <td className="px-5 py-3.5 text-[11px] font-mono text-slate-600">{order.deliver_date || new Date(order.created_at).toLocaleDateString()}</td>
+                            <td className="px-5 py-3.5">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${order.status === "Delivered" ? "bg-green-50 text-green-700 border border-green-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
+                                {order.status}
+                              </span>
                             </td>
+                            {activeTab === "cleared" && (
+                              <td className="px-5 py-3.5 text-[11px] font-mono text-emerald-600 font-semibold">📅 {new Date(order.cleared_date).toLocaleDateString()}</td>
+                            )}
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-3">
-                      <svg className="w-12 h-12 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                      </svg>
-                      <p className="text-sm">ဒီပို့ဆောင်သူအတွက် အထုပ် (Way) များ မရှိသေးပါ။</p>
+                    <div className="flex flex-col items-center justify-center h-full text-slate-400 py-12 space-y-2">
+                      <p className="text-xs">ဤ Tab အတွက် စာရင်းများ မရှိသေးပါ။</p>
                     </div>
                   )}
                 </div>
               </>
             ) : (
-              // ညာဘက်ခြမ်း (Sender မရွေးရသေးခင် ပြမည့်ပုံစံ)
-              <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-4">
-                <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center">
-                  <svg className="w-8 h-8 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
-                  </svg>
-                </div>
-                <p className="text-sm">အထုပ်စာရင်း ကြည့်ရှုရန် ဘယ်ဘက်မှ ပို့ဆောင်သူ အမည်ကို ရွေးချယ်ပါ။</p>
+              <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-3">
+                <p className="text-xs font-medium">ပါဆယ်မှတ်တမ်းများ ကြည့်ရှုရန် ဘယ်ဘက်မှ ပို့ဆောင်သူ (Sender) အမည်ကို ရွေးချယ်ပါ။</p>
               </div>
             )}
           </div>
 
         </div>
       </div>
+
+      <SenderModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={handleModalSuccess}
+        mode={modalMode}
+        editData={modalMode === "edit" ? selectedSender : null}
+        activeBranch={activeBranch}
+      />
     </div>
   );
 }

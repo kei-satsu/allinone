@@ -96,25 +96,71 @@ const MENU_ITEMS: MenuItem[] = [
       <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
     </svg>
   ),
-  // 🌟 Sub-menu သုံးခုကို children ခံပြီး ထည့်သွင်းခြင်း
+  // 🌟 Sub-menu (၄) ခုလုံးကို SVG Icon များဖြင့် ပြောင်းလဲထားခြင်း
   children: [
     {
       name: "Transit In",
       path: "/transit/in",
-      icon: "📥" // ပိုမိုရှင်းလင်းအောင် Icon အသေးလေးတွေပါ တွဲပေးထားပါတယ်
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+        </svg>
+      )
     },
     {
       name: "Transit Out",
       path: "/transit/out",
-      icon: "📤"
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+        </svg>
+      )
     },
     {
       name: "Pending In",
       path: "/transit/pd",
-      icon: "⏳"
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      )
+    },
+    {
+      name: "Transit Report",
+      path: "/transit/transit-report",
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5-3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+        </svg>
+      )
     }
   ]
 },
+
+ {
+    name: "Senders",
+    path: "/senders",
+    icon: (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5Zm6-10.125a1.875 1.875 0 1 1-3.75 0 1.875 1.875 0 0 1 3.75 0Zm-1.214 6.33a3.75 3.75 0 0 0-3.322 0c-1.017.43-1.464 1.577-1.13 2.617a14.451 14.451 0 0 0 5.582 0c.334-1.04-.113-2.187-1.13-2.618Z" />
+  </svg>
+),
+  },
+
+{
+    name: "Barcode Print",
+    path: "/barcode-print",
+    icon: (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+    {/* Printer Body */}
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5V4.5a.75.75 0 01.75-.75h9a.75.75 0 01.75.75v3m-12 0h13.5A2.25 2.25 0 0121 9.75v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15.75v-6A2.25 2.25 0 015.25 7.5z" />
+    {/* Printed Label Sheet */}
+    <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 15.75h9v3.75a.75.75 0 01-.75.75h-7.5a.75.75 0 01-.75-.75v-3.75z" />
+    {/* Barcode Lines inside the label */}
+    <path strokeLinecap="round" d="M9.5 17.25v1.5M12 17.25v1.5M14.5 17.25v1.5" />
+  </svg>
+),
+  },
  
 
   {
