@@ -1,4 +1,4 @@
-"use client"
+'use client'
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
@@ -15,6 +15,10 @@ export default function BulkUpdatePage() {
   const [riders, setRiders] = useState<any[]>([])
   const [cities, setCities] = useState<any[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>([]) 
+  
+  // 🌟 ဖြေရှင်းချက်: Search ချိန်းသွားသော်လည်း ရွေးထားသည့် ပါဆယ်ဒေတာများ မပျောက်စေရန် Full Object သိမ်းမည့် နေရာ
+  const [selectedOrders, setSelectedOrders] = useState<any[]>([]) 
+  
   const [userBranch, setUserBranch] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [searchLoading, setSearchLoading] = useState(false)
@@ -23,9 +27,9 @@ export default function BulkUpdatePage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [qrInput, setQrInput] = useState('')
 
-  // 📸 Camera Scanner States (အသစ်ထပ်ထည့်ထားသော State များ)
+  // 📸 Camera Scanner States
   const [showCamera, setShowCamera] = useState(false)
-  const [pendingOrder, setPendingOrder] = useState<any>(null) // Scan ဖတ်မိပြီး Add မလုပ်ရသေးသော အထုပ်
+  const [pendingOrder, setPendingOrder] = useState<any>(null) 
   const [cameraLoading, setCameraLoading] = useState(false)
 
   // Bulk Action Update States
@@ -70,9 +74,9 @@ export default function BulkUpdatePage() {
   }
 
   async function fetchCities() {
-  const { data } = await supabase.from('cities').select('*')
-  if (data) setCities(data)
-}
+    const { data } = await supabase.from('cities').select('*')
+    if (data) setCities(data)
+  }
 
   async function fetchRecentOrders(branch: string) {
     setSearchLoading(true)
@@ -95,11 +99,10 @@ export default function BulkUpdatePage() {
       return
     }
     setSearchLoading(true)
-   const { data, error } = await supabase
+    const { data, error } = await supabase
       .from('orders')
       .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
       .eq('branch', userBranch)
-      // ✨ အောက်တွင် barcode.ilike.%${query}% ကိုပါ တိုးပေးထားပါတယ်
       .or(`item_id.ilike.%${query}%,barcode.ilike.%${query}%,sender_name.ilike.%${query}%,receiver_name.ilike.%${query}%,receiver_phone.ilike.%${query}%`)
       .order('created_at', { ascending: false })
 
@@ -145,8 +148,10 @@ export default function BulkUpdatePage() {
           return [data, ...prev]
         })
         setSelectedIds(prev => prev.includes(data.id) ? prev : [...prev, data.id])
+        // 🌟 ID အပြင် Full Object ပါ သိမ်းဆည်းပေးခြင်း
+        setSelectedOrders(prev => prev.some(o => o.id === data.id) ? prev : [...prev, data])
       } else {
-        alert(`Item ID: ${value} အား ရှာမတွေ့ပါ။ စာလုံးပေါင်း သေချာပါသလား?`)
+        alert(`Item ID: ${value} အား ရှာမတွေ့ပါ။ สာလုံးပေါင်း သေ尋ာပါသလား?`)
       }
       setQrInput('') 
       qrInputRef.current?.focus()
@@ -154,9 +159,8 @@ export default function BulkUpdatePage() {
     }
   }
 
-  // 📸 2. Mobile Camera Scanner Logic အသစ်
+  // 📸 2. Mobile Camera Scanner Logic
   const handleCameraScan = async (detectedCodes: any[]) => {
-    // Code ဖတ်ပြီးဖြစ်နေချိန် (သို့) Data ဆွဲနေချိန်ဆိုရင် နောက်ထပ် ထပ်မဖတ်အောင် တားထားမည်
     if (detectedCodes.length === 0 || pendingOrder || cameraLoading) return;
     const value = detectedCodes[0].rawValue;
     if (!value) return;
@@ -172,7 +176,7 @@ export default function BulkUpdatePage() {
     if (error || !data) {
       alert(`Item ID: ${value} အား ရှာမတွေ့ပါ။`);
     } else {
-      setPendingOrder(data); // ဒေတာရပြီဆိုရင် Confirmation UI ကို ပြပေးမည်
+      setPendingOrder(data); 
     }
     setCameraLoading(false);
   }
@@ -184,131 +188,158 @@ export default function BulkUpdatePage() {
         return [pendingOrder, ...prev];
       });
       setSelectedIds(prev => prev.includes(pendingOrder.id) ? prev : [...prev, pendingOrder.id]);
-      setPendingOrder(null); // အထုပ်ကို List ထဲထည့်ပြီးပါက နောက်တစ်ထုပ် ဆက်ဖတ်ရန်
+      // 🌟 Full Object သိမ်းပေးခြင်း
+      setSelectedOrders(prev => prev.some(o => o.id === pendingOrder.id) ? prev : [...prev, pendingOrder]);
+      setPendingOrder(null); 
     }
   }
 
   const cancelPendingOrder = () => {
-    setPendingOrder(null); // မထည့်ဘဲ နောက်တစ်ထုပ် ပြန်ဖတ်ရန်
+    setPendingOrder(null); 
   }
 
-  const handleSelectRow = (id: string) => {
-    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])
+  // 🌟 ပြင်ဆင်ချက်: Row တစ်ခုချင်းစီကို နှိပ်လျှင် ID ရော Object ပါ တွဲမှတ်ပေးခြင်း
+  const handleSelectRow = (orderObj: any) => {
+    const id = orderObj.id
+    setSelectedIds(prev => {
+      if (prev.includes(id)) {
+        setSelectedOrders(old => old.filter(o => o.id !== id))
+        return prev.filter(i => i !== id)
+      } else {
+        setSelectedOrders(old => [...old, orderObj])
+        return [...prev, id]
+      }
+    })
   }
 
+  // 🌟 ပြင်ဆင်ချက်: Select All Visible နှိပ်လျှင် လတ်တလောမြင်ရသမျှကို လက်ရှိရွေးထားပြီးသားစာရင်းထဲ ထည့်ပေါင်း/ဖယ်ထုတ်ပေးခြင်း
   const handleSelectAllVisible = () => {
-    if (selectedIds.length === orders.length) setSelectedIds([])
-    else setSelectedIds(orders.map(o => o.id))
+    if (orders.length === 0) return;
+    
+    const allVisibleChecked = orders.every(o => selectedIds.includes(o.id))
+    const visibleIds = orders.map(o => o.id)
+
+    if (allVisibleChecked) {
+      // Visible ဖြစ်နေတာတွေကို အမှန်ခြစ်ဖြုတ်မည်
+      setSelectedIds(prev => prev.filter(id => !visibleIds.includes(id)))
+      setSelectedOrders(prev => prev.filter(o => !visibleIds.includes(o.id)))
+    } else {
+      // Visible ဖြစ်နေတာတွေကို အမှန်ခြစ်ထည့်မည် (ဒေတာဟောင်းမပျောက်စေရ)
+      setSelectedIds(prev => {
+        const next = [...prev];
+        orders.forEach(o => { if (!next.includes(o.id)) next.push(o.id) });
+        return next;
+      });
+      setSelectedOrders(prev => {
+        const next = [...prev];
+        orders.forEach(o => { if (!next.some(x => x.id === o.id)) next.push(o) });
+        return next;
+      });
+    }
   }
 
   const handleBulkUpdateSubmit = async (e: React.FormEvent) => {
-  e.preventDefault()
-  if (selectedIds.length === 0) return alert("ကျေးဇူးပြု၍ အပ်ဒိတ်လုပ်မည့် ပါဆယ်ထုပ်များကို အရင်ရွေးချယ်ပါ!")
+    e.preventDefault()
+    if (selectedIds.length === 0) return alert("ကျေးဇူးပြု၍ အပ်ဒိတ်လုပ်မည့် ပါဆယ်ထုပ်များကို အရင်ရွေးချယ်ပါ!")
 
-  setLoading(true)
-  try {
-    const isInTransit = bulkStatus === 'In-Transit';
-    
-    // 💡 အပြင်မှာတင် Status အပေါ်မူတည်ပြီး Rider နာမည် သို့မဟုတ် City နာမည်ကို ကြိုရှာထားမယ်
-    let targetEntityName = 'ဖြုတ်လိုက်သည်';
-    if (isInTransit) {
-      // cities array ထဲမှာ ရွေးချယ်ထားတဲ့ C.ID နဲ့ တိုက်စစ်ပြီး မြို့နာမည်ကို ယူပါတယ်
-      const selectedCity = cities.find(c => String(c["C.ID"]) === String(bulkRiderId));
-      targetEntityName = selectedCity ? selectedCity.name : 'သတ်မှတ်မထားသော မြို့';
-    } else {
-      // ပုံမှန်ဆိုရင် riders array ထဲကနေ Rider နာမည်ကို ယူပါတယ်
-      const selectedRider = riders.find(r => r.id === bulkRiderId);
-      targetEntityName = selectedRider ? selectedRider.name : 'ဖြုတ်လိုက်သည်';
-    }
-
-    const updatePromises = selectedIds.map(async (id) => {
-      // orders သို့မဟုတ် လက်ရှိ state ထဲက အော်ဒါကို ရှာယူခြင်း
-      const currentOrder = orders.find(o => o.id === id);
-      if (!currentOrder) return null;
-
-      // 📝 History Log အတွက် အပြောင်းအလဲများကို စစ်ဆေးမှတ်သားခြင်း
-      let changes: string[] = [];
-      if (currentOrder.status !== bulkStatus) {
-        changes.push(`Bulk စနစ်ဖြင့် Status ကို "${currentOrder.status || 'At Office'}" မှ "${bulkStatus}" သို့ ပြောင်းလဲခဲ့သည်`);
-      }
-
+    setLoading(true)
+    try {
+      const isInTransit = bulkStatus === 'In-Transit';
+      
+      let targetEntityName = 'ဖြုတ်လိုက်သည်';
       if (isInTransit) {
-        if (currentOrder.transit_to !== bulkRiderId) {
-          changes.push(`Transit City ကို "${targetEntityName}" သို့ ပြောင်းလဲခဲ့သည်`);
-        }
+        const selectedCity = cities.find(c => String(c["C.ID"]) === String(bulkRiderId));
+        targetEntityName = selectedCity ? selectedCity.name : 'သတ်မှတ်မထားသော မြို့';
       } else {
-        if (currentOrder.deliver_rider_id !== bulkRiderId) {
-          changes.push(`Rider ကို "${targetEntityName}" သို့ တာဝန်ပေးခဲ့သည်`);
+        const selectedRider = riders.find(r => r.id === bulkRiderId);
+        targetEntityName = selectedRider ? selectedRider.name : 'ဖြုတ်လိုက်သည်';
+      }
+
+      const updatePromises = selectedIds.map(async (id) => {
+        // 🌟 အဓိကပြင်ဆင်ချက်: မျက်နှာပြင်ပေါ်က orders အစား Search ကြောင့်ပျောက်နေပတ်စေ `selectedOrders` ထဲကနေ ရှာယူပါမည်
+        const currentOrder = selectedOrders.find(o => o.id === id);
+        if (!currentOrder) return null;
+
+        let changes: string[] = [];
+        if (currentOrder.status !== bulkStatus) {
+          changes.push(`Bulk စနစ်ဖြင့် Status ကို "${currentOrder.status || 'At Office'}" မှ "${bulkStatus}" သို့ ပြောင်းလဲခဲ့သည်`);
         }
-      }
 
-      if (bulkNoteAction === 'rt' && currentOrder.note !== 'RT') {
-        changes.push(`Note တွင် "RT" ဟု သတ်မှတ်ခဲ့သည်`);
-      } else if (bulkNoteAction === 'clear' && currentOrder.note) {
-        changes.push(`Note ထဲရှိ အချက်အလက်များကို ဖယ်ရှားရှင်းလင်းခဲ့သည်`);
-      }
+        if (isInTransit) {
+          if (currentOrder.transit_to !== bulkRiderId) {
+            changes.push(`Transit City ကို "${targetEntityName}" သို့ ပြောင်းလဲခဲ့သည်`);
+          }
+        } else {
+          if (currentOrder.deliver_rider_id !== bulkRiderId) {
+            changes.push(`Rider ကို "${targetEntityName}" သို့ တာဝန်ပေးခဲ့သည်`);
+          }
+        }
 
-      if (changes.length === 0) {
-        changes.push("Bulk စနစ်ဖြင့် ပါဆယ်အချက်အလက်များကို ပြင်ဆင်ခဲ့သည်");
-      }
+        if (bulkNoteAction === 'rt' && currentOrder.note !== 'RT') {
+          changes.push(`Note တွင် "RT" ဟု သတ်မှတ်ခဲ့သည်`);
+        } else if (bulkNoteAction === 'clear' && currentOrder.note) {
+          changes.push(`Note ထဲရှိ အချက်အလက်များကို ဖယ်ရှားရှင်းလင်းခဲ့သည်`);
+        }
 
-      const logNote = changes.join("၊ ");
-      const updatedHistory = appendLog(currentOrder.history, "Bulk Updated", logNote);
+        if (changes.length === 0) {
+          changes.push("Bulk စနစ်ဖြင့် ပါဆယ်အချက်အလက်များကို ပြင်ဆင်ခဲ့သည်");
+        }
 
-      // 🔄 Status အလိုက် Database ထဲ ထည့်သွင်းမည့် Field Data များကို ခွဲခြားပြင်ဆင်ခြင်း
-      const updateData: any = {
-        status: bulkStatus,
-        history: updatedHistory
-      };
+        const logNote = changes.join("၊ ");
+        const updatedHistory = appendLog(currentOrder.history, "Bulk Updated", logNote);
 
-      if (isInTransit) {
-        updateData.transit_to = bulkRiderId || null;       // ရွေးချယ်ထားသော City ID ဝင်မည်
-        updateData.transit_date = bulkDeliverDate || null; // ရွေးချယ်ထားသော Date ဝင်မည်
-        updateData.deliver_rider_id = null;               // ပုံမှန် Rider field ကို clear လုပ်မည်
-        updateData.deliver_date = null;
+        const updateData: any = {
+          status: bulkStatus,
+          history: updatedHistory
+        };
+
+        if (isInTransit) {
+          updateData.transit_to = bulkRiderId || null;       
+          updateData.transit_date = bulkDeliverDate || null; 
+          updateData.deliver_rider_id = null;               
+          updateData.deliver_date = null;
+        } else {
+          updateData.deliver_rider_id = bulkRiderId || null; 
+          updateData.deliver_date = bulkDeliverDate || null; 
+        }
+
+        if (bulkNoteAction === 'rt') {
+          updateData.note = 'RT';
+        } else if (bulkNoteAction === 'clear') {
+          updateData.note = null;
+        }
+
+        return supabase
+          .from('orders')
+          .update(updateData)
+          .eq('id', id);
+      });
+
+      const results = await Promise.all(updatePromises);
+      const hasError = results.some(res => res && res.error);
+
+      if (!hasError) {
+        alert(`ပါဆယ်ထုပ် (${selectedIds.length}) ထုပ်အား Status နှင့် လှုပ်ရှားမှုမှတ်တမ်း ပြောင်းလဲခြင်း အောင်မြင်ပါသည်! 🎉`);
+        setSelectedIds([])
+        setSelectedOrders([]) // 🌟 အသစ်ရှင်းလင်းချက်
+        setSearchTerm('')
+        setBulkNoteAction('keep')
+        fetchRecentOrders(userBranch)
       } else {
-        updateData.deliver_rider_id = bulkRiderId || null; // ပုံမှန် Rider ID ဝင်မည်
-        updateData.deliver_date = bulkDeliverDate || null; // ပုံမှန် Delivery Date ဝင်မည်
-        
+        alert("ဒေတာအချို့ကို အပ်ဒိတ်လုပ်ရာတွင် အမှားအယွင်း ရှိခဲ့ပါသည်။ ကျေးဇူးပြု၍ ပြန်လည်စစ်ဆေးပါ။")
       }
-
-      if (bulkNoteAction === 'rt') {
-        updateData.note = 'RT';
-      } else if (bulkNoteAction === 'clear') {
-        updateData.note = null;
-      }
-
-      // Supabase သို့ Update လုပ်ရန် လှမ်းပို့ခြင်း
-      return supabase
-        .from('orders')
-        .update(updateData)
-        .eq('id', id);
-    });
-
-    const results = await Promise.all(updatePromises);
-    const hasError = results.some(res => res && res.error);
-
-    if (!hasError) {
-      alert(`ပါဆယ်ထုပ် (${selectedIds.length}) ထုပ်အား Status နှင့် လှုပ်ရှားမှုမှတ်တမ်း ပြောင်းလဲခြင်း အောင်မြင်ပါသည်! 🎉`);
-      setSelectedIds([])
-      setSearchTerm('')
-      setBulkNoteAction('keep')
-      fetchRecentOrders(userBranch)
-    } else {
-      alert("ဒေတာအချို့ကို အပ်ဒိတ်လုပ်ရာတွင် အမှားအယွင်း ရှိခဲ့ပါသည်။ ကျေးဇူးပြု၍ ပြန်လည်စစ်ဆေးပါ။")
+    } catch (error: any) {
+      alert("Error: " + error.message)
+    } finally {
+      setLoading(false)
+      qrInputRef.current?.focus()
     }
-  } catch (error: any) {
-    alert("Error: " + error.message)
-  } finally {
-    setLoading(false)
-    qrInputRef.current?.focus()
   }
-}
 
   return (
     <div className="w-full h-full flex flex-col bg-[#f3f3f3] font-[system-ui,-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif] overflow-auto select-none p-4 relative">
       
-      {/* 📸 Mobile Camera Modal (ပေါ်လာမည့် အစိတ်အပိုင်း) */}
+      {/* 📸 Mobile Camera Modal */}
       {showCamera && (
         <div className="fixed inset-0 z-70 bg-black/95 flex flex-col items-center justify-center animate-in fade-in duration-200">
           <div className="absolute top-4 right-4 z-50">
@@ -323,47 +354,41 @@ export default function BulkUpdatePage() {
             ) : !pendingOrder ? (
               <Scanner onScan={handleCameraScan} formats={['qr_code', 'code_128', 'code_39', 'ean_13']} />
             ) : (
-              // 📸 Scan ဖတ်မိပြီးနောက် ပြသမည့် အချက်အလက် (Add / Cancel ရွေးချယ်ရန်)
               <div className="absolute inset-0 bg-white p-6 flex flex-col justify-center text-left overflow-y-auto">
-  <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4 mx-auto shrink-0">
-    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-    </svg>
-  </div>
-  <h3 className="text-lg font-bold text-center text-gray-900 mb-4 shrink-0">အထုပ်အား ရှာဖွေတွေ့ရှိပါသည်</h3>
-  
-  {/* 📦 ပါဆယ်အချက်အလက်များ */}
-  <div className="space-y-3 mb-4 bg-gray-50 p-4 rounded-xl border border-gray-100 shrink-0">
-    <p className="text-sm flex justify-between border-b border-gray-200 pb-2">
-      <span className="text-gray-500">Item ID:</span> <span className="font-mono font-bold">{pendingOrder.item_id}</span>
-    </p>
-    <p className="text-sm flex justify-between border-b border-gray-200 pb-2">
-      <span className="text-gray-500">Sender:</span> <span className="font-semibold">{pendingOrder.sender_name}</span>
-    </p>
-    <p className="text-sm flex justify-between border-b border-gray-200 pb-2">
-      <span className="text-gray-500">Receiver:</span> <span className="font-semibold">{pendingOrder.receiver_name}</span>
-    </p>
-    <p className="text-sm flex justify-between text-orange-600 font-bold text-base">
-      <span>COD:</span> <span>{pendingOrder.cod || pendingOrder.cod_amount || '0'} MMK</span>
-    </p>
-  </div>
+                <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4 mx-auto shrink-0">
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-bold text-center text-gray-900 mb-4 shrink-0">အထုပ်အား ရှာဖွေတွေ့ရှိပါသည်</h3>
+                
+                <div className="space-y-3 mb-4 bg-gray-50 p-4 rounded-xl border border-gray-100 shrink-0">
+                  <p className="text-sm flex justify-between border-b border-gray-200 pb-2">
+                    <span className="text-gray-500">Item ID:</span> <span className="font-mono font-bold">{pendingOrder.item_id}</span>
+                  </p>
+                  <p className="text-sm flex justify-between border-b border-gray-200 pb-2">
+                    <span className="text-gray-500">Sender:</span> <span className="font-semibold">{pendingOrder.sender_name}</span>
+                  </p>
+                  <p className="text-sm flex justify-between border-b border-gray-200 pb-2">
+                    <span className="text-gray-500">Receiver:</span> <span className="font-semibold">{pendingOrder.receiver_name}</span>
+                  </p>
+                  <p className="text-sm flex justify-between text-orange-600 font-bold text-base">
+                    <span>COD:</span> <span>{pendingOrder.cod || pendingOrder.cod_amount || '0'} MMK</span>
+                  </p>
+                </div>
 
-  {/* 🖼️ 🌟 အသစ်ဖြည့်စွက်ချက်: image_url ရှိလျှင် ပုံလှမ်းပြပေးမည့်နေရာ */}
-  {pendingOrder.image_url && (
-    <div className="mb-4 border border-gray-200 rounded-xl overflow-hidden bg-gray-100 flex justify-center items-center h-32 shrink-0">
-      <img 
-        src={pendingOrder.image_url} 
-        alt="Parcel Preview" 
-        className="h-full w-full object-contain"
-        onError={(e) => {
-          // 💡 အကယ်၍ Link ပျက်နေတာမျိုးရှိရင် နေရာလွတ်ကြီး ဖြစ်မနေအောင် ကွယ်ထားပေးမည့် စနစ်
-          e.currentTarget.style.display = 'none';
-        }}
-      />
-    </div>
-  )}
+                {pendingOrder.image_url && (
+                  <div className="mb-4 border border-gray-200 rounded-xl overflow-hidden bg-gray-100 flex justify-center items-center h-32 shrink-0">
+                    <img 
+                      src={pendingOrder.image_url} 
+                      alt="Parcel Preview" 
+                      className="h-full w-full object-contain"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                  </div>
+                )}
 
-                <div className="flex gap-3 mt-auto ">
+                <div className="flex gap-3 mt-auto">
                   <button onClick={cancelPendingOrder} className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-all">
                     Cancel
                   </button>
@@ -403,163 +428,149 @@ export default function BulkUpdatePage() {
         </div>
 
         {/* 🔍 SECTION 1: SEARCH & SCANNER INPUTS */}
-<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-  
-  {/* 💻 Desktop မှာပဲပြမည့် Hardware Scanner Field (ဖုန်းမှာ အလိုအလျောက် ပုန်းနေပါမည်) */}
-  <div className="hidden md:flex bg-gray-900 text-white p-4 rounded-lg border border-gray-950 shadow flex-col justify-center relative">
-    <label className="block text-orange-400 font-semibold mb-2 uppercase text-[11px] tracking-wider flex items-center justify-between gap-2">
-      <span className="flex items-center gap-2">
-        📷 QR / BARCODE SCANNER
-        {searchLoading && <span className="text-[9px] bg-orange-500 text-white px-1.5 py-0.5 rounded animate-pulse">SEARCHING...</span>}
-      </span>
-    </label>
-    <div className="flex gap-2">
-      <input 
-        ref={qrInputRef}
-        type="text"
-        placeholder="Scanner ဖြင့် ဖတ်ပါ..."
-        value={qrInput}
-        onChange={e => setQrInput(e.target.value)}
-        onKeyDown={handleQrScanSubmit}
-        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white font-mono placeholder-gray-500 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-900 text-sm shadow-inner"
-      />
-      <button 
-        type="button"
-        onClick={() => setShowCamera(true)}
-        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium text-xs whitespace-nowrap transition-all shadow-md flex items-center gap-1.5"
-      >
-        📷 Camera ဖြင့်ဖတ်မည်
-      </button>
-    </div>
-    <p className="text-[10px] text-gray-400 mt-2 italic">💡 Computer Scanner ဖတ်လျှင် အလိုအလျောက် ရွေးချယ်ပြီးဖြစ်သွားမည်။</p>
-  </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="hidden md:flex bg-gray-900 text-white p-4 rounded-lg border border-gray-950 shadow flex-col justify-center relative">
+            <label className="block text-orange-400 font-semibold mb-2 uppercase text-[11px] tracking-wider flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2">
+                📷 QR / BARCODE SCANNER
+                {searchLoading && <span className="text-[9px] bg-orange-500 text-white px-1.5 py-0.5 rounded animate-pulse">SEARCHING...</span>}
+              </span>
+            </label>
+            <div className="flex gap-2">
+              <input 
+                ref={qrInputRef}
+                type="text"
+                placeholder="Scanner ဖြင့် ဖတ်ပါ..."
+                value={qrInput}
+                onChange={e => setQrInput(e.target.value)}
+                onKeyDown={handleQrScanSubmit}
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white font-mono placeholder-gray-500 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-900 text-sm shadow-inner"
+              />
+              <button 
+                type="button"
+                onClick={() => setShowCamera(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium text-xs whitespace-nowrap transition-all shadow-md flex items-center gap-1.5"
+              >
+                📷 Camera ဖြင့်ဖတ်မည်
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-400 mt-2 italic">💡 Computer Scanner ဖတ်လျှင် အလိုအလျောက် ရွေးချယ်ပြီးဖြစ်သွားမည်။</p>
+          </div>
 
-  {/* 📱 Mobile မှာပဲသီးသန့်ပြမည့် သပ်ရပ်သော Camera ခလုတ် (စာအပိုများ ဖယ်ရှားထားပါသည်) */}
-  <div className="block md:hidden w-full">
-    <button 
-      type="button"
-      onClick={() => setShowCamera(true)}
-      className="w-full py-4 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-all"
-    >
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-      ဖုန်းကင်မရာဖြင့် QR / Barcode ဖတ်မည်
-    </button>
-  </div>
+          <div className="block md:hidden w-full">
+            <button 
+              type="button"
+              onClick={() => setShowCamera(true)}
+              className="w-full py-4 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-all"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              ဖုန်းကင်မရာဖြင့် QR / Barcode ဖတ်မည်
+            </button>
+          </div>
 
-  {/* 🔍 Normal Smart Search (ဖုန်းရော Desktop ပါ လှပစွာ ပေါ်နေပါမည်) */}
-  <form onSubmit={handleManualSearchSubmit} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm flex flex-col justify-center">
-    <label className={labelStyle}>🔍 Multi-Field Auto Filter (Item ID, Name, Phone)</label>
-    <div className="flex gap-2">
-      <input 
-        type="text"
-        placeholder="ရိုက်လိုက်တာနဲ့ အလိုအလျောက် ရှာပေးပါမည်..."
-        value={searchTerm}
-        onChange={e => setSearchTerm(e.target.value)}
-        className={winInput}
-      />
-      <button type="submit" className="bg-gray-800 hover:bg-gray-900 text-white font-medium px-4 rounded-md text-xs uppercase tracking-wide transition-all shadow-sm">
-        {searchLoading ? '...' : 'Search'}
-      </button>
-    </div>
-     </form>
-</div>
+          <form onSubmit={handleManualSearchSubmit} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm flex flex-col justify-center">
+            <label className={labelStyle}>🔍 Multi-Field Auto Filter (Item ID, Name, Phone)</label>
+            <div className="flex gap-2">
+              <input 
+                type="text"
+                placeholder="ရိုက်လိုက်တာနဲ့ အလိုအလျောက် ရှာပေးပါမည်..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className={winInput}
+              />
+              <button type="submit" className="bg-gray-800 hover:bg-gray-900 text-white font-medium px-4 rounded-md text-xs uppercase tracking-wide transition-all shadow-sm">
+                {searchLoading ? '...' : 'Search'}
+              </button>
+            </div>
+          </form>
+        </div>
 
-        {/* 🚀 SECTION 2: BULK ACTION CONTROLLER (ချိန်းပြီးသား) */}
-<div className="bg-white p-4 rounded-lg border-2 border-orange-400 shadow-sm">
-  <div className="flex items-center justify-between border-b border-gray-100 pb-2 mb-3">
-    <h2 className="text-xs font-bold text-gray-900 uppercase tracking-wide flex items-center gap-1.5">
-      <span className="w-2 h-2 bg-orange-500 rounded-full animate-ping" />
-      Bulk Action Processing
-    </h2>
-    <span className="text-[11px] font-mono font-bold bg-orange-50 text-orange-700 border border-orange-100 px-2 py-0.5 rounded">
-      SELECTED: {selectedIds.length} ITEMS CHOSEN
-    </span>
-  </div>
+        {/* 🚀 SECTION 2: BULK ACTION CONTROLLER */}
+        <div className="bg-white p-4 rounded-lg border-2 border-orange-400 shadow-sm">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-2 mb-3">
+            <h2 className="text-xs font-bold text-gray-900 uppercase tracking-wide flex items-center gap-1.5">
+              <span className="w-2 h-2 bg-orange-500 rounded-full animate-ping" />
+              Bulk Action Processing
+            </h2>
+            <span className="text-[11px] font-mono font-bold bg-orange-50 text-orange-700 border border-orange-100 px-2 py-0.5 rounded">
+              SELECTED: {selectedIds.length} ITEMS CHOSEN
+            </span>
+          </div>
 
-  <form onSubmit={handleBulkUpdateSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
-    
-    {/* ၁။ Status ရွေးချယ်မှုအပိုင်း (ရှေ့သို့ ရွှေ့ထားသည်) */}
-    <div>
-      <label className={labelStyle}>1. Change Status To</label>
-      <div className="relative">
-        <select value={bulkStatus} onChange={e => {
-          setBulkStatus(e.target.value);
-          setBulkRiderId(''); // Status ချိန်းလိုက်ရင် ရွေးထားတဲ့ ID ကို ပုံမှန်အတိုင်း Reset ပြန်ချပေးမယ်
-        }} className={winSelect}>
-          <option value="At Office">📦 At Office</option>
-          <option value="On Way">🚵 On Way</option>
-          <option value="Delivered">✅ Delivered</option>
-          <option value="In-Transit">🚚 In-Transit</option>
-        </select>
-        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">▼</div>
-      </div>
-    </div>
+          <form onSubmit={handleBulkUpdateSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+            <div>
+              <label className={labelStyle}>1. Change Status To</label>
+              <div className="relative">
+                <select value={bulkStatus} onChange={e => {
+                  setBulkStatus(e.target.value);
+                  setBulkRiderId(''); 
+                }} className={winSelect}>
+                  <option value="At Office">📦 At Office</option>
+                  <option value="On Way">🚵 On Way</option>
+                  <option value="Delivered">✅ Delivered</option>
+                  <option value="In-Transit">🚚 In-Transit</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">▼</div>
+              </div>
+            </div>
 
-    {/* ၂။ Rider သို့မဟုတ် City Dynamic ရွေးချယ်မှုအပိုင်း */}
-    <div>
-      <label className={labelStyle}>
-        {bulkStatus === 'In-Transit' ? '2. Select Transit City' : '2. Assign Deliver Rider'}
-      </label>
-      <div className="relative">
-        <select value={bulkRiderId} onChange={e => setBulkRiderId(e.target.value)} className={winSelect}>
-          {bulkStatus === 'In-Transit' ? (
-            <>
-              <option value="">City မရွေးချယ်ရသေးပါ...</option>
-              {/* page_3.tsx ရှိ cities state မှ မြို့စာရင်းထုတ်ပြခြင်း */}
-              {cities.map(c => <option key={c["C.ID"]} value={c["C.ID"]}>🌆 {c.name}</option>)}
-            </>
-          ) : (
-            <>
-              <option value="">Rider မရွေးချယ်ရသေးပါ...</option>
-              {riders.map(r => <option key={r.id} value={r.id}>🛵 {r.name}</option>)}
-            </>
-          )}
-        </select>
-        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">▼</div>
-      </div>
-    </div>
+            <div>
+              <label className={labelStyle}>
+                {bulkStatus === 'In-Transit' ? '2. Select Transit City' : '2. Assign Deliver Rider'}
+              </label>
+              <div className="relative">
+                <select value={bulkRiderId} onChange={e => setBulkRiderId(e.target.value)} className={winSelect}>
+                  {bulkStatus === 'In-Transit' ? (
+                    <>
+                      <option value="">City မရွေးချယ်ရသေးပါ...</option>
+                      {cities.map(c => <option key={c["C.ID"]} value={c["C.ID"]}>🌆 {c.name}</option>)}
+                    </>
+                  ) : (
+                    <>
+                      <option value="">Rider မရွေးချယ်ရသေးပါ...</option>
+                      {riders.map(r => <option key={r.id} value={r.id}>🛵 {r.name}</option>)}
+                    </>
+                  )}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">▼</div>
+              </div>
+            </div>
 
-    {/* ၃။ Date Input အပိုင်း */}
-    <div>
-      <label className={labelStyle}>
-        {bulkStatus === 'In-Transit' ? '3. Transit Date' : '3. Delivery Date'}
-      </label>
-      <input type="date" value={bulkDeliverDate} onChange={e => setBulkDeliverDate(e.target.value)} className={winInput + " font-mono"} />
-    </div>
+            <div>
+              <label className={labelStyle}>
+                {bulkStatus === 'In-Transit' ? '3. Transit Date' : '3. Delivery Date'}
+              </label>
+              <input type="date" value={bulkDeliverDate} onChange={e => setBulkDeliverDate(e.target.value)} className={winInput + " font-mono"} />
+            </div>
 
-    <div>
-    <label className={labelStyle}>4. Note (RT Option)</label>
-    <div className="relative">
-      <select 
-        value={bulkNoteAction} 
-        onChange={e => setBulkNoteAction(e.target.value)} 
-        className={winSelect}
-      >
-        <option value="keep">-- No Change (မပြင်ပါ) --</option>
-        <option value="rt">⚠️ Mark as RT (RT ဟုရေးမည်)</option>
-        <option value="clear">✨ Clear Note (မှတ်ချက်ဖျက်မည်)</option>
-      </select>
-      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">▼</div>
-    </div>
-  </div>
+            <div>
+              <label className={labelStyle}>4. Note (RT Option)</label>
+              <div className="relative">
+                <select value={bulkNoteAction} onChange={e => setBulkNoteAction(e.target.value)} className={winSelect}>
+                  <option value="keep">-- No Change (မပြင်ပါ) --</option>
+                  <option value="rt">⚠️ Mark as RT (RT ဟုရေးမည်)</option>
+                  <option value="clear">✨ Clear Note (မှတ်ချက်ဖျက်မည်)</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">▼</div>
+              </div>
+            </div>
 
-    {/* ၄။ Submit Button အပိုင်း */}
-    <div>
-      <button
-        type="submit"
-        disabled={loading || selectedIds.length === 0}
-        className={`w-full py-2 text-xs font-semibold rounded-md uppercase tracking-wide transition-all shadow-sm ${loading || selectedIds.length === 0 ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300' : 'bg-orange-500 hover:bg-orange-600 text-white active:scale-[0.99]'}`}
-      >
-        {loading ? 'Processing Database...' : `Apply Bulk Update (${selectedIds.length})`}
-      </button>
-    </div>
-  </form>
-</div>
+            <div>
+              <button
+                type="submit"
+                disabled={loading || selectedIds.length === 0}
+                className={`w-full py-2 text-xs font-semibold rounded-md uppercase tracking-wide transition-all shadow-sm ${loading || selectedIds.length === 0 ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300' : 'bg-orange-500 hover:bg-orange-600 text-white active:scale-[0.99]'}`}
+              >
+                {loading ? 'Processing Database...' : `Apply Bulk Update (${selectedIds.length})`}
+              </button>
+            </div>
+          </form>
+        </div>
 
-        {/* 📊 SECTION 3: DATA TABLE (မူလအတိုင်း) */}
+        {/* 📊 SECTION 3: DATA TABLE */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left whitespace-nowrap text-[12px]">
@@ -568,7 +579,7 @@ export default function BulkUpdatePage() {
                   <th className="py-2.5 px-3 text-center w-12">
                     <input 
                       type="checkbox" 
-                      checked={orders.length > 0 && selectedIds.length === orders.length}
+                      checked={orders.length > 0 && orders.every(o => selectedIds.includes(o.id))}
                       onChange={handleSelectAllVisible}
                       className="w-3.5 h-3.5 rounded text-orange-500 focus:ring-orange-400 cursor-pointer"
                     />
@@ -589,14 +600,14 @@ export default function BulkUpdatePage() {
                     return (
                       <tr 
                         key={o.id} 
-                        onClick={() => handleSelectRow(o.id)}
+                        onClick={() => handleSelectRow(o)} // 🌟 ပြင်ဆင်ချက်: ID အစား Object တစ်ခုလုံး ပို့ပေးသည်
                         className={`hover:bg-gray-50/80 transition-colors cursor-pointer ${isChecked ? 'bg-orange-50/60 font-medium' : ''}`}
                       >
                         <td className="py-2.5 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                           <input 
                             type="checkbox" 
                             checked={isChecked}
-                            onChange={() => handleSelectRow(o.id)}
+                            onChange={() => handleSelectRow(o)} // 🌟 ပြင်ဆင်ချက်: Object တစ်ခုလုံး ပို့ပေးသည်
                             className="w-3.5 h-3.5 rounded text-orange-500 focus:ring-orange-400 cursor-pointer"
                           />
                         </td>
