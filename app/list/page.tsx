@@ -55,7 +55,35 @@ export default function OrderList() {
   const [viewingHistoryOrder, setViewingHistoryOrder] = useState<any | null>(null)
   const [viewingDetailOrder, setViewingDetailOrder] = useState<any | null>(null);
   const [showMobileFilters, setShowMobileFilters] = useState(false)
-  const [expandedMobileCards, setExpandedMobileCards] = useState<Record<string, boolean>>({})
+  
+  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
+  const [selectAll, setSelectAll] = useState(false); // Header checkbox အတွက်
+
+  // Toggle order တစ်ခုချင်း select / deselect
+const toggleOrderSelection = (orderId: string) => {
+  setSelectedOrders(prev => {
+    const newSet = new Set(prev);
+    if (newSet.has(orderId)) {
+      newSet.delete(orderId);
+    } else {
+      newSet.add(orderId);
+    }
+    return newSet;
+  });
+};
+
+// Filter လက်ရှိပြသော Orders အားလုံးကို select လုပ်ရန်
+const selectAllFiltered = () => {
+  const filteredIds = new Set(filteredOrders.map(o => o.id));
+  setSelectedOrders(filteredIds);
+};
+
+// ရွေးထားသမျှ အားလုံးဖြုတ်ရန်
+const clearSelection = () => {
+  setSelectedOrders(new Set());
+};
+
+
 
   // ၁။ Print ထုတ်မည့် Data ကို ယာယီသိမ်းထားမည့် State
   const [activePrintOrder, setActivePrintOrder] = useState<any | null>(null);
@@ -234,7 +262,14 @@ useEffect(() => {
     }
   }
 
-  
+  useEffect(() => {
+  if (filteredOrders.length === 0) {
+    setSelectAll(false);
+    return;
+  }
+  const allSelected = filteredOrders.every(o => selectedOrders.has(o.id));
+  setSelectAll(allSelected);
+}, [selectedOrders, filteredOrders]);
 
   
 
@@ -306,7 +341,24 @@ useEffect(() => {
         
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
           {/* ── Columns Show/Hide Dropdown ── */}
+{selectedOrders.size > 0 && (
+  <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-1.5 ml-2">
+    <span className="text-xs font-bold text-orange-800 whitespace-nowrap">
+      Selected: <span className="bg-orange-500 text-white px-2 py-0.5 rounded-full ml-1">{selectedOrders.size}</span> items
+    </span>
+    <button 
+      onClick={clearSelection}
+      className="text-[10px] font-semibold text-red-600 bg-red-50 hover:bg-red-100 px-2 py-0.5 rounded-md transition-colors"
+    >
+      ဖြုတ်မည်
+    </button>
+  </div>
+)}
+
           <div className="relative">
+
+
+
             <button 
               onClick={() => setShowColDropdown(!showColDropdown)}
               className="bg-white border border-gray-300 hover:border-gray-400 text-gray-700 font-medium px-3 py-1.5 rounded-md transition-all text-xs flex items-center gap-1.5 shadow-sm"
@@ -317,6 +369,8 @@ useEffect(() => {
               </svg>
               Columns
             </button>
+
+            
             
             {showColDropdown && (
               <>
@@ -341,6 +395,8 @@ useEffect(() => {
               </>
             )}
           </div>
+
+
 
           <button onClick={() => fetchData()} className="bg-white border border-gray-300 hover:border-gray-400 text-gray-700 font-medium px-3 py-1.5 rounded-md transition-all text-xs flex items-center gap-1.5 shadow-sm">
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
@@ -431,6 +487,21 @@ useEffect(() => {
           <table className="w-full text-left whitespace-nowrap text-[12px]">
             <thead className="sticky top-0 z-20 bg-white shadow-[0_1px_0_0_rgba(229,231,235,1)]">
               <tr className="text-gray-400 border-b border-gray-200 font-semibold uppercase tracking-wider text-[10px]">
+                {/* 👇 Selection Checkbox Header */}
+    <th className="py-2.5 px-2 text-center w-10">
+      <input
+        type="checkbox"
+        className="w-4 h-4 text-orange-500 rounded border-gray-300 accent-orange-500 cursor-pointer"
+        checked={selectAll}
+        onChange={() => {
+          if (selectAll) {
+            clearSelection();
+          } else {
+            selectAllFiltered();
+          }
+        }}
+      />
+    </th>
                 {COLUMN_DEFS.map(col => visibleCols[col.key] && (
                   <th key={col.key} className={`py-2.5 px-3 ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right' : ''} ${col.key === 'image_url' ? 'text-center' : ''}`}>
                     {col.label}
@@ -513,6 +584,15 @@ useEffect(() => {
                   
                   className="hover:bg-gray-50/80 transition-colors cursor-context-menu"
                 >
+                  {/* 👇 Checkbox Cell */}
+      <td className="py-2.5 px-2 text-center" onClick={(e) => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          className="w-4 h-4 text-orange-500 rounded border-gray-300 accent-orange-500 cursor-pointer"
+          checked={selectedOrders.has(o.id)}
+          onChange={() => toggleOrderSelection(o.id)}
+        />
+      </td>
                   {COLUMN_DEFS.map(col => visibleCols[col.key] && (
                     <td key={`${o.id}-${col.key}`} className={`py-2.5 px-3 text-gray-700 ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right' : ''}`}>
                       {renderCell(o, col.key)}
@@ -545,6 +625,14 @@ useEffect(() => {
                 {/* Card Top Header */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
+                     {/* 👇 Checkbox on Mobile Card */}
+      <input
+        type="checkbox"
+        className="w-5 h-5 text-orange-500 rounded border-gray-300 accent-orange-500 cursor-pointer"
+        checked={selectedOrders.has(o.id)}
+        onChange={() => toggleOrderSelection(o.id)}
+        onClick={(e) => e.stopPropagation()} // card click နဲ့ မရောအောင်
+      />
                     <span className="font-mono font-bold text-gray-900 text-sm">{o.item_id}</span>
                     {renderCell(o, 'branch')}
                   </div>
