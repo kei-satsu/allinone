@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import EditOrderModal from '@/components/EditOrderModal'
+import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs';
 
 // ── Column အားလုံးသတ်မှတ်ချက် ──
 const COLUMN_DEFS = [
@@ -426,6 +428,231 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
   // ၅။ ✨ သင်အလိုရှိသော ပုံသေနည်းအတိုင်း ဒေတာ ၃ ခုကို ပေါင်းပြီး tableTotalAmount ကို သတ်မှတ်သည်
   const tableTotalAmount = grandTotalToPayCalculated + oppositePaidTotal + officePaidTotal;
 
+  const handleExportFullExcel = async () => {
+  if (filteredOrders.length === 0) {
+    alert("Export လုပ်ရန် ပါဆယ်ဒေတာမရှိပါ။");
+    return;
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  const branchName = userBranch === 'MDY' ? 'Mandalay' : 'Yangon';
+
+  // ========== အသုံးပြုမယ့် Style ပုံစံများ ==========
+  const headerStyle: Partial<ExcelJS.Style> = {
+    font: { bold: true, color: { argb: 'FFFFFFFF' } },
+    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } },
+    alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
+    border: {
+      top: { style: 'thin' },
+      left: { style: 'thin' },
+      bottom: { style: 'thin' },
+      right: { style: 'thin' },
+    },
+  };
+
+  const dataStyle: Partial<ExcelJS.Style> = {
+    alignment: { vertical: 'middle', wrapText: true },
+    border: {
+      top: { style: 'thin' },
+      left: { style: 'thin' },
+      bottom: { style: 'thin' },
+      right: { style: 'thin' },
+    },
+  };
+
+  const moneyStyle: Partial<ExcelJS.Style> = {
+    ...dataStyle,
+    numFmt: '#,##0',   // ဂဏန်းတွေကို comma ခံပြီးပြမယ် (ဒဿမမပါ)
+  };
+
+  // ============================================================
+  // SHEET 1: စာရင်းချုပ် (Summary Dashboard)
+  // ============================================================
+  const wsSummary = workbook.addWorksheet('စာရင်းချုပ် (Summary)');
+  wsSummary.columns = [
+    { header: 'အမျိုးအမည် (Metric)', key: 'metric', width: 42 },
+    { header: 'ပမာဏ / အချက်အလက် (Value)', key: 'value', width: 28 },
+  ];
+
+  // Header row style
+  const summaryHeaderRow = wsSummary.getRow(1);
+  summaryHeaderRow.eachCell((cell) => {
+    cell.style = headerStyle;
+  });
+
+  const totalCodAmount = filteredOrders.reduce((sum, o) => sum + (Number(o.cod_amount) || 0), 0);
+  const totalDeliFeeAmount = filteredOrders.reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
+  const totalNetAmount = filteredOrders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+
+  const summaryRows = [
+    { metric: 'အစီရင်ခံစာ ရက်စွဲ (Report Date)', value: selectedDate },
+    { metric: 'ဂိတ်ခွဲ (Branch)', value: branchName },
+    { metric: 'စုစုပေါင်း ပါဆယ်အရေအတွက်', value: `${filteredOrders.length} ထုပ်` },
+    { metric: '----------------------------------------', value: '-------------------' },
+    { metric: 'စုစုပေါင်း ရရန်ရှိသော COD (Total COD)', value: totalCodAmount },
+    { metric: 'စုစုပေါင်း Delivery Fee', value: totalDeliFeeAmount },
+    { metric: 'စုစုပေါင်း ပမာဏ (Net Total Amount)', value: totalNetAmount },
+    { metric: '----------------------------------------', value: '-------------------' },
+    { metric: 'ဂိတ်ရှင်းပြီး စုစုပေါင်း (Office Paid)', value: typeof officePaidTotal !== 'undefined' ? officePaidTotal : 0 },
+    { metric: 'ဆန့်ကျင်ဘက်ဂိတ်ရှင်းပြီး (Opposite Paid)', value: typeof oppositePaidTotal !== 'undefined' ? oppositePaidTotal : 0 },
+    { metric: 'စုစုပေါင်းစာရင်းချုပ် (Grand Total Table)', value: typeof tableTotalAmount !== 'undefined' ? tableTotalAmount : 0 },
+  ];
+
+  summaryRows.forEach((row) => {
+    wsSummary.addRow(row);
+  });
+
+  // အကြောင်းအရာတွေကို data style ပေး၊ ငွေတွေဆို moneyStyle ပေး
+  wsSummary.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return; // header skip
+    row.eachCell((cell) => {
+      cell.style = dataStyle;
+      if (cell.value && typeof cell.value === 'number') {
+        cell.numFmt = '#,##0';
+      }
+    });
+  });
+
+  // ============================================================
+  // SHEET 2: ပါဆယ်မှတ်တမ်းအသေးစိတ် (Orders)
+  // ============================================================
+  const wsTable = workbook.addWorksheet('ပါဆယ်အသေးစိတ် (Orders)');
+
+  // Column တွေကို visibleCols နဲ့ ညှိမယ်
+  const visibleColDefs = COLUMN_DEFS.filter(col => visibleCols[col.key]);
+  const columns = visibleColDefs.map(col => ({
+    header: col.label,
+    key: col.key,
+    width: 18,
+  }));
+  wsTable.columns = columns;
+
+  // Header style
+  const tableHeaderRow = wsTable.getRow(1);
+  tableHeaderRow.eachCell((cell) => {
+    cell.style = headerStyle;
+  });
+
+  // Data ဖြည့်
+  filteredOrders.forEach(o => {
+    const rowValues: any[] = [];
+    visibleColDefs.forEach(col => {
+      let value = o[col.key];
+      if (col.key === 'pickup_rider') value = o.pickup_rider?.name || o.pickup_rider || '-';
+      if (col.key === 'deliver_rider') value = o.deliver_rider?.name || o.deliver_rider || '-';
+      if (['cod_amount', 'deli_fee', 'total_amount'].includes(col.key)) value = Number(value) || 0;
+      rowValues.push(value ?? '-');
+    });
+    wsTable.addRow(rowValues);
+  });
+
+  // Data row styling
+  wsTable.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+    row.eachCell((cell, colNumber) => {
+      cell.style = dataStyle;
+      // ငွေကြေးကော်လံတွေကို money format
+      const colKey = visibleColDefs[colNumber - 1]?.key;
+      if (colKey && ['cod_amount', 'deli_fee', 'total_amount'].includes(colKey)) {
+        cell.numFmt = '#,##0';
+      }
+    });
+  });
+
+  // Freeze header row
+  wsTable.views = [{ state: 'frozen', ySplit: 1 }];
+
+  // ============================================================
+  // SHEET 3: COD ခွဲဝေမှုမှတ်တမ်း (Handovers) - ရှိမှသာ
+  // ============================================================
+  const rawHandovers = (typeof handoverForm !== 'undefined' ? handovers : (typeof handoverForm !== 'undefined' ? handovers : []));
+  if (rawHandovers && rawHandovers.length > 0) {
+    const wsHandovers = workbook.addWorksheet('COD ခွဲဝေမှု (Handovers)');
+    wsHandovers.columns = [
+      { header: 'စဉ် (No)', key: 'no', width: 8 },
+      { header: 'အပ်နှံသည့် ရက်စွဲ', key: 'date', width: 18 },
+      { header: 'Rider အမည်', key: 'rider', width: 18 },
+      { header: 'Type', key: 'type', width: 18 },
+      { header: 'အပ်နှံငွေ အမျိုးအစား', key: 'txnType', width: 16 },
+      { header: 'ပမာဏ (Amount)', key: 'amount', width: 25 },
+      { header: 'မှတ်ချက်', key: 'note', width: 25 },
+    ];
+
+    const hHeaderRow = wsHandovers.getRow(1);
+    hHeaderRow.eachCell((cell) => cell.style = headerStyle);
+
+    rawHandovers.forEach((h: any, idx: number) => {
+      wsHandovers.addRow({
+        no: idx + 1,
+        date: h.created_at ? new Date(h.created_at).toLocaleDateString() : '-',
+        rider: h.rider_name || h.rider || '-',
+        type: h.type || h.payment_method || '-',
+        txnType: h.type || h.transaction_type || '-',
+        amount: Number(h.amount) || 0,
+        note: h.note || h.remark || '-',
+      });
+    });
+
+    wsHandovers.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      row.eachCell((cell, colNumber) => {
+        cell.style = dataStyle;
+        if (colNumber === 6) cell.numFmt = '#,##0'; // amount column
+      });
+    });
+    wsHandovers.views = [{ state: 'frozen', ySplit: 1 }];
+  }
+
+  // ============================================================
+  // SHEET 4: OS အလိုက် COD ခွဲဝေမှုစာရင်း (OS COD Summary)
+  // ============================================================
+  if (senderCodByLoc && Object.keys(senderCodByLoc).length > 0) {
+    const wsOs = workbook.addWorksheet('OS အလိုက် COD စာရင်း');
+    wsOs.columns = [
+      { header: 'စဉ် (No)', key: 'no', width: 8 },
+      { header: 'မြို့ (Location)', key: 'location', width: 18 },
+      { header: 'Online Shop (OS) အမည်', key: 'shop', width: 30 },
+      { header: 'ပြန်ပေးရမည့် COD ပမာဏ (Ks)', key: 'amount', width: 25 },
+    ];
+
+    const osHeaderRow = wsOs.getRow(1);
+    osHeaderRow.eachCell((cell) => cell.style = headerStyle);
+
+    let osIndex = 1;
+    Object.entries(senderCodByLoc).forEach(([loc, senders]: [string, any]) => {
+      Object.entries(senders).forEach(([senderName, amount]: [string, any]) => {
+        wsOs.addRow({
+          no: osIndex++,
+          location: loc === 'MDY' ? 'Mandalay' : loc === 'YGN' ? 'Yangon' : loc,
+          shop: senderName,
+          amount: Number(amount) || 0,
+        });
+      });
+    });
+
+    wsOs.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      row.eachCell((cell, colNumber) => {
+        cell.style = dataStyle;
+        if (colNumber === 4) cell.numFmt = '#,##0';
+      });
+    });
+    wsOs.views = [{ state: 'frozen', ySplit: 1 }];
+  }
+
+  // ============================================================
+  // Download
+  // ============================================================
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Full_Report_${branchName}_${selectedDate}.xlsx`;
+  a.click();
+  window.URL.revokeObjectURL(url);
+};
+
   return (
     <div className="w-full h-full flex flex-col bg-[#f3f3f3] font-[system-ui] overflow-hidden select-none">
       
@@ -480,6 +707,17 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
           <button onClick={() => fetchData(userBranch, selectedDate)} className="bg-orange-500 hover:bg-orange-600 text-white font-medium px-3 py-1.5 rounded-md text-xs shadow-sm transition-all">
             Refresh
           </button>
+
+{/* 💡 (ကုဒ်သစ်) Export Excel Button */}
+          <button 
+            onClick={handleExportFullExcel} 
+            className="bg-green-600 hover:bg-green-700 text-white font-medium px-3 py-1.5 rounded-md text-xs shadow-sm transition-all flex items-center gap-1.5"
+            title="Export filtered data to Excel"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Export
+          </button>
+
         </div>
       </div>
 

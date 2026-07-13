@@ -15,6 +15,7 @@
     "@yudiel/react-qr-scanner": "^2.6.0",
     "@zxing/library": "^0.23.0",
     "cloudinary": "^2.10.0",
+    "exceljs": "^4.4.0",
     "html-to-image": "^1.11.13",
     "jsbarcode": "^3.12.3",
     "konva": "^10.3.0",
@@ -26,7 +27,8 @@
     "react-easy-crop": "^5.5.7",
     "react-konva": "^19.2.4",
     "swiper": "^12.2.0",
-    "use-image": "^1.1.4"
+    "use-image": "^1.1.4",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
