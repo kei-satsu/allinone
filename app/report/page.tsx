@@ -40,6 +40,11 @@ export default function DailyReport() {
   const [userBranch, setUserBranch] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
   const [handovers, setHandovers] = useState<any[]>([])
+
+
+  
+
+  
   
   // Mobile ပေါ်မှာ Summary ကတ်တွေကို ပိတ်/ဖွင့် လုပ်ဖို့ State (ဖုန်းမှာ နေရာမရှုပ်အောင် ပုံမှန်ကို Hidden ထားပါမည်)
   const [showMobileSummary, setShowMobileSummary] = useState(false)
@@ -221,6 +226,35 @@ export default function DailyReport() {
     })
   })
 
+  // 💡 (ကုဒ်သစ်) ရွေးချယ်ထားသော ပါဆယ် ID များကို ထိန်းချုပ်ရန် State
+const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+// 💡 (ကုဒ်သစ်) Select All အားလုံးကို တစ်ပြိုင်နက် ရွေးရန်/ဖျက်ရန်
+const handleSelectAll = (checked: boolean) => {
+  if (checked) {
+    const allVisibleIds = filteredOrders.map(o => o.id);
+    setSelectedIds(allVisibleIds);
+  } else {
+    setSelectedIds([]);
+  }
+};
+
+// 💡 (ကုဒ်သစ်) တစ်ကွက်ချင်းစီ Checkbox နှိပ်ပုံ
+const handleSelectRow = (id: string, checked: boolean) => {
+  if (checked) {
+    setSelectedIds(prev => [...prev, id]);
+  } else {
+    setSelectedIds(prev => prev.filter(itemId => itemId !== id));
+  }
+};
+
+// 💡 (ကုဒ်သစ်) ရွေးချယ်ထားသော ပါဆယ်များ၏ အရေအတွက်နှင့် ပမာဏများကို တွက်ချက်ခြင်း
+const selectedOrders = filteredOrders.filter(o => selectedIds.includes(o.id));
+const totalSelectedCount = selectedOrders.length;
+
+const totalCod = selectedOrders.reduce((sum, o) => sum + (Number(o.cod_amount) || 0), 0);
+const totalDeliFee = selectedOrders.reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
+const grandTotal = selectedOrders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
   
 
   // Handover အမှတ်တမ်းတစ်ခု ဖျက်ခြင်း
@@ -854,18 +888,29 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
         {/* Desktop View Table */}
         <div className="hidden sm:block">
           <table className="w-full text-left whitespace-nowrap text-[12px]">
-            <thead className="sticky top-0 z-20 bg-white shadow-[0_1px_0_0_rgba(229,231,235,1)]">
-              <tr className="text-gray-400 border-b border-gray-200 bg-gray-50/70">
-                {COLUMN_DEFS.map(col => visibleCols[col.key] && (
-                  <th key={col.key} className="px-4 py-3 font-semibold uppercase tracking-wider text-[11px] text-gray-500">
-                    {col.label}
-                  </th>
-                ))}
-              </tr>
-              
-              {/* Filter Layout */}
-              <tr>
-                {COLUMN_DEFS.map(col => {
+          <thead className="sticky top-0 z-20 bg-white shadow-[0_1px_0_0_rgba(229,231,235,1)]">
+  <tr className="text-gray-400 border-b border-gray-200 bg-gray-50/70">
+    {/* 💡 Checkbox Header ကော်လံ အသစ် */}
+    <th className="px-4 py-3 w-10 text-center bg-gray-50/70">
+      <input 
+        type="checkbox"
+        className="rounded border-gray-300 text-orange-500 focus:ring-orange-500 cursor-pointer w-3.5 h-3.5"
+        checked={filteredOrders.length > 0 && selectedIds.length === filteredOrders.length}
+        onChange={e => handleSelectAll(e.target.checked)}
+      />
+    </th>
+    {COLUMN_DEFS.map(col => visibleCols[col.key] && (
+      <th key={col.key} className="px-4 py-3 font-semibold uppercase tracking-wider text-[11px] text-gray-500">
+        {col.label}
+      </th>
+    ))}
+  </tr>
+  
+  {/* Filter Layout */}
+  <tr>
+    {/* 💡 Filter တန်းအတွက် Checkbox ကော်လံနေရာလွတ် တစ်ကွက်ဖြည့်ပေးခြင်း */}
+    <td className="px-4 py-1.5 bg-gray-50/30"></td>
+    {COLUMN_DEFS.map(col => {
                   if (!visibleCols[col.key]) return null;
 
                   return (
@@ -932,36 +977,82 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-gray-700">
-              {loading ? (
-                <tr>
-                  <td colSpan={COLUMN_DEFS.length} className="text-center py-10 font-medium text-gray-400">Loading Report Logs...</td>
-                </tr>
-              ) : filteredOrders.length === 0 ? (
-                <tr>
-                  <td colSpan={COLUMN_DEFS.length} className="text-center py-10 font-medium text-gray-400">ယနေ့ရက်စွဲအတွက် ပါဆယ်မှတ်တမ်း မရှိသေးပါ။</td>
-                </tr>
-              ) : filteredOrders.map(o => (
-                <tr 
-                  key={o.id} 
-                  className="hover:bg-gray-50/80 transition-colors cursor-context-menu"
-                  onContextMenu={(e) => {
-                    e.preventDefault(); 
-                    setContextMenu({
-                      x: e.clientX,
-                      y: e.clientY,
-                      order: o
-                    });
-                  }}
-                >
-                  {COLUMN_DEFS.map(col => visibleCols[col.key] && (
-                    <td key={col.key} className="px-4 py-2.5 font-medium">
-                      {renderCell(o, col.key)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
+  {loading ? (
+    <tr>
+      {/* 💡 Checkbox ကြောင့် ကော်လံတစ်ခုပိုလာသဖြင့် colSpan ကို + 1 ပေါင်းပေးရပါသည် */}
+      <td colSpan={COLUMN_DEFS.length + 1} className="text-center py-10 font-medium text-gray-400">Loading Report Logs...</td>
+    </tr>
+  ) : filteredOrders.length === 0 ? (
+    <tr>
+      <td colSpan={COLUMN_DEFS.length + 1} className="text-center py-10 font-medium text-gray-400">ယနေ့ရက်စွဲအတွက် ပါဆယ်မှတ်တမ်း မရှိသေးပါ။</td>
+    </tr>
+  ) : filteredOrders.map(o => (
+    <tr 
+      key={o.id} 
+      className={`hover:bg-gray-50/80 transition-colors cursor-context-menu ${selectedIds.includes(o.id) ? 'bg-orange-50/30' : ''}`}
+      onContextMenu={(e) => {
+        e.preventDefault(); 
+        setContextMenu({
+          x: e.clientX,
+          y: e.clientY,
+          order: o
+        });
+      }}
+    >
+      {/* 💡 တစ်ကွက်ချင်းစီအတွက် Row Checkbox အသစ် */}
+      <td className="px-4 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+        <input 
+          type="checkbox"
+          className="rounded border-gray-300 text-orange-500 focus:ring-orange-500 cursor-pointer w-3.5 h-3.5"
+          checked={selectedIds.includes(o.id)}
+          onChange={e => handleSelectRow(o.id, e.target.checked)}
+        />
+      </td>
+      {COLUMN_DEFS.map(col => visibleCols[col.key] && (
+        <td key={col.key} className="px-4 py-2.5 font-medium">
+          {renderCell(o, col.key)}
+        </td>
+      ))}
+    </tr>
+  ))}
+</tbody>
           </table>
+          {/* 💡 (ကုဒ်သစ်) ရွေးချယ်ထားသော ပါဆယ်ပမာဏများကို ပြသပေးမည့် Sticky Floating Summary Footer */}
+        {selectedIds.length > 0 && (
+  <div className="sticky bottom-0 left-0 right-0 bg-white border-t-2 border-orange-500 px-4 py-2 flex flex-wrap items-center justify-start gap-5 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] z-30 animate-fade-in sm:rounded-b-lg">
+    
+    {/* ၁။ အရေအတွက် ပြကွက် (ဘယ်ဘက်အစ) */}
+    <div className="flex items-center gap-2 border-r border-gray-200 pr-4 py-0.5">
+      <span className="bg-orange-500 text-white font-black px-2 py-0.5 rounded text-[10px] tracking-wide">
+        {totalSelectedCount} ထုပ်
+      </span>
+      <span className="text-[11px] text-gray-500 font-bold">ရွေးချယ်ထားသည်</span>
+    </div>
+    
+    {/* ၂။ ပမာဏတွက်ချက်မှုများ စုစည်းပြသမှုအပိုင်း (ဘယ်ဘက်သို့ ကပ်ထားသည်) */}
+    <div className="flex flex-wrap items-center gap-5 text-[11px]">
+      
+      {/* Total COD */}
+      <div className="flex flex-col items-start">
+        <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Total COD</span>
+        <span className="font-extrabold text-gray-800 text-[12px]">{totalCod.toLocaleString()} Ks</span>
+      </div>
+      
+      {/* Total Deli Fee */}
+      <div className="flex flex-col items-start border-l border-gray-100 pl-4">
+        <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Total Deli Fee</span>
+        <span className="font-extrabold text-gray-800 text-[12px]">{totalDeliFee.toLocaleString()} Ks</span>
+      </div>
+      
+      {/* Net Total Amount (Orange Highlight Box) */}
+      <div className="flex flex-col items-start border-l border-gray-100 pl-4 bg-orange-50/80 px-3 py-0.5 rounded-md border border-orange-100">
+        <span className="text-[9px] text-orange-600 font-black uppercase tracking-wider">Net Total Amount</span>
+        <span className="font-black text-orange-600 text-[12px]">{grandTotal.toLocaleString()} Ks</span>
+      </div>
+
+    </div>
+  </div>
+)}
         </div>
 
         {/* Mobile View Responsive Cards */}
