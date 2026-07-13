@@ -154,7 +154,7 @@ const BarcodePrinterPage = () => {
         .label-box-a6-10 { 
           width: 46mm;        /* 🌟 အလျား ပိုရှည်သွားစေရန် Width ကို 46mm သို့ ညှိခြင်း */
           height: 27.2mm;     /* 🌟 အပေါ်အောက် လွတ်နေတာ ပျောက်ဖို့ Height ကို 27.2mm သို့ လျှော့ချခြင်း */
-          border: 1px dashed #94a3b8; 
+          border: 1px dashed #000000; 
           display: flex; 
           flex-direction: column; 
           justify-content: center; 
