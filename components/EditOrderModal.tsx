@@ -35,7 +35,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     receiver_name: '',
     receiver_phone: '',
     receiver_address: '',
-    receiver_loc: 'MDY', // ⚠️ Database Column Name နဲ့ ကိုက်ညီမှု ရှိ/မရှိ ပြန်စစ်ပါ
+    receiver_loc: 'MDY',
     cod_amount: 0,
     deli_fee: 0,
     fee_type: 'Deli',
@@ -48,7 +48,10 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     cleared_date: '',
     branch: '',
     image_url: '',
-    remark: ''
+    remark: '',
+    // ✨ Transit Information Fields
+    transit_date: '',
+    transit_to: ''
   })
 
   // 1. Form အချက်အလက်များ မူရင်းအတိုင်း ဖြည့်သွင်းခြင်း
@@ -76,7 +79,10 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
         cleared_date: orderData.cleared_date || '',
         branch: orderData.branch || '',
         image_url: orderData.image_url || '',
-        remark: orderData.remark || ''
+        remark: orderData.remark || '',
+        // ✨ Transit ဒေတာ အစပျိုးဖြည့်ခြင်း
+        transit_date: orderData.transit_date || '',
+        transit_to: orderData.transit_to || ''
       })
 
       if (orderData.fee_type === 'Bill') {
@@ -97,7 +103,6 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
       if (!error && data) setSenders(data)
     }
 
-    // ✨ Cities Table မှ ဒေတာဆွဲထုတ်သည့် Function
     async function fetchCities() {
       const { data, error } = await supabase.from('cities').select('*').order('name', { ascending: true })
       if (!error && data) setCities(data)
@@ -245,6 +250,14 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     if ((orderData.deliver_date || '') !== (formData.deliver_date || '')) {
       changes.push(`📆 Deliver Date: "${orderData.deliver_date || 'N/A'}" ➔ "${formData.deliver_date || 'Deleted'}"`);
     }
+    // ✨ Transit Date Change Log
+    if ((orderData.transit_date || '') !== (formData.transit_date || '')) {
+      changes.push(`🚚 Transit Date: "${orderData.transit_date || 'N/A'}" ➔ "${formData.transit_date || 'Deleted'}"`);
+    }
+    // ✨ Transit To Change Log
+    if ((orderData.transit_to || '') !== (formData.transit_to || '')) {
+      changes.push(`🚛 Transit To: "${orderData.transit_to || 'N/A'}" ➔ "${formData.transit_to || 'Deleted'}"`);
+    }
     if ((orderData.note || '') !== (formData.note || '')) {
       const oldNote = orderData.note === 'RT' ? 'Return (RT)' : (orderData.note || 'Normal');
       const newNote = formData.note === 'RT' ? 'Return (RT)' : (formData.note || 'Normal');
@@ -279,12 +292,15 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
 
     const updatedHistory = [...(orderData.history || []), newLogEntry];
 
+    // ✨ transit_date / transit_to ကို payload တွင် ထည့်သွင်းထားပြီးဖြစ်သည်
     const payload = {
         ...formData,
         pickup_rider_id: formData.pickup_rider_id || null,
         deliver_rider_id: formData.deliver_rider_id || null,
         deliver_date: formData.deliver_date || null,
         cleared_date: formData.cleared_date || null,
+        transit_date: formData.transit_date || null,
+        transit_to: formData.transit_to || null,
         history: updatedHistory
     }
 
@@ -429,22 +445,21 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                   <input type="text" value={formData.receiver_address} onChange={e => setFormData({...formData, receiver_address: e.target.value})} className={winInput} />
                 </div>
                 <div>
-  {/* 🏙️ Column Name "C.ID" ကို သုံးပြီး ဒေတာသွင်းမည့် Dropdown */}
-  <label className={labelStyle}>Destination City</label>
-  <select 
-    value={formData.receiver_loc} 
-    onChange={e => setFormData({...formData, receiver_loc: e.target.value})} 
-    className={winSelect}
-    required
-  >
-    <option value="">Select city...</option>
-    {cities.map((city) => (
-      <option key={city['C.ID']} value={city['C.ID']}>
-        {city.name}
-      </option>
-    ))}
-  </select>
-</div>
+                  <label className={labelStyle}>Destination City</label>
+                  <select 
+                    value={formData.receiver_loc} 
+                    onChange={e => setFormData({...formData, receiver_loc: e.target.value})} 
+                    className={winSelect}
+                    required
+                  >
+                    <option value="">Select city...</option>
+                    {cities.map((city) => (
+                      <option key={city['C.ID']} value={city['C.ID']}>
+                        {city.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -548,7 +563,6 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                     <option value="yes">Cleared</option>
                   </select>
 
-                  {/* ✨ Cleared Date Picker */}
                   {formData.cleared_date && (
                     <div className="mt-2">
                       <label className="block text-gray-500 font-medium mb-1 text-[10px] uppercase tracking-wide">Cleared Date</label>
@@ -561,6 +575,32 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                       />
                     </div>
                   )}
+                </div>
+              </div>
+            </div>
+
+            {/* ✨ Transit Information (New Section) */}
+            <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-xs">
+              <h3 className="font-bold text-gray-800 uppercase text-xs mb-3 flex items-center gap-1.5 text-indigo-600">🚛 Transit Information</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className={labelStyle}>Transit Date</label>
+                  <input 
+                    type="date" 
+                    value={formData.transit_date} 
+                    onChange={e => setFormData({...formData, transit_date: e.target.value})} 
+                    className={`${winInput} font-mono`} 
+                  />
+                </div>
+                <div>
+                  <label className={labelStyle}>Transit To (Branch)</label>
+                  <input 
+                    type="text" 
+                    value={formData.transit_to} 
+                    onChange={e => setFormData({...formData, transit_to: e.target.value})} 
+                    className={winInput} 
+                    placeholder="ဥပမာ - MDY, YGN"
+                  />
                 </div>
               </div>
             </div>
