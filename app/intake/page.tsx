@@ -57,6 +57,7 @@ export default function IntakePage() {
   const [capturedImages, setCapturedImages] = useState<CapturedFile[]>([]);
   const [currentIdx, setCurrentIdx] = useState<number>(0); 
   const [userBranch, setUserBranch] = useState('MDY');
+  const [receivedDate, setReceivedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   
   // Barcode / Scanner လုပ်ငန်းစဉ်အတွက် State များ
   const [intakeMethod, setIntakeMethod] = useState<'choose' | 'no-barcode' | 'with-barcode'>('choose');
@@ -378,7 +379,7 @@ export default function IntakePage() {
   };
 
   // 🌟 [Race Condition Fix] သီးခြား Parameter များဖြင့် နောက်ကွယ်မှ အလုပ်လုပ်မည့် Function
-  const startBackgroundUpload = async (finalImages: CapturedFile[], currentBatchNote: string) => {
+  const startBackgroundUpload = async (finalImages: CapturedFile[], currentBatchNote: string, currentReceivedDate: string) => {
     setIsBackgroundUploading(true);
     setBackgroundUploadCount(finalImages.length);
     setBackgroundUploadStatus('uploading');
@@ -422,7 +423,7 @@ export default function IntakePage() {
               image_url: secureUrl,                                  
               branch: userBranch,                                    
               status: 'Pending',                                     
-              received_date: new Date().toISOString().split('T')[0], 
+              received_date: currentReceivedDate, 
               uploader_note: currentBatchNote || null,                      
               barcode: imgObj.barcode || null,                       
             },
@@ -446,8 +447,8 @@ export default function IntakePage() {
       );
 
       if (userWantsToRetry) {
-        startBackgroundUpload(finalImages, currentBatchNote); 
-      } else {
+  startBackgroundUpload(finalImages, currentBatchNote, currentReceivedDate); 
+} else {
         finalImages.forEach((img) => {
           saveToDevice(img.preview, `parcel_${img.id}.jpg`);
         });
@@ -464,15 +465,17 @@ export default function IntakePage() {
     
     const imagesToUpload = [...capturedImages];
     const noteToUpload = batchNote; 
+    const dateToUpload = receivedDate;
 
     // UI & State အားလုံးကို ဒုတိယအကြိမ် ထပ်မံရိုက်ကူးနိုင်ရန် ချက်ချင်း Clear လုပ်ပြီး ဖယ်ထုတ်ပေးလိုက်ပါသည်
     setCapturedImages([]); 
     setBatchNote('');
+    setReceivedDate(new Date().toISOString().split('T')[0]);
     setFlowMode('camera');
     setIntakeMethod('choose');
     
     // နောက်ကွယ် လုပ်ငန်းစဉ်သို့ ဒေတာများကို သီးခြား ပေးပို့လုပ်ဆောင်စေပါသည်
-    startBackgroundUpload(imagesToUpload, noteToUpload);
+    startBackgroundUpload(imagesToUpload, noteToUpload, dateToUpload);
     alert('ပါဆယ်မှတ်တမ်းများကို နောက်ကွယ် (Background) မှ စတင်အပ်ဒိတ်လုပ်နေပါပြီဗျာ။');
   };
 
@@ -616,6 +619,16 @@ export default function IntakePage() {
                     <div className="bg-gradient-to-r from-orange-500 to-amber-500 text-neutral-950 text-xs font-black uppercase px-4 py-2 rounded-xl shadow-2xl border border-orange-400/20 tracking-wider flex items-center justify-between animate-fade-in">
                       <span className="truncate">🔗 BARCODE: {currentScannedBarcode}</span>
                       <span className="bg-neutral-950 text-orange-400 text-[9px] px-2 py-0.5 rounded-md flex-shrink-0 ml-2">READY</span>
+                      {/* 💡 ပြန်လည်စကင်ဖတ်ရန် ခလုတ်အသစ် */}
+        <button 
+          onClick={() => {
+            setBarcodeStep('scanning');
+            setCurrentScannedBarcode('');
+          }}
+          className="bg-neutral-950 hover:bg-neutral-900 border border-neutral-800 text-white text-[9px] px-2 py-0.5 rounded-md font-bold transition-colors shadow-sm"
+        >
+          🔄 ပြန်ဖတ်မည်
+        </button>
                     </div>
                   </div>
                 )}
@@ -722,12 +735,31 @@ export default function IntakePage() {
           </div>
 
           {/* Linked Barcode Indicator Panel Badge */}
-          {currentImgObj.barcode && (
-            <div className="mt-3 bg-neutral-900/80 border border-orange-500/20 rounded-xl p-3 flex items-center justify-between text-xs animate-fade-in shadow-inner">
-              <span className="text-gray-400 font-medium">ချိတ်ဆက်ထားသော Barcode ID:</span>
-              <span className="font-black text-orange-400 tracking-widest font-mono text-sm bg-neutral-950 px-2 py-0.5 rounded-md border border-neutral-800">{currentImgObj.barcode}</span>
-            </div>
-          )}
+{currentImgObj.barcode && (
+  <div className="mt-3 bg-neutral-900/80 border border-orange-500/20 rounded-xl p-3 flex items-center justify-between text-xs animate-fade-in shadow-inner">
+    <span className="text-gray-400 font-medium">ချိတ်ဆက်ထားသော Barcode ID:</span>
+    <div className="flex items-center gap-2">
+      <span className="font-black text-orange-400 tracking-widest font-mono text-sm bg-neutral-950 px-2 py-0.5 rounded-md border border-neutral-800">{currentImgObj.barcode}</span>
+      
+      {/* 💡 Preview မှာလည်း Barcode မှားနေရင် ဖြုတ်ပြီး ကင်မရာ စကင်နာသို့ ပြန်သွားစေမည့် ခလုတ် */}
+      <button
+        onClick={() => {
+          if(window.confirm('ဒီပုံရဲ့ Barcode ကို ဖျက်ပြီး စကင်နာဖြင့် ပြန်ဖတ်လိုပါသလားဗျာ?')) {
+            // လက်ရှိ ပုံထဲက Barcode ကို ဖျက်ထုတ်ခြင်း
+            setCapturedImages(capturedImages.map((img, i) => i === currentIdx ? { ...img, barcode: undefined } : img));
+            // Scanner စာမျက်နှာသို့ ပြန်ပို့ခြင်း
+            setFlowMode('camera');
+            setBarcodeStep('scanning');
+            setCurrentScannedBarcode('');
+          }
+        }}
+        className="text-[10px] bg-red-950/40 border border-red-900/40 text-red-400 px-2 py-1 rounded-md font-bold hover:bg-red-950/60 transition-colors"
+      >
+        🔄 ပြန်ဖတ်မည်
+      </button>
+    </div>
+  </div>
+)}
 
           {/* Canvas Component Stage Studio Area */}
           <div 
@@ -813,6 +845,16 @@ export default function IntakePage() {
                 className="w-full bg-neutral-950 border border-neutral-800 text-neutral-200 placeholder-neutral-700 rounded-xl px-3.5 py-2.5 text-xs outline-none focus:border-orange-500/40 transition-all shadow-inner font-medium"
               />
             </div>
+
+            <div className="mt-2">
+  <label className="block text-[10px] uppercase font-black tracking-widest text-neutral-500 mb-1.5">ရက်စွဲ သတ်မှတ်ရန် (Received Date)</label>
+  <input 
+    type="date" 
+    value={receivedDate} 
+    onChange={e => setReceivedDate(e.target.value)}
+    className="w-full bg-neutral-950 border border-neutral-800 text-neutral-200 rounded-xl px-3.5 py-2.5 text-xs outline-none focus:border-orange-500/40 transition-all shadow-inner font-medium"
+  />
+</div>
 
             <div className="flex items-center justify-between pt-0.5 gap-4">
               {/* Image Resolution Quality Config Selector */}

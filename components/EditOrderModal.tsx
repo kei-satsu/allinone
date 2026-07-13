@@ -20,13 +20,14 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
   const [loading, setLoading] = useState(false)
   const [riders, setRiders] = useState<any[]>([])
   const [senders, setSenders] = useState<any[]>([])
+  const [cities, setCities] = useState<any[]>([]) // ✨ Cities State အသစ်ထည့်သွင်းခြင်း
   const [filteredSenders, setFilteredSenders] = useState<any[]>([])
   const [showSenderDropdown, setShowSenderDropdown] = useState(false)
   const [originalCod, setOriginalCod] = useState<number>(0)
   const [resetKey, setResetKey] = useState<number>(Date.now())
 
   const [formData, setFormData] = useState({
-    sender_id: '', // sender_id ထည့်သွင်းထားသည်
+    sender_id: '',
     received_date: '',
     sender_name: '',
     sender_phone: '', 
@@ -34,7 +35,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     receiver_name: '',
     receiver_phone: '',
     receiver_address: '',
-    receiver_loc: 'MDY',
+    receiver_loc: 'MDY', // ⚠️ Database Column Name နဲ့ ကိုက်ညီမှု ရှိ/မရှိ ပြန်စစ်ပါ
     cod_amount: 0,
     deli_fee: 0,
     fee_type: 'Deli',
@@ -54,7 +55,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
   useEffect(() => {
     if (orderData && isOpen) {
       setFormData({
-        sender_id: orderData.sender_id || '', // မူရင်း order ရဲ့ sender_id ကို ရယူခြင်း
+        sender_id: orderData.sender_id || '',
         received_date: orderData.received_date || '',
         sender_name: orderData.sender_name || '',
         sender_phone: orderData.sender_phone || '',
@@ -87,7 +88,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     }
   }, [orderData, isOpen])
 
-  // 2. Senders နှင့် Riders အချက်အလက်များ ဆွဲထုတ်ခြင်း
+  // 2. Senders, Cities နှင့် Riders အချက်အလက်များ ဆွဲထုတ်ခြင်း
   useEffect(() => {
     if (!isOpen) return
     
@@ -96,7 +97,14 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
       if (!error && data) setSenders(data)
     }
 
+    // ✨ Cities Table မှ ဒေတာဆွဲထုတ်သည့် Function
+    async function fetchCities() {
+      const { data, error } = await supabase.from('cities').select('*').order('name', { ascending: true })
+      if (!error && data) setCities(data)
+    }
+
     fetchSenders()
+    fetchCities()
   }, [isOpen])
 
   useEffect(() => {
@@ -110,7 +118,6 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
 
   // 3. Sender ရှာဖွေခြင်းနှင့် ရွေးချယ်ခြင်းယန္တရား
   const handleSenderNameChange = (val: string) => {
-    // စာရိုက်နေစဉ်အတွင်း တန်ဖိုးအသစ်မရွေးရသေးသဖြင့် sender_id ကို reset ချထားမည်
     setFormData(prev => ({ ...prev, sender_name: val, sender_id: '' }))
     
     if (val.trim() === '') {
@@ -129,7 +136,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
   const selectSender = (selectedSender: any) => {
     setFormData(prev => ({
       ...prev,
-      sender_id: selectedSender.id, // ရွေးချယ်လိုက်သော Sender ၏ ID ကို ထည့်သွင်းခြင်း
+      sender_id: selectedSender.id,
       sender_name: selectedSender.name,
       sender_phone: selectedSender.phone || '',
       sender_loc: selectedSender.location || prev.sender_loc
@@ -176,7 +183,6 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
         return;
     }
 
-    // List ထဲမှ ပေးပို့သူ (Sender) ကို သေချာစွာ မရွေးချယ်ထားပါက တားဆီးရန် Validation
     if (!formData.sender_id) {
         alert("ကျေးဇူးပြု၍ ပေးပို့သူ (Sender) ကို List ကျလာသည့်အထဲမှ သေချာစွာ နှိပ်၍ရွေးချယ်ပေးပါ!")
         return;
@@ -184,7 +190,6 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
 
     setLoading(true)
 
-    // ── 📝 History Audit Log Generation ──
     let changes: string[] = [];
     const fmtKg = (val: any) => `${(Number(val) || 0).toLocaleString()} Ks`;
 
@@ -274,7 +279,6 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
 
     const updatedHistory = [...(orderData.history || []), newLogEntry];
 
-    // payload တွင် formData တစ်ခုလုံးပါသွားသဖြင့် sender_id လည်း auto ပါဝင်သွားမည်ဖြစ်သည်
     const payload = {
         ...formData,
         pickup_rider_id: formData.pickup_rider_id || null,
@@ -347,7 +351,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
               </div>
             </div>
 
-            {/* Sender Section (Searchable Dropdown) */}
+            {/* Sender Section */}
             <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-xs relative">
               <h3 className="font-bold text-gray-800 uppercase text-xs mb-3 flex items-center gap-1.5 text-blue-600">📤 Sender Details</h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -368,7 +372,6 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                       <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-emerald-600 text-xs font-bold">✓ Selected</span>
                     )}
                   </div>
-                  {/* Dropdown Overlay */}
                   {showSenderDropdown && filteredSenders.length > 0 && (
                     <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
                       {filteredSenders.map(s => (
@@ -426,13 +429,22 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                   <input type="text" value={formData.receiver_address} onChange={e => setFormData({...formData, receiver_address: e.target.value})} className={winInput} />
                 </div>
                 <div>
-                  <label className={labelStyle}>Destination City</label>
-                  <select value={formData.receiver_loc} onChange={e => setFormData({...formData, receiver_loc: e.target.value})} className={winSelect}>
-                    <option value="MDY">Mandalay (MDY)</option>
-                    <option value="YGN">Yangon (YGN)</option>
-                    <option value="NPT">Nay Pyi Taw (NPT)</option>
-                  </select>
-                </div>
+  {/* 🏙️ Column Name "C.ID" ကို သုံးပြီး ဒေတာသွင်းမည့် Dropdown */}
+  <label className={labelStyle}>Destination City</label>
+  <select 
+    value={formData.receiver_loc} 
+    onChange={e => setFormData({...formData, receiver_loc: e.target.value})} 
+    className={winSelect}
+    required
+  >
+    <option value="">Select city...</option>
+    {cities.map((city) => (
+      <option key={city['C.ID']} value={city['C.ID']}>
+        {city.name}
+      </option>
+    ))}
+  </select>
+</div>
               </div>
             </div>
 

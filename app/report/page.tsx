@@ -617,183 +617,236 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
 
             </div>
 
-            {/* ---------------------------------------------------- */}
-            {/* ညာဘက်ခြမ်း (Blue Area - Table & Buttons) - Width 70% */}
-            {/* ---------------------------------------------------- */}
-            <div className="w-[70%] p-2 relative bg-blue-50/20 flex flex-col h-full">
-              
-              {/* 🔵 အပြာရောင် Frame (Box ကို ကွပ်ထားသည်) */}
-              
-              
-              {/* Header & Buttons (Blue Box အတွင်း) */}
-              <div className="flex justify-between items-center pb-2 z-10 px-2 pt-1 relative shrink-0">
-                <h2 className="text-[11px] font-bold text-blue-800 uppercase tracking-wide flex items-center gap-1.5">
-                  💵 အပ်ငွေ Summary
-                </h2>
-                <div className="flex items-center gap-1.5">
-                  <button 
-                    onClick={() => setViewHandoverModal(true)}
-                    className="bg-blue-100 hover:bg-blue-200 text-blue-800 font-semibold px-2.5 py-1 rounded text-[10px] border border-blue-300 shadow-sm transition-all flex items-center gap-1"
-                  >
-                    အပ်ငွေစရင်း
-                  </button>
-                  <button 
-                    onClick={() => setHandoverModal({ open: true, riderName: riders[0]?.name || '' })}
-                    className="bg-teal-600 hover:bg-teal-700 text-white font-semibold px-2.5 py-1 rounded text-[10px] shadow-sm transition-all flex items-center gap-1"
-                  >
-                    ငွေထည့်ရန်
-                  </button>
-                </div>
-              </div>
+           {/* ---------------------------------------------------- */}
+{/* ညာဘက်ခြမ်း (Blue Area - Table & Buttons) - Width 70% */}
+{/* ---------------------------------------------------- */}
+<div className="w-[70%] p-2 relative bg-blue-50/20 flex flex-col h-full">
+  
+  {/* Header & Buttons (Blue Box အတွင်း) */}
+  <div className="flex justify-between items-center pb-2 z-10 px-2 pt-1 relative shrink-0">
+    <h2 className="text-[11px] font-bold text-blue-800 uppercase tracking-wide flex items-center gap-1.5">
+      💵 အပ်ငွေ Summary
+    </h2>
+    <div className="flex items-center gap-1.5">
+      <button 
+        onClick={() => setViewHandoverModal(true)}
+        className="bg-blue-100 hover:bg-blue-200 text-blue-800 font-semibold px-2.5 py-1 rounded text-[10px] border border-blue-300 shadow-sm transition-all flex items-center gap-1"
+      >
+        အပ်ငွေစရင်း
+      </button>
+      <button 
+        onClick={() => setHandoverModal({ open: true, riderName: riders[0]?.name || '' })}
+        className="bg-teal-600 hover:bg-teal-700 text-white font-semibold px-2.5 py-1 rounded text-[10px] shadow-sm transition-all flex items-center gap-1"
+      >
+        ငွေထည့်ရန်
+      </button>
+    </div>
+  </div>
 
-              {/* တွက်ချက်ခြင်းနှင့် Layout တည်ဆောက်ခြင်းအပိုင်း */}
-              {(() => {
-                let grandTotalToPay = 0;
-                let grandTotalCashIn = 0;
-                let grandTotalOop = 0;
-                let grandTotalGap = 0;
+  {/* တွက်ချက်ခြင်းနှင့် Layout တည်ဆောက်ခြင်းအပိုင်း */}
+  {(() => {
+    let grandTotalToPay = 0;
+    let grandTotalCashIn = 0;
+    let grandTotalOop = 0;
+    let grandTotalGap = 0;
 
-                // 1. Rider တစ်ယောက်ချင်းစီရဲ့ Data တွက်ချက်ခြင်းအပိုင်း
-                const rows = riders.map(rider => {
-                  const riderOrders = reportData.filter(o => 
-  o.deliver_rider_id === rider.id && 
-  o.status === 'Delivered' && 
-  o.deliver_date === selectedDate
-);
-                  const totalToPay = riderOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
-                  const riderHandovers = handovers.filter(h => h.rider_name === rider.name);
-                  const cashIn = riderHandovers.filter(h => h.transaction_type === 'Cash-in').reduce((sum, h) => sum + (h.amount || 0), 0);
-                  const oop = riderHandovers.filter(h => h.transaction_type === 'OOP').reduce((sum, h) => sum + (h.amount || 0), 0);
-                  const gap = totalToPay - (cashIn + oop);
+    let grandTotalDelivered = 0;
+    let grandTotalOnWay = 0;
+    let grandTotalWays = 0;
 
-                  if (totalToPay === 0 && cashIn === 0 && oop === 0) return null;
+    // 1. Rider တစ်ယောက်ချင်းစီရဲ့ Data တွက်ချက်ခြင်းအပိုင်း
+    const rows = riders.map(rider => {
+      const riderOrders = reportData.filter(o => 
+        o.deliver_rider_id === rider.id && 
+        o.deliver_date === selectedDate
+      );
 
-                  grandTotalToPay += totalToPay;
-                  grandTotalCashIn += cashIn;
-                  grandTotalOop += oop;
-                  grandTotalGap += gap;
+      const deliveredCount = riderOrders.filter(o => o.status === 'Delivered').length;
+      const onWayCount = riderOrders.filter(o => o.status === 'On Way').length;
+      const totalWayCount = riderOrders.length; 
 
-                  let gapColor = "text-green-600";
-                  if (gap > 0) gapColor = "text-red-600 font-bold";
-                  else if (gap < 0) gapColor = "text-amber-600 font-bold";
+      const totalToPay = riderOrders.filter(o => o.status === 'Delivered').reduce((sum, o) => sum + (o.total_amount || 0), 0);
+      
+      const riderHandovers = handovers.filter(h => h.rider_name === rider.name);
+      const cashIn = riderHandovers.filter(h => h.transaction_type === 'Cash-in').reduce((sum, h) => sum + (h.amount || 0), 0);
+      const oop = riderHandovers.filter(h => h.transaction_type === 'OOP').reduce((sum, h) => sum + (h.amount || 0), 0);
+      const gap = totalToPay - (cashIn + oop);
 
-                  return (
-                    <tr key={rider.id} className="hover:bg-blue-50/30 transition-colors">
-                      <td className="px-2 py-1.5 font-semibold text-gray-900 truncate" title={rider.name}>👤 {rider.name}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-gray-900">{totalToPay.toLocaleString()}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-blue-600">{cashIn.toLocaleString()}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-purple-600">{oop.toLocaleString()}</td>
-                      <td className={`px-2 py-1.5 text-right font-mono ${gapColor}`}>
-                        {gap > 0 ? `+${gap.toLocaleString()}` : gap.toLocaleString()}
-                      </td>
-                    </tr>
-                  );
-                }).filter(Boolean);
+      if (totalToPay === 0 && cashIn === 0 && oop === 0 && totalWayCount === 0) return null;
 
-                let totalGapColor = "text-green-700";
-                if (grandTotalGap > 0) totalGapColor = "text-red-700";
-                else if (grandTotalGap < 0) totalGapColor = "text-amber-700";
+      grandTotalToPay += totalToPay;
+      grandTotalCashIn += cashIn;
+      grandTotalOop += oop;
+      grandTotalGap += gap;
+      
+      grandTotalDelivered += deliveredCount;
+      grandTotalOnWay += onWayCount;
+      grandTotalWays += totalWayCount;
 
-                return (
-                  <div className="flex-1 min-h-0 flex flex-col rounded border border-blue-200 bg-white mx-1 mb-1 z-10 shadow-inner">
-                    
-                    {/* 🟢 အပေါ်ဘက်ခြမ်း: ရိုးရိုး Data Row များပြသပေးပြီး Content များလာပါက Scroll ဆွဲနိုင်မည့် Area */}
-                    <div className="flex-1 overflow-y-auto custom-scrollbar">
-                      <table className="w-full text-left text-[11px] whitespace-nowrap table-fixed">
-                        <thead className="bg-blue-50/50 text-gray-600 font-bold uppercase text-[9px] tracking-wider border-b border-blue-100 sticky top-0 z-10">
-                          <tr>
-                            <th className="px-2 py-2 w-[24%]">Rider Name</th>
-                            <th className="px-2 py-2 text-right w-[19%]">Total</th>
-                            <th className="px-2 py-2 text-right w-[19%]">အပ်ငွေ</th>
-                            <th className="px-2 py-2 text-right w-[19%]">စိုက်ငွေ</th>
-                            <th className="px-2 py-2 text-right w-[19%]">ကွာဟချက်</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 text-gray-700 font-medium">
-                          {rows.length === 0 ? (
-                            <tr>
-                              <td colSpan={5} className="text-center py-8 text-gray-400 font-medium">
-                                ယနေ့အတွက် Rider စာရင်းချုပ် မရှိသေးပါ။
-                              </td>
-                            </tr>
-                          ) : (
-                            rows
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+      let gapColor = "text-green-600";
+      if (gap > 0) gapColor = "text-red-600 font-bold";
+      else if (gap < 0) gapColor = "text-amber-600 font-bold";
 
-                    {/* 🔵 အောက်ဘက်ခြမ်း: ဒေတာ ရှိရှိမရှိရှိ အောက်ခြေမှာ Layout အရ အမြဲတမ်း Fixed ကပ်နေမည့် Total Footer Area */}
-                    <div className="bg-blue-50 border-t-2 border-blue-200 font-bold text-gray-950 shadow-sm shrink-0">
-                      <table className="w-full text-left text-[11px] whitespace-nowrap table-fixed">
-                        <tbody>
-                          <tr className="font-bold">
-                            <td className="px-2 py-2 text-blue-900 font-bold w-[24%]">Total</td>
-                            <td className="px-2 py-2 text-right font-mono text-blue-900 w-[19%]">{grandTotalToPay.toLocaleString()}</td>
-                            <td className="px-2 py-2 text-right font-mono text-blue-700 w-[19%]">{grandTotalCashIn.toLocaleString()}</td>
-                            <td className="px-2 py-2 text-right font-mono text-purple-700 w-[19%]">{grandTotalOop.toLocaleString()}</td>
-                            <td className={`px-2 py-2 text-right font-mono w-[19%] ${totalGapColor}`}>
-                              {grandTotalGap > 0 ? `+${grandTotalGap.toLocaleString()}` : grandTotalGap.toLocaleString()}
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-
-                  </div>
-                );
-              })()}
-
+      return (
+        <tr key={rider.id} className="hover:bg-blue-50/30 transition-colors">
+          <td className="px-2 py-1.5 font-semibold text-gray-900 truncate" title={rider.name}>👤 {rider.name}</td>
+          
+          <td className="px-2 py-1.5 text-center">
+            <div className="flex items-center justify-center gap-1 font-mono text-[10px]">
+              <span className="bg-green-50 text-green-700 px-1 rounded border border-green-200" title="Delivered">D:{deliveredCount}</span>
+              <span className="bg-blue-50 text-blue-700 px-1 rounded border border-blue-200" title="On Way">O:{onWayCount}</span>
+              <span className="bg-gray-100 text-gray-700 px-1 rounded border border-gray-200 font-bold" title="Total">T:{totalWayCount}</span>
             </div>
-              
-          </div>
+          </td>
+
+          <td className="px-2 py-1.5 text-right font-mono text-gray-900">{totalToPay.toLocaleString()}</td>
+          <td className="px-2 py-1.5 text-right font-mono text-blue-600">{cashIn.toLocaleString()}</td>
+          <td className="px-2 py-1.5 text-right font-mono text-purple-600">{oop.toLocaleString()}</td>
+          <td className={`px-2 py-1.5 text-right font-mono ${gapColor}`}>
+            {gap > 0 ? `+${gap.toLocaleString()}` : gap.toLocaleString()}
+          </td>
+        </tr>
+      );
+    }).filter(Boolean);
+
+    let totalGapColor = "text-green-700";
+    if (grandTotalGap > 0) totalGapColor = "text-red-700";
+    else if (grandTotalGap < 0) totalGapColor = "text-amber-700";
+
+    return (
+      <div className="flex-1 min-h-0 flex flex-col rounded border border-blue-200 bg-white mx-1 mb-1 z-10 shadow-inner">
+        
+        {/* 🟢 အပေါ်ဘက်ခြမ်း: Table Area */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <table className="w-full text-left text-[11px] whitespace-nowrap table-fixed">
+            <thead className="bg-blue-50/50 text-gray-600 font-bold uppercase text-[9px] tracking-wider border-b border-blue-100 sticky top-0 z-10">
+              <tr>
+                <th className="px-2 py-2 w-[22%]">Rider Name</th>
+                <th className="px-2 py-2 text-center w-[18%]">Way (D/O/T)</th>
+                <th className="px-2 py-2 text-right w-[15%]">Total</th>
+                <th className="px-2 py-2 text-right w-[15%]">အပ်ငွေ</th>
+                <th className="px-2 py-2 text-right w-[15%]">စိုက်ငွေ</th>
+                <th className="px-2 py-2 text-right w-[15%]">ကွာဟချက်</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 text-gray-700 font-medium">
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="text-center py-8 text-gray-400 font-medium">
+                    ယနေ့အတွက် Rider စာရင်းချုပ် မရှိသေးပါ။
+                  </td>
+                </tr>
+              ) : (
+                rows
+              )}
+            </tbody>
+          </table>
         </div>
 
-        {/* ========================================================= */}
-        {/* ဒီအောက်မှာ ညာဘက်ခြမ်း COD ခွဲဝေမှုကတ် တွေ ဆက်ရှိနေမှာပါ... */}
-        {/* ========================================================= */}
-        
-      
-        {/* ကတ် (၂) - Sender အလိုက် ပြန်ပေးရမယ့် COD စာရင်း Card */}
-        <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col gap-3 h-full overflow-y-auto">
-          <div className="border-b border-gray-100 pb-2 sticky top-0 bg-white z-10">
-            <h2 className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
-              COD ခွဲဝေမှု စရင်း 
-            </h2>
-          </div>
-
-          
-
-          {Object.keys(senderCodByLoc).length === 0 ? (
-            <p className="text-xs text-gray-400 font-medium py-2 text-center my-auto">ယနေ့အတွက် Delivered ဖြစ်ပြီးသား COD ပေးရန်မရှိသေးပါ။</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {Object.entries(senderCodByLoc).map(([loc, senders]) => {
-                const locTotal = Object.values(senders).reduce((a, b) => a + b, 0);
-                return (
-                  <div key={loc} className="p-3 border border-orange-100 rounded-lg bg-orange-50/20 flex flex-col gap-2 shadow-sm">
-                    <div className="font-bold text-orange-800 text-xs border-b border-orange-200/60 pb-1 flex items-center justify-between">
-                      <span>📍 City/LOC: {loc}</span>
-                      <span className="text-[10px] bg-orange-100 px-1.5 py-0.5 rounded text-orange-700 font-bold">
-                        {locTotal.toLocaleString()} Ks
-                      </span>
-                    </div>
-                    <div className="text-[11px] space-y-1.5 max-h-32 overflow-y-auto pr-1">
-                      {Object.entries(senders).map(([senderName, totalCod]) => (
-                        <div key={senderName} className="flex justify-between items-center bg-white p-1.5 rounded border border-gray-100 shadow-xs">
-                          <span className="font-medium text-gray-700 truncate max-w-[100px]" title={senderName}>👤 {senderName}</span>
-                          <span className="font-bold text-gray-900">{totalCod.toLocaleString()} Ks</span>
-                        </div>
-                      ))}
-                    </div>
+        {/* 🔵 အောက်ဘက်ခြမ်း: Fixed Footer Summary Area */}
+        <div className="bg-blue-50 border-t-2 border-blue-200 font-bold text-gray-950 shadow-sm shrink-0">
+          <table className="w-full text-left text-[11px] whitespace-nowrap table-fixed">
+            <tbody>
+              <tr className="font-bold">
+                <td className="px-2 py-2 text-blue-900 font-bold w-[22%]">Total</td>
+                
+                <td className="px-2 py-2 text-center w-[18%]">
+                  <div className="flex items-center justify-center gap-1 font-mono text-[10px]">
+                    <span className="bg-green-100 text-green-800 px-1 rounded border border-green-300">D:{grandTotalDelivered}</span>
+                    <span className="bg-blue-100 text-blue-800 px-1 rounded border border-blue-300">O:{grandTotalOnWay}</span>
+                    <span className="bg-gray-200 text-gray-800 px-1 rounded border border-gray-200 font-bold">T:{grandTotalWays}</span>
                   </div>
-                );
-              })}
-            </div>
-          )}
+                </td>
+
+                <td className="px-2 py-2 text-right font-mono text-blue-900 w-[15%]">{grandTotalToPay.toLocaleString()}</td>
+                <td className="px-2 py-2 text-right font-mono text-blue-700 w-[15%]">{grandTotalCashIn.toLocaleString()}</td>
+                <td className="px-2 py-2 text-right font-mono text-purple-700 w-[15%]">{grandTotalOop.toLocaleString()}</td>
+                <td className={`px-2 py-2 text-right font-mono w-[15%] ${totalGapColor}`}>
+                  {grandTotalGap > 0 ? `+${grandTotalGap.toLocaleString()}` : grandTotalGap.toLocaleString()}
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
       </div>
+    );
+  })()}
+
+  </div> 
+</div> 
+</div> 
+
+        
+
+{/* ========================================================= */}
+{/* ဒီအောက်မှာ ညာဘက်ခြမ်း COD ခွဲဝေမှုကတ် တွေ ဆက်ရှိနေမှာပါ... */}
+{/* ========================================================= */}
+
+{/* ကတ် (၂) - Sender အလိုက် ပြန်ပေးရမယ့် COD စာရင်း Card */}
+<div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col gap-3 h-full">
+  <div className="border-b border-gray-100 pb-2 shrink-0">
+    <h2 className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
+      💰 COD ခွဲဝေမှု စာရင်း
+    </h2>
+  </div>
+
+  {/* Outer Scrollable Area */}
+  <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
+    {(() => {
+      // ၁။ ဒေတာများကို ပမာဏတွက်ချက်ပြီး၊ ၀ ဖြစ်နေလျှင် ဖယ်ထုတ်ကာ၊ အများဆုံးမှ အနည်းဆုံးသို့ စီခြင်း
+      const sortedAndFilteredLocs = Object.entries(senderCodByLoc)
+        .map(([loc, senders]) => {
+          const locTotal = Object.values(senders).reduce((a, b) => Number(a) + Number(b), 0);
+          return { loc, senders, locTotal };
+        })
+        .filter(item => item.locTotal > 0) // စုစုပေါင်းပမာဏ ၀ ပြား ဖြစ်နေသော မြို့များကို ဖျောက်ထားရန်
+        .sort((a, b) => b.locTotal - a.locTotal); // COD အများဆုံးမြို့ကို ထိပ်ဆုံးသို့ တင်ရန်
+
+      // ပြစရာ မြို့စာရင်း လုံးဝမရှိတော့ပါက
+      if (sortedAndFilteredLocs.length === 0) {
+        return (
+          <div className="h-full flex items-center justify-center text-xs text-gray-400 font-medium py-8">
+            ယနေ့အတွက် Delivered ဖြစ်ပြီးသား COD ပေးရန်မရှိသေးပါ။
+          </div>
+        );
+      }
+
+      return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {sortedAndFilteredLocs.map(({ loc, senders, locTotal }) => (
+            // 💡 သတ်မှတ်ထားသော အမြင့် h-80 ကို ပုံသေ အသုံးပြုထားပါသည်
+            <div key={loc} className="p-3 border border-orange-100 rounded-lg bg-orange-50/20 flex flex-col gap-2 shadow-sm h-80">
+              
+              {/* မြို့အလိုက် Header အကွက် */}
+              <div className="font-bold text-orange-800 text-xs border-b border-orange-200/60 pb-1 flex items-center justify-between shrink-0">
+                <span>📍 City/LOC: {loc}</span>
+                <span className="text-[10px] bg-orange-100 px-1.5 py-0.5 rounded text-orange-700 font-bold">
+                  {locTotal.toLocaleString()} Ks
+                </span>
+              </div>
+
+              {/* Sender များစာရင်း (မဆန့်ပါက ကတ်ထဲတွင် Scroll ဆွဲနိုင်သည်) */}
+              <div className="text-[11px] space-y-1.5 flex-1 overflow-y-auto pr-1 custom-scrollbar min-h-0">
+                {Object.entries(senders)
+                  .filter(([_, totalCod]) => Number(totalCod) > 0) // Sender တစ်ဦးချင်းစီတွင် ၀ ဖြစ်နေပါက ဖျောက်ထားရန်
+                  .map(([senderName, totalCod]) => (
+                    <div key={senderName} className="flex justify-between items-center bg-white p-1.5 rounded border border-gray-100 shadow-xs">
+                      <span className="font-medium text-gray-700 truncate max-w-[110px]" title={senderName}>👤 {senderName}</span>
+                      <span className="font-bold text-gray-900">{Number(totalCod).toLocaleString()} Ks</span>
+                    </div>
+                  ))}
+              </div>
+
+            </div>
+          ))} {/* 💡 အပိတ် Error ကို ဒီနေရာမှာ သေချာပြင်ဆင်ထားပါတယ်ဗျာ */}
+        </div>
+      );
+    })()}
+  </div>
+</div>
+
+</div> {/* 👈 အပြင်ဘက်ဆုံး Layout အတွက် မူလအတိုင်း ပိတ်ပေးထားသည့် ဒုတိယမြောက် Div */}
 
       {/* ── Workspace Table / List Area (Flex item optimized) ── */}
       <div className="flex-1 overflow-auto bg-white sm:mx-4 sm:my-3 sm:rounded-lg sm:border sm:border-gray-200 sm:shadow-sm">
