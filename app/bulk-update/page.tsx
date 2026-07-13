@@ -403,7 +403,7 @@ export default function BulkUpdatePage() {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto w-full space-y-4 pb-20">
+      <div className="max-w-screen-3xl w-full space-y-4 pb-20">
         
         {/* Title Top Bar */}
         <div className="px-4 py-3 bg-white border border-gray-200 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-sm">
@@ -589,6 +589,10 @@ export default function BulkUpdatePage() {
                   <th className="py-2.5 px-3">Receiver Name</th>
                   <th className="py-2.5 px-3">Phone</th>
                   <th className="py-2.5 px-3">Full Address</th>
+                  <th className="py-2.5 px-3">COD</th>
+                  <th className="py-2.5 px-3">Deli Fee</th>
+                  <th className="py-2.5 px-3">Type</th>
+                  <th className="py-2.5 px-3">Total</th>
                   <th className="py-2.5 px-3 text-center">Rider (Delivered By)</th>
                   <th className="py-2.5 px-3 text-center">Status</th>
                 </tr>
@@ -616,6 +620,11 @@ export default function BulkUpdatePage() {
                         <td className="py-2.5 px-3 text-gray-900 font-semibold">{o.receiver_name}</td>
                         <td className="py-2.5 px-3 font-mono text-gray-600">{o.receiver_phone}</td>
                         <td className="py-2.5 px-3 text-gray-500 max-w-xs truncate" title={o.receiver_address}>{o.receiver_address || '-'}</td>
+                        <td className="py-2.5 px-3 font-mono text-gray-600">{o.cod_amount}</td>
+                        <td className="py-2.5 px-3 font-mono text-gray-600">{o.deli_fee}</td>
+                        <td className="py-2.5 px-3 font-mono text-gray-600">{o.fee_type}</td>
+                        <td className="py-2.5 px-3 font-mono text-gray-600">{o.total_amount}</td>
+                        
                         <td className="py-2.5 px-3 text-center text-gray-600 font-medium">{o.deliver_rider?.name || <span className="text-gray-300">-</span>}</td>
                         <td className="py-2.5 px-3 text-center">
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wide ${
