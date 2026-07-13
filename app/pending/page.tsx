@@ -14,6 +14,8 @@ export default function PendingEntry() {
   const router = useRouter()
   const senderInputRef = useRef<HTMLInputElement>(null)
   const receiverNameRef = useRef<HTMLInputElement>(null)
+
+  const thumbContainerRef = useRef<HTMLDivElement>(null)
   
   const [pendingItems, setPendingItems] = useState<any[]>([])
   const [selectedItem, setSelectedItem] = useState<any>(null)
@@ -231,6 +233,22 @@ useEffect(() => {
     }
   }
 }
+
+// 💡 (အသစ်ထည့်ရန်) ရွေးထားသော အော်ဒါပုံပြောင်းသွားပါက ထိုပုံငယ်လေးဆီသို့ Auto Scroll ဆွဲပေးခြင်း
+  useEffect(() => {
+    if (thumbContainerRef.current && selectedItem) {
+      // Container အောက်ရှိ data-active="true" သတ်မှတ်ထားသော Element ကို ရှာဖွေခြင်း
+      const activeElement = thumbContainerRef.current.querySelector('[data-active="true"]');
+      
+      if (activeElement) {
+        activeElement.scrollIntoView({
+          behavior: 'smooth',   // ညင်သာချောမွေ့စွာ Scroll ဖြစ်စေရန်
+          block: 'nearest',     // ဒေါင်လိုက်အတွက် အနီးစပ်ဆုံးအနေအထားတွင်ထားရန်
+          inline: 'center'      // ✨ ရွေးချယ်ထားသည့်ပုံကို Carousel ၏ အလယ်ကောင်တည့်တည့်သို့ ရောက်အောင်ဆွဲပေးခြင်း
+        });
+      }
+    }
+  }, [selectedItem]); // selectedItem ပြောင်းလဲတိုင်း အလုပ်လုပ်မည် (Arrow Key ဖြင့် ရွှေ့လျှင်လည်း အကျုံးဝင်ပါသည်)
 
   // 🌟 ဘယ်နေရာမှာပဲဖြစ်ဖြစ် Enter နှိပ်လိုက်ရင် Update & Next ကို တန်းနှိပ်ပေးမယ့် စနစ်
   useEffect(() => {
@@ -510,16 +528,31 @@ useEffect(() => {
         const { error: orderError } = await supabase.from('orders').update(baseOrderPayload).eq('id', selectedItem.id)
         if (orderError) throw orderError
 
-        // UI ကို Next Item သို့ ရွှေ့ပေးခြင်း
-        setProcessedStack(prev => [...prev, selectedItem.id])
-        const updatedPending = pendingItems.filter(item => item.id !== selectedItem.id)
-        setPendingItems(updatedPending)
-        if (updatedPending.length > 0) {
-          handleSelectItem(updatedPending[0])
-        } else {
-          setSelectedItem(null)
-        }
+       // ── 💡 ပုံရွှေ့ပေးမည့် Logic အသစ် (နေရာ ၂ ခုလုံးတွင် ဤကုဒ်ဖြင့် အစားထိုးပါ) ──
 
+// ၁။ လက်ရှိ ရွေးချယ်ထားတဲ့ပုံရဲ့ နေရာ (Index) ကို အရင်မှတ်ထားမယ်
+const currentIndex = pendingItems.findIndex(item => item.id === selectedItem.id);
+
+// ၂။ လက်ရှိပုံကို ဖယ်ထုတ်လိုက်တဲ့ စာရင်းအသစ်ကို တွက်ချက်မယ်
+const updatedPending = pendingItems.filter(item => item.id !== selectedItem.id);
+
+// ၃။ UI States များကို Update လုပ်မယ်
+setPendingItems(updatedPending);
+setProcessedStack(prev => [...prev, selectedItem.id]);
+
+// ၄။ နောက်ပုံ သို့မဟုတ် ရှေ့ပုံကို သွားမည့် လမ်းကြောင်းကို စစ်ဆေးမယ်
+if (updatedPending.length > 0) {
+  if (currentIndex < pendingItems.length - 1) {
+    // 🌟 အလည်ကပုံဆိုရင် -> ညာဘက်က နောက်တစ်ပုံဆီကို Auto ဆက်သွားမယ်
+    handleSelectItem(updatedPending[currentIndex]);
+  } else {
+    // 🌟 နောက်ဆုံးပုံ ဖြစ်နေရင် -> ဘယ်ဘက်က သူ့ရှေ့ကပုံဆီကို Auto ပြန်သွားမယ်
+    handleSelectItem(updatedPending[updatedPending.length - 1]);
+  }
+} else {
+  setSelectedItem(null);
+}
+// ──────────────────────────────────────────────
       } else {
         // 🔴 အော့ဖ်လိုင်းဖြစ်နေချိန် လုပ်ဆောင်ချက် Flow (Queue ထဲ ပစ်ထည့်မည့်စနစ်)
         let newItem: QueueItem;
@@ -545,16 +578,31 @@ useEffect(() => {
         const updatedQueue = [...syncQueue, newItem]
         setSyncQueue(updatedQueue)
         localStorage.setItem('offline_orders_queue', JSON.stringify(updatedQueue))
-        
-        // အော့ဖ်လိုင်းဖြစ်နေလည်း UI မှာ ပြီးသွားသလိုမျိုး Next Item ကို တန်းကျော်ပေးမယ်
-        setProcessedStack(prev => [...prev, selectedItem.id])
-        const updatedPending = pendingItems.filter(item => item.id !== selectedItem.id)
-        setPendingItems(updatedPending)
-        if (updatedPending.length > 0) {
-          handleSelectItem(updatedPending[0])
-        } else {
-          setSelectedItem(null)
-        }
+       // ── 💡 ပုံရွှေ့ပေးမည့် Logic အသစ် (နေရာ ၂ ခုလုံးတွင် ဤကုဒ်ဖြင့် အစားထိုးပါ) ──
+
+// ၁။ လက်ရှိ ရွေးချယ်ထားတဲ့ပုံရဲ့ နေရာ (Index) ကို အရင်မှတ်ထားမယ်
+const currentIndex = pendingItems.findIndex(item => item.id === selectedItem.id);
+
+// ၂။ လက်ရှိပုံကို ဖယ်ထုတ်လိုက်တဲ့ စာရင်းအသစ်ကို တွက်ချက်မယ်
+const updatedPending = pendingItems.filter(item => item.id !== selectedItem.id);
+
+// ၃။ UI States များကို Update လုပ်မယ်
+setPendingItems(updatedPending);
+setProcessedStack(prev => [...prev, selectedItem.id]);
+
+// ၄။ နောက်ပုံ သို့မဟုတ် ရှေ့ပုံကို သွားမည့် လမ်းကြောင်းကို စစ်ဆေးမယ်
+if (updatedPending.length > 0) {
+  if (currentIndex < pendingItems.length - 1) {
+    // 🌟 အလည်ကပုံဆိုရင် -> ညာဘက်က နောက်တစ်ပုံဆီကို Auto ဆက်သွားမယ်
+    handleSelectItem(updatedPending[currentIndex]);
+  } else {
+    // 🌟 နောက်ဆုံးပုံ ဖြစ်နေရင် -> ဘယ်ဘက်က သူ့ရှေ့ကပုံဆီကို Auto ပြန်သွားမယ်
+    handleSelectItem(updatedPending[updatedPending.length - 1]);
+  }
+} else {
+  setSelectedItem(null);
+}
+// ──────────────────────────────────────────────
       }
     } catch (err: any) {
       alert("Error ဖြစ်ပွားခဲ့သည်: " + err.message)
@@ -637,27 +685,49 @@ useEffect(() => {
                     </button>
                   </div>
                   
-                  {/* Grid Scroll Area */}
-                  <div className="flex-1 grid grid-cols-4 sm:grid-cols-5 lg:grid-cols-4 xl:grid-cols-5 gap-2 overflow-y-auto content-start pb-4 pr-1 scrollbar-thin">
-                    {pendingItems.map((item, idx) => (
-                      <div
-                        key={item.id || idx}
-                        onClick={() => {
-                          handleSelectItem(item)
-                          setIsThumbGridOpen(false) // ပုံရွေးပြီးရင် grid ကိုပိတ်မယ်
-                        }}
-                        className={`aspect-[3/4] bg-gray-900 rounded-lg overflow-hidden cursor-pointer border-2 transition-all duration-200 relative group ${selectedItem.id === item.id ? 'border-orange-500 ring-2 ring-orange-500/30' : 'border-gray-800 hover:border-gray-500'}`}
-                      >
-                        <img src={item.image_url} className="w-full h-full object-cover select-none pointer-events-none" alt="thumb" />
-                        {item.uploader_note && (
-                          <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-black animate-pulse" title="Has Note" />
-                        )}
-                        <div className="absolute inset-x-0 bottom-0 bg-black/70 text-[10px] text-gray-300 px-1 py-0.5 truncate text-center font-mono group-hover:text-white">
-                          No. {idx + 1}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                 {/* 💡 ၁။ အပြင်ဘက်တွင် Scroll နှင့် Flex အမြင့်အတွက် သီးသန့် Div တစ်ခုအဖြစ် ထားရှိပါ */}
+<div className="flex-1 overflow-y-auto pb-4 pr-1 scrollbar-thin">
+  
+  {/* 💡 ၂။ အတွင်းဘက်တွင် Grid Layout ချရန်အတွက် သီးသန့် Div တစ်ခု ထပ်မံပတ်ပေးလိုက်ပါ */}
+  <div className="grid grid-cols-4 sm:grid-cols-5 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+    
+    {pendingItems.map((item, idx) => (
+      <div
+        key={item.id || idx}
+        onClick={() => {
+          handleSelectItem(item);
+          setIsThumbGridOpen(false);
+        }}
+        className={`
+          aspect-square w-full min-w-0 min-h-0 
+          bg-gray-900 rounded-lg overflow-hidden 
+          cursor-pointer border-2 transition-all duration-200 
+          relative group
+          ${selectedItem?.id === item.id 
+            ? 'border-orange-500 ring-2 ring-orange-500/30 ring-inset' 
+            : 'border-gray-800 hover:border-gray-500'
+          }
+        `}
+      >
+        <img 
+          src={item.image_url} 
+          className="w-full h-full object-cover select-none pointer-events-none" 
+          alt="thumb" 
+        />
+        {item.uploader_note && (
+          <span 
+            className="absolute top-1 right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-black animate-pulse" 
+            title="Has Note" 
+          />
+        )}
+        <div className="absolute inset-x-0 bottom-0 bg-black/70 text-[10px] text-gray-300 px-1 py-0.5 truncate text-center font-mono group-hover:text-white">
+          No. {idx + 1}
+        </div>
+      </div>
+    ))}
+
+  </div> {/* 💡 အတွင်းဘက် Grid ပိတ်တာဖြစ်ပါတယ် */}
+</div> {/* 💡 အပြင်ဘက် Scroll Area ပိတ်တာဖြစ်ပါတယ် */}
                 </div>
               )}
 
@@ -750,9 +820,13 @@ useEffect(() => {
               </div>
               
               {/* Bottom Strip Zone with Expand Grid Trigger */}
-              <div className="h-20 bg-gray-950 border-t border-gray-800 p-1.5 flex gap-2 overflow-x-auto scrollbar-thin flex-shrink-0 items-center">
+              <div 
+  ref={thumbContainerRef}
+  className="h-20 bg-gray-950 border-t border-gray-800 p-1.5 flex gap-2 overflow-x-auto scrollbar-thin flex-shrink-0 items-center"
+>
                 
                 {/* ✨ Grid Trigger Icon Button */}
+                <div className="sticky left-0 z-10 flex items-center gap-2 bg-transparent flex-shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsThumbGridOpen(true)}
@@ -765,21 +839,33 @@ useEffect(() => {
                   <span className="text-[9px] font-bold uppercase tracking-wider">Expand</span>
                 </button>
 
-                <div className="w-px h-full bg-gray-800 shrink-0" />
+                <div className="w-px h-full bg-gray-800 shrink-0" /></div>
 
                 {/* Horizontal list of thumbnails */}
-                {pendingItems.map((item, idx) => (
-                  <div 
-                    key={item.id || idx}
-                    onClick={() => handleSelectItem(item)}
-                    className={`w-14 h-full min-w-[56px] rounded-md overflow-hidden cursor-pointer border-2 transition-all relative ${selectedItem.id === item.id ? 'border-orange-500 scale-95 opacity-100' : 'border-transparent opacity-50 hover:opacity-100'}`}
-                  >
-                    <img src={item.image_url} className="w-full h-full object-cover" alt="thumb" draggable={false} />
-                    {item.uploader_note && (
-                      <span className="absolute top-0.5 right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-black" title="Has Note" />
-                    )}
-                  </div>
-                ))}
+                {pendingItems.map((item, idx) => {
+    // လက်ရှိ item သည် ရွေးချယ်ထားသည့် item ဟုတ်မဟုတ် စစ်ဆေးခြင်း
+    const isActive = selectedItem?.id === item.id;
+
+    return (
+      <div 
+        key={item.id} 
+        onClick={() => handleSelectItem(item)}
+        // 💡 ၂။ အဆင့် (၂) ရှိ querySelector မှ အလွယ်တကူ ရှာနိုင်ရန် data-active သတ်မှတ်ပေးပါ
+        data-active={isActive ? "true" : "false"}
+        className={`relative h-full w-14 rounded border cursor-pointer overflow-hidden group transition-all duration-200 shrink-0 select-none ${
+          isActive ? 'border-orange-500 ring-2 ring-orange-500/30' : 'border-gray-800 hover:border-gray-500'
+        }`}
+      >
+        <img src={item.image_url} className="w-full h-full object-cover select-none pointer-events-none" alt="thumb" />
+        {item.uploader_note && (
+          <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-black animate-pulse" title="Has Note" />
+        )}
+        <div className="absolute inset-x-0 bottom-0 bg-black/70 text-[10px] text-gray-300 px-1 py-0.5 truncate text-center font-mono group-hover:text-white">
+          No. {idx + 1}
+        </div>
+      </div>
+    );
+  })}
               </div>
             </>
           ) : (

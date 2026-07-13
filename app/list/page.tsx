@@ -45,6 +45,9 @@ export default function OrderList() {
   const [editingOrder, setEditingOrder] = useState<any>(null)
   const [userBranch, setUserBranch] = useState<string>('')
 
+  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [globalSearch, setGlobalSearch] = useState<string>('');
+
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; order: any } | null>(null)
   const [previewImage, setPreviewImage] = useState<string | null>(null) 
   const [imgScale, setImgScale] = useState<number>(1)
@@ -142,12 +145,15 @@ useEffect(() => {
   const [colFilters, setColFilters] = useState<Record<string, string>>({})
 
 
-  const fetchData = async (branchCode?: string) => {
+  // 💡 (အစားထိုးရန်) fetchData Function အသစ်
+  const fetchData = async (branchCode?: string, dateStr?: string, searchStr?: string) => {
     const activeBranch = branchCode || userBranch;
     if (!activeBranch) return;
 
-    setLoading(true)
-    const { data, error } = await supabase
+    setLoading(true);
+
+    // အခြေခံ Query (Branch ကိုသာ စစ်ထားသည်)
+    let query = supabase
       .from('orders')
       .select(`
         *,
@@ -156,11 +162,25 @@ useEffect(() => {
       `)
       .eq('is_deleted', false)
       .eq('branch', activeBranch)
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: false });
 
-    if (error) console.error(error)
-    else setOrders(data || [])
-    setLoading(false)
+    // Search စာသားရှိရင် Database တစ်ခုလုံးထဲက ရှာမည်၊ မရှိရင် Date နဲ့ပဲ စစ်ထုတ်မည်
+    if (searchStr && searchStr.trim() !== '') {
+      const s = searchStr.trim();
+      // ID, Phone, Name တစ်ခုခုနဲ့ တူတာရှိရင် ဆွဲထုတ်မည့် Logic
+      query = query.or(`item_id.ilike.%${s}%,receiver_phone.ilike.%${s}%,receiver_name.ilike.%${s}%,sender_name.ilike.%${s}%`);
+    } else {
+      const activeDate = dateStr || selectedDate;
+      if (activeDate) {
+        query = query.eq('received_date', activeDate);
+      }
+    }
+
+    const { data, error } = await query;
+    if (error) console.error(error);
+    else setOrders(data || []);
+    
+    setLoading(false);
   }
 
   const fetchRiders = async () => {
@@ -174,10 +194,21 @@ useEffect(() => {
       router.push('/login')
     } else {
       setUserBranch(storedBranch)
-      fetchData(storedBranch)
       fetchRiders()
     }
   }, [router])
+
+  // 💡 (အသစ်ထည့်ရန်) Date သို့မဟုတ် Search ပြောင်းလဲတိုင်း Data Auto ဆွဲမည့် Effect
+  useEffect(() => {
+    if (!userBranch) return;
+    
+    // Search ရိုက်ထည့်နေစဉ် Database သို့ ဆက်တိုက်မသွားစေရန် 500ms Delay (Debounce) ခံထားခြင်း
+    const timer = setTimeout(() => {
+      fetchData(userBranch, selectedDate, globalSearch);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [selectedDate, globalSearch, userBranch]);
 
   useEffect(() => {
     const handleCloseMenu = () => setContextMenu(null)
@@ -186,16 +217,7 @@ useEffect(() => {
   }, [])
 
   const filteredOrders = orders.filter(o => {
-    // 📱 Mobile Global Search Logics
-    if (colFilters['global_search']) {
-      const query = colFilters['global_search'].toLowerCase()
-      const isMatch = 
-        String(o.item_id || '').toLowerCase().includes(query) ||
-        String(o.receiver_phone || '').toLowerCase().includes(query) ||
-        String(o.receiver_name || '').toLowerCase().includes(query) ||
-        String(o.sender_name || '').toLowerCase().includes(query)
-      if (!isMatch) return false
-    }
+    
 
     // 💻 Desktop Grid Filter Logics
     return Object.keys(colFilters).every(key => {
@@ -331,9 +353,16 @@ useEffect(() => {
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500" />
           </span>
           <div>
-            <h1 className="text-base font-semibold text-gray-900 tracking-wide uppercase">
-              {userBranch === 'MDY' ? 'Mandalay' : userBranch === 'YGN' ? 'Yangon' : 'Main'} Office
-            </h1>
+            <h1 className="text-base font-semibold text-gray-900 tracking-wide flex items-center gap-2">
+  <span className="uppercase">{userBranch === 'MDY' ? 'Mandalay' : userBranch === 'YGN' ? 'Yangon' : 'Main'} Office</span>
+  
+  <input 
+    type="date" 
+    value={selectedDate}
+    onChange={(e) => setSelectedDate(e.target.value)}
+    className="ml-2 text-sm font-medium border border-gray-300 rounded-md px-2 py-1 text-gray-700 bg-white focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 shadow-sm cursor-pointer"
+  />
+</h1>
             <p className="text-[11px] text-gray-500 font-medium hidden sm:block">Order Management · Right-click row for actions</p>
             <p className="text-[11px] text-gray-500 font-medium sm:hidden">Order Management · Tap 3-dots for actions</p>
           </div>
@@ -415,12 +444,12 @@ useEffect(() => {
   <div className="px-3 py-2 flex items-center gap-2">
     <div className="relative flex-1">
       <input 
-        type="text" 
-        placeholder="🔍 ID၊ ဖုန်း၊ အမည်ဖြင့် ရှာရန်..." 
-        className="w-full bg-gray-50 border border-gray-200 rounded-md pl-8 pr-3 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-orange-500 focus:bg-white"
-        value={colFilters['global_search'] || ''}
-        onChange={e => setColFilters(prev => ({ ...prev, global_search: e.target.value }))}
-      />
+  type="text" 
+  placeholder="🔍 ID၊ ဖုန်း၊ အမည်ဖြင့် Database တစ်ခုလုံးမှ ရှာရန်..." 
+  className="w-full bg-gray-50 border border-gray-200 rounded-md pl-8 pr-3 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-orange-500 focus:bg-white"
+  value={globalSearch}
+  onChange={e => setGlobalSearch(e.target.value)}
+/>
     </div>
     <button 
       onClick={() => setShowMobileFilters(!showMobileFilters)}
