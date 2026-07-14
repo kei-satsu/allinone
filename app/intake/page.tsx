@@ -10,6 +10,62 @@ import useImage from 'use-image';
 import EasyCrop, { Area } from 'react-easy-crop';
 import { Scanner } from '@yudiel/react-qr-scanner'; 
 
+
+
+// ─── INDEXEDDB OFFLINE STORAGE ENGINE ───
+const DB_NAME = 'AllInOne_OfflineIntake';
+const STORE_NAME = 'pending_uploads';
+
+const openOfflineDB = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+};
+
+// Queue ထဲသို့ ဒေတာ သိမ်းဆည်းခြင်း
+const saveToOfflineQueue = async (item: any) => {
+  const db = await openOfflineDB();
+  return new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.put(item);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+};
+
+// Queue ထဲရှိ ဒေတာအားလုံးကို ဆွဲထုတ်ခြင်း
+const getOfflineQueue = async (): Promise<any[]> => {
+  const db = await openOfflineDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.getAll();
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+};
+
+// အောင်မြင်စွာ တင်ပြီးသွားသော Record ကို ဖျက်ထုတ်ခြင်း
+const deleteFromOfflineQueue = async (id: string) => {
+  const db = await openOfflineDB();
+  return new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.delete(id);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+};
+
 // Telegram သို့ ပုံပို့ရန် Server Route ခေါ်ယူခြင်း
 const sendToTelegram = async (imageUrl: string, note: string, barcode: string | undefined, branch: string) => {
   console.log("Sending to Telegram via Server Route...", { branch });
@@ -69,6 +125,22 @@ export default function IntakePage() {
   const [isBackgroundUploading, setIsBackgroundUploading] = useState(false);
   const [backgroundUploadCount, setBackgroundUploadCount] = useState(0); 
   const [backgroundUploadStatus, setBackgroundUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+
+  const clearAllOfflineQueue = async () => {
+  const db = await openOfflineDB();
+  return new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.clear(); // Queue ထဲရှိသမျှ အကုန်ဖျက်ပစ်ခြင်း
+    request.onsuccess = () => {
+      setBackgroundUploadStatus('idle');
+      setBackgroundUploadCount(0);
+      resolve();
+      alert('မတင်ရသေးသော Offline Queue စာရင်းအားလုံးကို ဖျက်ပစ်လိုက်ပါပြီဗျာ။');
+    };
+    request.onerror = () => reject(request.error);
+  });
+};
 
   // Camera Config
   const [cameraActive, setCameraActive] = useState(false);
@@ -169,6 +241,18 @@ export default function IntakePage() {
   useEffect(() => {
     setHideMobileDock(flowMode === 'camera');
   }, [flowMode, setHideMobileDock]);
+
+  // 🌟 Web App ကို စဖွင့်လိုက်တိုင်း တင်ရန်ကျန်နေခဲ့သော Offline Queue စာရင်းဟောင်းများကို စစ်ဆေးခြင်း
+  useEffect(() => {
+    const checkUnfinishedUploads = async () => {
+      const remainingQueue = await getOfflineQueue();
+      if (remainingQueue.length > 0) {
+        setBackgroundUploadCount(remainingQueue.length);
+        setBackgroundUploadStatus('error'); // အနီရောင် Status ပြထားပြီး ဝန်ထမ်းကို Retry နှိပ်ခွင့်ပြုမည်
+      }
+    };
+    checkUnfinishedUploads();
+  }, []);
 
   // Sound System (Beep & Shutter)
   const playBeepSound = () => {
@@ -378,24 +462,37 @@ export default function IntakePage() {
     document.body.removeChild(link);
   };
 
-  // 🌟 [Race Condition Fix] သီးခြား Parameter များဖြင့် နောက်ကွယ်မှ အလုပ်လုပ်မည့် Function
-  const startBackgroundUpload = async (finalImages: CapturedFile[], currentBatchNote: string, currentReceivedDate: string) => {
+  // 🌟 [Core Engine] ဒေတာနှင့် ဓာတ်ပုံ တစ်တွဲတည်း အောင်မြင်မှ Queue ထဲက ဖျက်မည့် စနစ်
+  // 🌟 Database အောင်မြင်မှ Telegram ပို့ပြီး Queue ထဲကဖျက်မည့် စနစ်သစ်
+  const processOfflineQueue = async () => {
+    if (isBackgroundUploading) return;
+
+    const pendingItems = await getOfflineQueue();
+    if (pendingItems.length === 0) {
+      setBackgroundUploadStatus('idle');
+      return;
+    }
+
     setIsBackgroundUploading(true);
-    setBackgroundUploadCount(finalImages.length);
+    setBackgroundUploadCount(pendingItems.length);
     setBackgroundUploadStatus('uploading');
 
     try {
       const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'YOUR_CLOUD_NAME'; 
       const uploadPreset = 'for_allinone'; 
 
-      for (let i = 0; i < finalImages.length; i++) {
-        const imgObj = finalImages[i];
-        let fileToUpload = imgObj.file;
+      for (const item of pendingItems) {
+        let fileToUpload = item.file;
 
-        if (imgObj.textAnnotations.length > 0) {
-          fileToUpload = (await bakeImageWithText(imgObj)) as File;
+        // Bake Text Logic (ရှိခဲ့လျှင်)
+        if (item.textAnnotations && item.textAnnotations.length > 0) {
+          const temporaryPreviewUrl = URL.createObjectURL(item.file);
+          const adaptedItem = { ...item, preview: temporaryPreviewUrl };
+          fileToUpload = (await bakeImageWithText(adaptedItem)) as File;
+          URL.revokeObjectURL(temporaryPreviewUrl);
         }
 
+        // ─── အဆင့် (၁) - CLOUDINARY သို့ ဓာတ်ပုံအရင်တင်ခြင်း ───
         const formData = new FormData();
         formData.append('file', fileToUpload);
         formData.append('upload_preset', uploadPreset);
@@ -412,71 +509,83 @@ export default function IntakePage() {
         const cloudinaryData = await response.json();
         const secureUrl = cloudinaryData.secure_url; 
 
-        console.log("Telegram ပို့ရန် ကြိုးစားနေသည်..."); 
-        await sendToTelegram(secureUrl, currentBatchNote, imgObj.barcode, userBranch);
-        console.log("Telegram ပို့ပြီးပါပြီ။");
-
+        // ─── အဆင့် (၂) - SUPABASE DATABASE ထဲသို့ အရင်ဆုံး စာရင်းသွင်းခြင်း ───
+        // (ဒီနေရာကို အပေါ်သို့ ရွှေ့လိုက်ပါသည်)
         const { error: dbError } = await supabase
           .from('orders')
           .insert([
             {
               image_url: secureUrl,                                  
-              branch: userBranch,                                    
+              branch: item.branch,                                    
               status: 'Pending',                                     
-              received_date: currentReceivedDate, 
-              uploader_note: currentBatchNote || null,                      
-              barcode: imgObj.barcode || null,                       
+              received_date: item.received_date, 
+              uploader_note: item.uploader_note || null,                      
+              barcode: item.barcode || null,                       
             },
           ]);
 
+        // အကယ်၍ DB ထဲသွင်းတာ Error တက်ရင် အောက်က Telegram အဆင့်ကို ဆက်မသွားဘဲ ဒီမှာတင် ရပ်ပစ်ပါမည်
         if (dbError) {
           console.error("Supabase Database Insert Error:", dbError);
-          throw dbError;
+          throw dbError; 
         }
+
+        // ─── အဆင့် (၃) - DATABASE အောင်မြင်မှ TELEGRAM သို့ လှမ်းပို့ခြင်း ───
+        // (DB အောင်မြင်ပြီးမှ ဤကုဒ်အလုပ်လုပ်ပါမည်)
+        await sendToTelegram(secureUrl, item.uploader_note, item.barcode, item.branch);
+
+        // ─── အဆင့် (၄) - အားလုံး ရာနှုန်းပြည့်အောင်မြင်မှ ဖုန်းထဲက Queue ကို ဖျက်ခြင်း ───
+        await deleteFromOfflineQueue(item.id);
+        
+        setBackgroundUploadCount(prev => Math.max(0, prev - 1));
       }
 
       setBackgroundUploadStatus('success');
     } catch (error) {
-      console.error('Background Upload Queue Error:', error);
+      console.error('Queue Processing Error:', error);
       setBackgroundUploadStatus('error');
-      
-      const userWantsToRetry = window.confirm(
-        "ပုံတင်လို့ အဆင်မပြေဖြစ်နေပါတယ်။ \n\n" +
-        "OK နှိပ်လျှင် - ထပ်မံကြိုးစားပါမည်။ \n" +
-        "Cancel နှိပ်လျှင် - ပုံများကို ဖုန်းထဲသို့ Save လုပ်ပါမည်။"
-      );
-
-      if (userWantsToRetry) {
-  startBackgroundUpload(finalImages, currentBatchNote, currentReceivedDate); 
-} else {
-        finalImages.forEach((img) => {
-          saveToDevice(img.preview, `parcel_${img.id}.jpg`);
-        });
-        alert('ပုံများကို ဖုန်း၏ Download folder ထဲသို့ သိမ်းဆည်းပြီးပါပြီ။');
-      }
     } finally {
       setIsBackgroundUploading(false);
+      
+      const remaining = await getOfflineQueue();
+      if (remaining.length > 0) {
+        setBackgroundUploadStatus('error');
+      }
     }
   };
 
-  // 🌟 [Race Condition Fix] နှိပ်လိုက်သည်နှင့် လက်ရှိ State များကို ချက်ချင်း Clear စေမည့် စနစ်
+  // 🌟 ဒေတာနှင့် ပုံကို ခွဲမထွက်စေဘဲ Local Queue ထဲ အရင်သိမ်းဆည်းမည့် စနစ်
   const handleFinalSubmit = async () => {
     if (capturedImages.length === 0) return alert('ဓာတ်ပုံ အနည်းဆုံး ၁ ပုံ ရိုက်ပေးပါဗျာ');
     
-    const imagesToUpload = [...capturedImages];
-    const noteToUpload = batchNote; 
-    const dateToUpload = receivedDate;
+    // တစ်ပုံချင်းစီကို တစ်ခုချင်းစီစီမံနိုင်အောင် ခွဲထုတ်ပြီး Queue Item ပြုလုပ်ခြင်း
+    for (const img of capturedImages) {
+      const queueItemId = `queue_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      
+      const offlineItem = {
+        id: queueItemId,
+        file: img.file, // Native File (Binary Object) ကို IndexedDB က တိုက်ရိုက်သိမ်းပေးနိုင်ပါသည်
+        barcode: img.barcode || null,
+        textAnnotations: img.textAnnotations || [],
+        branch: userBranch,
+        received_date: receivedDate,
+        uploader_note: batchNote || null
+      };
 
-    // UI & State အားလုံးကို ဒုတိယအကြိမ် ထပ်မံရိုက်ကူးနိုင်ရန် ချက်ချင်း Clear လုပ်ပြီး ဖယ်ထုတ်ပေးလိုက်ပါသည်
+      // Browser Storage ထဲသို့ သိမ်းဆည်းခြင်း
+      await saveToOfflineQueue(offlineItem);
+    }
+
+    // UI & State အားလုံးကို ဒုတိယအကြိမ် ထပ်မံရိုက်ကူးနိုင်ရန် ချက်ချင်း Clear လုပ်ပါသည်
     setCapturedImages([]); 
     setBatchNote('');
     setReceivedDate(new Date().toISOString().split('T')[0]);
     setFlowMode('camera');
     setIntakeMethod('choose');
-    
-    // နောက်ကွယ် လုပ်ငန်းစဉ်သို့ ဒေတာများကို သီးခြား ပေးပို့လုပ်ဆောင်စေပါသည်
-    startBackgroundUpload(imagesToUpload, noteToUpload, dateToUpload);
-    alert('ပါဆယ်မှတ်တမ်းများကို နောက်ကွယ် (Background) မှ စတင်အပ်ဒိတ်လုပ်နေပါပြီဗျာ။');
+
+    // နောက်ကွယ်မှ စတင်တင်ပေးမည့် စနစ်ကို လှမ်းခေါ်ခြင်း
+    processOfflineQueue();
+    alert('ပါဆယ်မှတ်တမ်းများကို Queue ထဲသို့ စိတ်ချစွာသိမ်းဆည်းပြီး၊ နောက်ကွယ်မှ စတင်တင်နေပါပြီဗျာ။');
   };
 
   return (
@@ -502,6 +611,29 @@ export default function IntakePage() {
               {backgroundUploadStatus === 'error' && '❌ ပုံတင်ရန် အဆင်မပြေပါ။ လိုင်းစစ်ဆေးပေးပါဗျာ။'}
             </span>
           </div>
+          {backgroundUploadStatus === 'error' && (
+              <div className="flex gap-2">
+    <button
+      onClick={processOfflineQueue}
+      className="text-[10px] font-black bg-gradient-to-r from-orange-500 to-amber-500 px-3 py-1.5 rounded-lg text-white"
+    >
+      🔄 Retry Upload
+    </button>
+    
+    {/* 🌟 တမင်ဖျက်ပစ်ချင်လျှင် သုံးရန် Discard Button */}
+    <button
+      onClick={() => {
+        if(confirm("တင်ရန်ကျန်နေသော ပါဆယ်စာရင်းများကို တကယ်ပဲ ဖျက်ပစ်မလားဗျာ?")) {
+          clearAllOfflineQueue();
+        }
+      }}
+      className="text-[10px] font-bold bg-red-600 px-2 py-1.5 rounded-lg text-white border border-red-700 active:scale-95"
+    >
+      🗑️ စာရင်းဖျက်ပစ်မည်
+    </button>
+  </div>
+              
+            )}
           {backgroundUploadStatus !== 'uploading' && (
             <button 
               onClick={() => setBackgroundUploadStatus('idle')} 
