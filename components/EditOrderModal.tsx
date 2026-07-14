@@ -527,6 +527,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                       <option value="On Way">🚵 On Way</option>
                       <option value="Delivered">✅ Delivered</option>
                       <option value="In-Transit">🚚 In-Transit</option>
+                      <option value="Returned">↗️ Returned</option>
                   </select>
                 </div>
                 <div>
