@@ -37,17 +37,17 @@ export default function SendersDashboard() {
   }, [activeTab, activeBranch, selectedSender]);
 
   // 💡 အကောင့်ဝင်ထားသူသည် Admin ဟုတ်/မဟုတ် စစ်ဆေးရန် useEffect
-useEffect(() => {
-  const checkUserRole = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user?.user_metadata) {
-      // user_metadata ထဲက branch တန်ဖိုးကို ယူသည် (ဥပမာ- "ADMIN", "MDY", "YGN")
-      setRealBranch(session.user.user_metadata.branch || "MDY");
-    }
-  };
-  
-  checkUserRole();
-}, []);
+  useEffect(() => {
+    const checkUserRole = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.user_metadata) {
+        // user_metadata ထဲက branch တန်ဖိုးကို ယူသည် (ဥပမာ- "ADMIN", "MDY", "YGN")
+        setRealBranch(session.user.user_metadata.branch || "MDY");
+      }
+    };
+    
+    checkUserRole();
+  }, []);
 
   // 🌟 ၁။ Senders List ဆွဲထုတ်စဉ်မှာတင် သက်ဆိုင်ရာ Orders အခြေအနေကို ပါဝင်စစ်ဆေးပြီး အမှန်တကယ် ကျန်/မကျန် တွက်ချက်ခြင်း
   const fetchSenders = async () => {
@@ -69,9 +69,9 @@ useEffect(() => {
           (o: any) => o.status === "Delivered" && !o.cleared_date
         ).length || 0;
         
-        // 💡 မပို့ရသေးသည့်အထုပ် (Status က Delivered မဟုတ်တာ အားလုံး)
+        // 💡 မပို့ရသေးသည့်အထုပ် (Status က Delivered မဟုတ်တာ အားလုံးထဲမှ စာရင်းမရှင်းရသေးတာ)
         const notDeliveredCount = sender.orders?.filter(
-          (o: any) => o.status !== "Delivered"
+          (o: any) => o.status !== "Delivered" 
         ).length || 0;
         
         return {
@@ -167,7 +167,7 @@ useEffect(() => {
   );
   const clearedOrders = filteredOrders.filter((o) => o.cleared_date);
 
-  // 💡 Not Delivered အထုပ်များ ခွဲထုတ်ခြင်း
+  // 💡 Not Delivered အထုပ်များထဲမှ Cleared Date မရှိသေးသည့်အထုပ်များ (စာရင်းမရှင်းရသေးသော Not Delivered များ)
   const notDeliveredOrders = filteredOrders.filter(
     (o) => o.status !== "Delivered"
   );
@@ -201,7 +201,14 @@ useEffect(() => {
     }
   };
 
-  const totalSelectedCod = unclearedOrders
+  const getDisplayOrders = () => {
+    if (activeTab === "uncleared") return unclearedOrders;
+    if (activeTab === "cleared") return clearedOrders;
+    return notDeliveredOrders; // "not_delivered" ဖြစ်လျှင် ပြရန်
+  };
+
+  // 💡 လက်ရှိ ရွေးချယ်ထားသော ပုံးများ၏ စုစုပေါင်း COD တန်ဖိုးကို Dynamic တွက်ချက်ခြင်း
+  const totalSelectedCod = getDisplayOrders()
     .filter((o) => selectedOrderIds.includes(o.id))
     .reduce((sum, o) => sum + (Number(o.cod_amount) || 0), 0);
 
@@ -211,12 +218,6 @@ useEffect(() => {
     if (selectedSender) {
       handleSenderClick(selectedSender);
     }
-  };
-  
-  const getDisplayOrders = () => {
-    if (activeTab === "uncleared") return unclearedOrders;
-    if (activeTab === "cleared") return clearedOrders;
-    return notDeliveredOrders; // "not_delivered" ဖြစ်လျှင် ပြရန်
   };
 
   return (
@@ -361,12 +362,12 @@ useEffect(() => {
                     </p>
                   </div>
                   {realBranch === "ADMIN" && (
-                  <button
-                    onClick={() => { setModalMode("edit"); setIsModalOpen(true); }}
-                    className="px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold shadow-sm transition-colors"
-                  >
-                    ✏️ Edit Sender Info
-                  </button>
+                    <button
+                      onClick={() => { setModalMode("edit"); setIsModalOpen(true); }}
+                      className="px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold shadow-sm transition-colors"
+                    >
+                      ✏️ Edit Sender Info
+                    </button>
                   )}
                 </div>
 
@@ -426,8 +427,8 @@ useEffect(() => {
 
                 </div>
 
-                {/* Date Picker Action Bar */}
-                {activeTab === "uncleared" && selectedOrderIds.length > 0 && (
+                {/* 💡 Date Picker Action Bar (Uncleared နှင့် Not Delivered နှစ်မျိုးလုံးတွင် ပြသမည်) */}
+                {(activeTab === "uncleared" || activeTab === "not_delivered") && selectedOrderIds.length > 0 && (
                   <div className="bg-orange-50 border-b border-orange-100 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 animate-fadeIn">
                     <div className="text-xs font-semibold text-orange-800">
                       Selected: <span className="font-mono bg-orange-200/60 px-1.5 py-0.5 rounded text-orange-700">{selectedOrderIds.length}</span> ထုပ် | 
@@ -437,7 +438,7 @@ useEffect(() => {
                       <input
                         type="date"
                         value={clearedDateInput}
-                        onChange={(e) => setClearedDateInput(e.target.value)} // 💡 Fix typo 'e.with.value' to 'e.target.value'
+                        onChange={(e) => setClearedDateInput(e.target.value)}
                         className="px-3 py-1.5 bg-white border border-orange-200 rounded-xl text-xs font-semibold text-slate-800"
                       />
                       <button
@@ -451,20 +452,21 @@ useEffect(() => {
                   </div>
                 )}
 
-                {/* ─── 💡 Table Layout With Proper Curly Braces `{ }` ─── */}
+                {/* Table Layout */}
                 <div className="flex-1 overflow-auto custom-scrollbar">
                   {getDisplayOrders().length > 0 ? (
                     <table className="w-full text-left border-collapse whitespace-nowrap">
                       <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-100 sticky top-0 z-10 shadow-sm">
                         <tr>
-                          {activeTab === "uncleared" && (
+                          {/* 💡 Checkbox to select all (Uncleared & Not Delivered နှစ်မျိုးလုံးအတွက် အလုပ်လုပ်သည်) */}
+                          {(activeTab === "uncleared" || activeTab === "not_delivered") && (
                             <th className="px-4 py-3 text-center w-12">
                               <input
                                 type="checkbox"
-                                checked={unclearedOrders.length > 0 && selectedOrderIds.length === unclearedOrders.length}
+                                checked={getDisplayOrders().length > 0 && selectedOrderIds.length === getDisplayOrders().length}
                                 onChange={(e) => {
                                   if (e.target.checked) {
-                                    setSelectedOrderIds(unclearedOrders.map((o) => o.id));
+                                    setSelectedOrderIds(getDisplayOrders().map((o) => o.id));
                                   } else {
                                     setSelectedOrderIds([]);
                                   }
@@ -487,7 +489,8 @@ useEffect(() => {
                       <tbody className="divide-y divide-slate-100 text-slate-700 text-xs font-medium">
                         {getDisplayOrders().map((order, index) => (
                           <tr key={order.id || index} className="hover:bg-slate-50/60 transition-colors">
-                            {activeTab === "uncleared" && (
+                            {/* 💡 Row Selection Checkbox (Uncleared & Not Delivered နှစ်မျိုးလုံးအတွက် ပြသရန်) */}
+                            {(activeTab === "uncleared" || activeTab === "not_delivered") && (
                               <td className="px-4 py-3.5 text-center">
                                 <input
                                   type="checkbox"
