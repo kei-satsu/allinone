@@ -1071,7 +1071,7 @@ const tableDeliFeeTotal = officePaidTotal + billdeliTotal;
 <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col gap-3 h-full">
   <div className="border-b border-gray-100 pb-2 shrink-0">
     <h2 className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
-      💰 COD ခွဲဝေမှု စာရင်း
+       COD ခွဲဝေမှု စာရင်း
     </h2>
   </div>
 
