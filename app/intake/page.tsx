@@ -97,6 +97,103 @@ interface CapturedFile {
   barcode?: string; 
 }
 
+type IconProps = {
+  className?: string;
+};
+
+const IconPackage = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M3.5 7.5 12 3l8.5 4.5" />
+    <path d="M12 3v18" />
+    <path d="M3.5 7.5v9L12 21l8.5-4.5v-9" />
+  </svg>
+);
+
+const IconCamera = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M4 8h2.5a2 2 0 0 0 1.7-.9l.8-1.2a2 2 0 0 1 1.7-.9h3.6a2 2 0 0 1 1.7.9l.8 1.2a2 2 0 0 0 1.7.9H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2Z" />
+    <circle cx="12" cy="13" r="3.5" />
+  </svg>
+);
+
+const IconScan = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+    <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+    <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+    <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+    <path d="M7 12h10" />
+  </svg>
+);
+
+const IconImage = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <rect x="3" y="5" width="18" height="14" rx="2" />
+    <circle cx="9" cy="10" r="1.5" />
+    <path d="m21 15-4.5-4.5L7 19" />
+  </svg>
+);
+
+const IconArrowLeft = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="m15 18-6-6 6-6" />
+  </svg>
+);
+
+const IconSwitchCamera = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M4 8h12" />
+    <path d="m8 4 4 4-4 4" />
+    <path d="M20 16H8" />
+    <path d="m16 20-4-4 4-4" />
+  </svg>
+);
+
+const IconArrowRight = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="m9 18 6-6-6-6" />
+  </svg>
+);
+
+const IconTrash = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M3 6h18" />
+    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+    <path d="M10 11v6" />
+    <path d="M14 11v6" />
+  </svg>
+);
+
+const IconRefresh = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M21 12a9 9 0 1 1-3.5-7.2" />
+    <path d="M21 3v6h-6" />
+  </svg>
+);
+
+const IconCheck = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M20 6 9 17l-5-5" />
+  </svg>
+);
+
+const IconAlert = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M12 3 2 19h20L12 3Z" />
+    <path d="M12 9v4" />
+    <path d="M12 17h.01" />
+  </svg>
+);
+
+const IconUpload = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M12 3v12" />
+    <path d="m7 8 5-5 5 5" />
+    <path d="M5 14v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" />
+  </svg>
+);
+
 export default function IntakePage() {
   const router = useRouter();
   
@@ -295,17 +392,59 @@ export default function IntakePage() {
     } catch(e) {}
   };
 
-  // Barcode ဖတ်မိသည့်အခါ လုပ်ဆောင်ချက်
+ // 🌟 Barcode ဖတ်မိသည့်အခါ အသုံးပြုပြီးသား ဟုတ်/မဟုတ် အရင်စစ်ဆေးသည့် စနစ်သစ်
   const handleCameraScan = async (detectedCodes: any[]) => {
     if (detectedCodes.length === 0 || cameraLoading) return;
     const value = detectedCodes[0].rawValue;
     if (!value) return;
 
+    // ၁။ Scanner ကို ဒုတိယအကြိမ် ထပ်မဖတ်အောင် ခေတ္တပိတ်ထားမည်
     setCameraLoading(true);
-    playBeepSound(); 
-    setCurrentScannedBarcode(value); 
-    setBarcodeStep('capturing'); 
-    setCameraLoading(false);
+
+    try {
+      // ၂။ Supabase Database ရဲ့ orders table ထဲမှာ ဒီ barcode ရှိနှင့်ပြီးသားလား လှမ်းစစ်ခြင်း
+      const { data, error } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('barcode', value)
+        .maybeSingle(); // စာရင်းရှိရင် Object ပြန်လာမည်၊ မရှိရင် null ပြန်လာမည်
+
+      if (error) throw error;
+
+      // ၃။ အကယ်၍ စာရင်းရှိနေလျှင် (အသုံးပြုပြီးသား ဖြစ်နေလျှင်)
+      if (data) {
+        playBeepSound(); // သတိပေးသံ တီးပေးခြင်း
+        
+        // ဝန်ထမ်းထံ Alert Message ပြသခြင်း
+        alert(`⚠️ အသုံးပြုပြီးသား Barcode [${value}] ဖြစ်နေပါသည်!\nနောက်တစ်ခု ပြောင်းလဲဖတ်ပေးပါဗျာ။`);
+        
+        // စာရင်းတွေကို Reset လုပ်ပြီး Scanning အဆင့်မှာပဲ ဆက်ထားမည်
+        setCurrentScannedBarcode('');
+        setBarcodeStep('scanning');
+        setCameraLoading(false); // Scanner ပြန်ဖွင့်ပေးခြင်း
+        return; // အောက်က ဓာတ်ပုံရိုက်မည့် အဆင့်ကို ဆက်မသွားတော့ဘဲ ဒီမှာတင် ရပ်ပစ်ခြင်း
+      }
+
+      // ၄။ အကယ်၍ ဒေတာဘေ့စ်ထဲမှာ မရှိသေးသော Barcode အသစ်ဖြစ်လျှင် (ပုံမှန်အတိုင်း ရှေ့ဆက်သွားမည်)
+      playBeepSound(); 
+      setCurrentScannedBarcode(value); 
+      setBarcodeStep('capturing'); // ဓာတ်ပုံရိုက်ကူးရန် ကင်မရာစာမျက်နှာသို့ သွားမည်
+      
+    } catch (err) {
+      console.error("Barcode Verification Error:", err);
+      
+      // ⚠️ လိုင်းမကောင်းလို့ သို့မဟုတ် Offline ဖြစ်နေလို့ Error တက်ခဲ့လျှင်-
+      // နည်းလမ်း (၁) - ပါဆယ်စာရင်း ကွဲလွဲမှုမရှိစေရန် အွန်လိုင်းမှပဲ စစ်ပြီးမှ ပေးဖြတ်မည်
+      alert("⚠️ Barcode စစ်ဆေးရတာ အဆင်မပြေပါ။ အင်တာနက်လိုင်းကို ပြန်လည်စစ်ဆေးပေးပါဗျာ။");
+      
+      // နည်းလမ်း (၂) - အကယ်၍ Offline Mode မှာ စစ်စရာမလိုဘဲ တန်းပေးဖြတ်ချင်ရင် အပေါ်က Alert ကိုပိတ်ပြီး အောက်ကအတိုင်း ဖွင့်ပေးနိုင်ပါတယ်
+      /*
+      setCurrentScannedBarcode(value); 
+      setBarcodeStep('capturing');
+      */
+    } finally {
+      setCameraLoading(false);
+    }
   };
 
   // ဖုန်းပြခန်း (Gallery) မှ ပုံရွေးချယ်တင်ခြင်း
@@ -599,41 +738,47 @@ export default function IntakePage() {
           'bg-red-500/10 border-red-500/30 text-red-400 shadow-red-500/5'
         }`}>
           <div className="flex items-center gap-3">
-            {backgroundUploadStatus === 'uploading' && (
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-              </span>
+            {backgroundUploadStatus === 'uploading' ? (
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/15">
+                <IconUpload className="h-4 w-4 text-amber-400" />
+              </div>
+            ) : backgroundUploadStatus === 'success' ? (
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/15">
+                <IconCheck className="h-4 w-4 text-emerald-400" />
+              </div>
+            ) : (
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-500/15">
+                <IconAlert className="h-4 w-4 text-red-400" />
+              </div>
             )}
             <span>
               {backgroundUploadStatus === 'uploading' && `ပါဆယ်ပုံရိပ်များ တင်နေဆဲ... ကျန် (${backgroundUploadCount} ပုံ)`}
-              {backgroundUploadStatus === 'success' && '✨ ပါဆယ်မှတ်တမ်းများ အားလုံး အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။'}
-              {backgroundUploadStatus === 'error' && '❌ ပုံတင်ရန် အဆင်မပြေပါ။ လိုင်းစစ်ဆေးပေးပါဗျာ။'}
+              {backgroundUploadStatus === 'success' && 'ပါဆယ်မှတ်တမ်းများ အားလုံး အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။'}
+              {backgroundUploadStatus === 'error' && 'ပုံတင်ရန် အဆင်မပြေပါ။ လိုင်းစစ်ဆေးပေးပါဗျာ။'}
             </span>
           </div>
           {backgroundUploadStatus === 'error' && (
-              <div className="flex gap-2">
-    <button
-      onClick={processOfflineQueue}
-      className="text-[10px] font-black bg-gradient-to-r from-orange-500 to-amber-500 px-3 py-1.5 rounded-lg text-white"
-    >
-      🔄 Retry Upload
-    </button>
-    
-    {/* 🌟 တမင်ဖျက်ပစ်ချင်လျှင် သုံးရန် Discard Button */}
-    <button
-      onClick={() => {
-        if(confirm("တင်ရန်ကျန်နေသော ပါဆယ်စာရင်းများကို တကယ်ပဲ ဖျက်ပစ်မလားဗျာ?")) {
-          clearAllOfflineQueue();
-        }
-      }}
-      className="text-[10px] font-bold bg-red-600 px-2 py-1.5 rounded-lg text-white border border-red-700 active:scale-95"
-    >
-      🗑️ စာရင်းဖျက်ပစ်မည်
-    </button>
-  </div>
-              
-            )}
+            <div className="flex gap-2">
+              <button
+                onClick={processOfflineQueue}
+                className="inline-flex items-center gap-1.5 text-[10px] font-black bg-gradient-to-r from-orange-500 to-amber-500 px-3 py-1.5 rounded-lg text-white"
+              >
+                <IconRefresh className="h-3.5 w-3.5" />
+                Retry Upload
+              </button>
+              <button
+                onClick={() => {
+                  if(confirm('တင်ရန်ကျန်နေသော ပါဆယ်စာရင်းများကို တကယ်ပဲ ဖျက်ပစ်မလားဗျာ?')) {
+                    clearAllOfflineQueue();
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 text-[10px] font-bold bg-red-600 px-2 py-1.5 rounded-lg text-white border border-red-700 active:scale-95"
+              >
+                <IconTrash className="h-3.5 w-3.5" />
+                စာရင်းဖျက်ပစ်မည်
+              </button>
+            </div>
+          )}
           {backgroundUploadStatus !== 'uploading' && (
             <button 
               onClick={() => setBackgroundUploadStatus('idle')} 
@@ -647,35 +792,41 @@ export default function IntakePage() {
 
       {/* METHOD SELECTION SCREEN (UI/UX UPGRADED) */}
       {intakeMethod === 'choose' && (
-        <div className="flex-1 flex flex-col items-center justify-center p-6 bg-gradient-to-b from-neutral-900 via-neutral-950 to-black text-center animate-fade-in">
-          <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-amber-500 rounded-3xl flex items-center justify-center mb-6 shadow-xl shadow-orange-500/10 rotate-3 hover:rotate-0 transition-transform duration-300">
-            <svg className="w-9 h-9 text-neutral-950" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
-            </svg>
+        <div className="flex-1 flex flex-col items-center justify-center p-6 bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.16),_transparent_45%),linear-gradient(135deg,_#09090b,_#111114,_#020202)] text-center animate-fade-in">
+          <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-[1.75rem] bg-gradient-to-br from-orange-500 to-amber-400 shadow-[0_18px_50px_rgba(249,115,22,0.2)] ring-1 ring-white/10">
+            <IconPackage className="h-9 w-9 text-neutral-950" />
           </div>
-          <h2 className="text-2xl font-extrabold bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent mb-1 tracking-wider uppercase">ALL IN ONE EXPRESS</h2>
-          <p className="text-gray-500 text-xs mb-10 max-w-xs font-medium">ပါဆယ်မှတ်တမ်း မစတင်မီ အသုံးပြုမည့် စနစ်ကို ရွေးချယ်ပေးပါ</p>
+          <h2 className="mb-1 text-2xl font-extrabold uppercase tracking-[0.24em] text-transparent bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text">ALL IN ONE EXPRESS</h2>
+          <p className="mb-10 max-w-xs text-xs font-medium text-gray-400">ပါဆယ်မှတ်တမ်း မစတင်မီ အသုံးပြုမည့် စနစ်ကို ရွေးချယ်ပေးပါ</p>
           
           <div className="w-full max-w-xs flex flex-col gap-4">
             <button 
               onClick={() => setIntakeMethod('no-barcode')}
-              className="group w-full p-4 bg-neutral-900/60 hover:bg-neutral-900 border border-neutral-800 rounded-2xl font-bold text-sm text-neutral-200 active:scale-95 transition-all shadow-lg flex items-center gap-4 text-left"
+              className="group w-full rounded-2xl border border-white/10 bg-white/5 p-4 text-left shadow-[0_10px_30px_rgba(0,0,0,0.25)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/10 active:scale-[0.99]"
             >
-              <div className="w-10 h-10 rounded-xl bg-neutral-800 flex items-center justify-center text-lg group-hover:bg-orange-500/10 group-hover:text-orange-400 transition-colors">📷</div>
-              <div>
-                <p className="font-bold text-white text-sm">Barcode မပါဘဲ ပုံရိုက်မည်</p>
-                <p className="text-[11px] text-gray-500 font-normal">ပါဆယ်ကို တိုက်ရိုက်ဓာတ်ပုံရိုက်သိမ်းရန်</p>
+              <div className="flex items-center gap-4">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-neutral-800 text-orange-400 transition-colors group-hover:bg-orange-500/10">
+                  <IconCamera className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-white">Barcode မပါဘဲ ပုံရိုက်မည်</p>
+                  <p className="text-[11px] font-normal text-gray-400">ပါဆယ်ကို တိုက်ရိုက်ဓာတ်ပုံရိုက်သိမ်းရန်</p>
+                </div>
               </div>
             </button>
 
             <button 
               onClick={() => { setIntakeMethod('with-barcode'); setBarcodeStep('scanning'); }}
-              className="group w-full p-4 bg-gradient-to-br from-orange-500 to-amber-500 text-neutral-950 rounded-2xl active:scale-95 transition-all shadow-xl shadow-orange-500/10 flex items-center gap-4 text-left"
+              className="group w-full rounded-2xl bg-gradient-to-br from-orange-500 to-amber-400 p-4 text-left text-neutral-950 shadow-[0_18px_50px_rgba(249,115,22,0.2)] transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.99]"
             >
-              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-lg text-neutral-950 font-bold">🔍</div>
-              <div>
-                <p className="font-black text-neutral-950 text-sm">Barcode စကင်ဖတ်ပြီး ပုံရိုက်မည်</p>
-                <p className="text-[11px] text-neutral-900/70 font-medium">Barcode ID တွဲဖက်၍ မှတ်တမ်းတင်ရန်</p>
+              <div className="flex items-center gap-4">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/20 text-neutral-950">
+                  <IconScan className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-black">Barcode စကင်ဖတ်ပြီး ပုံရိုက်မည်</p>
+                  <p className="text-[11px] font-medium text-neutral-900/75">Barcode ID တွဲဖက်၍ မှတ်တမ်းတင်ရန်</p>
+                </div>
               </div>
             </button>
           </div>
@@ -695,18 +846,28 @@ export default function IntakePage() {
                   stopCamera();
                 }
               }}
-              className="w-10 h-10 flex items-center justify-center bg-neutral-900/80 backdrop-blur-md rounded-full border border-neutral-800 text-gray-300 font-bold active:scale-90 transition-transform text-sm shadow-xl"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-neutral-900/80 text-gray-300 shadow-xl backdrop-blur-md transition-transform active:scale-90"
             >
-              ←
+              <IconArrowLeft className="h-4 w-4" />
             </button>
-            <div className="bg-neutral-900/90 backdrop-blur-md px-4 py-1.5 rounded-full border border-neutral-800 text-[11px] font-extrabold tracking-widest text-orange-400 uppercase shadow-xl">
-              {intakeMethod === 'with-barcode' ? (barcodeStep === 'scanning' ? '🔍 SCANNING BARCODE' : '📷 TAKE PARCEL PHOTO') : `📸 ${userBranch} CAMERA`}
+            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-neutral-900/90 px-4 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.22em] text-orange-400 shadow-xl backdrop-blur-md">
+              {intakeMethod === 'with-barcode' ? (
+                <>
+                  <IconScan className="h-3.5 w-3.5" />
+                  <span>{barcodeStep === 'scanning' ? 'SCANNING BARCODE' : 'TAKE PARCEL PHOTO'}</span>
+                </>
+              ) : (
+                <>
+                  <IconCamera className="h-3.5 w-3.5" />
+                  <span>{userBranch} CAMERA</span>
+                </>
+              )}
             </div>
             <button 
               onClick={switchFacingMode} 
-              className="w-10 h-10 flex items-center justify-center bg-neutral-900/80 backdrop-blur-md rounded-full border border-neutral-800 text-gray-300 active:scale-90 transition-transform shadow-xl"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-neutral-900/80 text-gray-300 shadow-xl backdrop-blur-md transition-transform active:scale-90"
             >
-              🔄
+              <IconSwitchCamera className="h-4 w-4" />
             </button>
           </div>
 
@@ -720,17 +881,35 @@ export default function IntakePage() {
                   allowMultiple={false}
                   scanDelay={300}
                   styles={{ container: { width: '100%', height: '100%' } }}
+                  components={{ finder: false }}
                 />
-                {/* Visual Target Overlay for Scanner */}
-                <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                  <div className="w-64 h-40 border-2 border-dashed border-orange-500/60 bg-orange-500/5 rounded-2xl relative shadow-2xl">
-                    <div className="absolute top-0 left-0 w-4 h-4 border-t-4 border-l-4 border-orange-500 -mt-1 -ml-1 rounded-tl-md"></div>
-                    <div className="absolute top-0 right-0 w-4 h-4 border-t-4 border-r-4 border-orange-500 -mt-1 -mr-1 rounded-tr-md"></div>
-                    <div className="absolute bottom-0 left-0 w-4 h-4 border-b-4 border-l-4 border-orange-500 -mb-1 -ml-1 rounded-bl-md"></div>
-                    <div className="absolute bottom-0 right-0 w-4 h-4 border-b-4 border-r-4 border-orange-500 -mb-1 -mr-1 rounded-br-md"></div>
-                    <div className="w-full h-0.5 bg-orange-500 absolute top-1/2 left-0 animate-pulse"></div>
-                  </div>
-                </div>
+              {/* Visual Target Overlay for Scanner (Square, Larger, Moving Laser) */}
+<div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+  
+  {/* 🌟 ဤနေရာတွင် CSS Animation ကို တစ်ခါတည်း ထည့်သွင်းထားသဖြင့် ဘယ်နေရာမှာမဆို ရာနှုန်းပြည့် အလုပ်လုပ်ပါမည် */}
+  <style>{`
+    @keyframes scan-animation {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(318px); } /* 320px (box h-80) - 2px (laser h-0.5) */
+    }
+    .animate-laser-line {
+      animation: scan-animation 2.5s linear infinite;
+    }
+  `}</style>
+
+  {/* စတုရန်းပုံစံ ဘောင်အကြီး (w-80 h-80) */}
+  <div className="w-80 h-80 border-2 border-dashed border-orange-500/60 bg-orange-500/5 rounded-2xl relative shadow-2xl">
+    
+    {/* Corners (ထောင့်လေး ၄ ခု) */}
+    <div className="absolute top-0 left-0 w-4 h-4 border-t-4 border-l-4 border-orange-500 -mt-1 -ml-1 rounded-tl-md"></div>
+    <div className="absolute top-0 right-0 w-4 h-4 border-t-4 border-r-4 border-orange-500 -mt-1 -mr-1 rounded-tr-md"></div>
+    <div className="absolute bottom-0 left-0 w-4 h-4 border-b-4 border-l-4 border-orange-500 -mb-1 -ml-1 rounded-bl-md"></div>
+    <div className="absolute bottom-0 right-0 w-4 h-4 border-b-4 border-r-4 border-orange-500 -mb-1 -mr-1 rounded-br-md"></div>
+    
+    {/* လေဆာတန်း - Custom Class အသစ်ဖြစ်သော animate-laser-line ကို ပြောင်းသုံးထားပါသည် */}
+    <div className="w-full h-0.5 bg-orange-500 absolute top-0 left-0 animate-laser-line shadow-[0_0_8px_#f97316]"></div>
+  </div>
+</div>
                 <div className="absolute bottom-20 inset-x-0 text-center z-20 px-6">
                   <div className="inline-block bg-neutral-900/95 text-white font-semibold text-xs px-5 py-3 rounded-2xl border border-neutral-800 shadow-2xl backdrop-blur-md">
                     ပါဆယ်ပေါ်ရှိ Barcode / QR ကို ဘောင်အလယ်တွင် ထားပေးပါ
@@ -748,19 +927,24 @@ export default function IntakePage() {
 
                 {intakeMethod === 'with-barcode' && currentScannedBarcode && (
                   <div className="absolute top-24 left-4 right-4 z-20">
-                    <div className="bg-gradient-to-r from-orange-500 to-amber-500 text-neutral-950 text-xs font-black uppercase px-4 py-2 rounded-xl shadow-2xl border border-orange-400/20 tracking-wider flex items-center justify-between animate-fade-in">
-                      <span className="truncate">🔗 BARCODE: {currentScannedBarcode}</span>
-                      <span className="bg-neutral-950 text-orange-400 text-[9px] px-2 py-0.5 rounded-md flex-shrink-0 ml-2">READY</span>
-                      {/* 💡 ပြန်လည်စကင်ဖတ်ရန် ခလုတ်အသစ် */}
-        <button 
-          onClick={() => {
-            setBarcodeStep('scanning');
-            setCurrentScannedBarcode('');
-          }}
-          className="bg-neutral-950 hover:bg-neutral-900 border border-neutral-800 text-white text-[9px] px-2 py-0.5 rounded-md font-bold transition-colors shadow-sm"
-        >
-          🔄 ပြန်ဖတ်မည်
-        </button>
+                    <div className="flex animate-fade-in items-center justify-between gap-2 rounded-xl border border-orange-400/20 bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-2 text-xs font-black uppercase tracking-wider text-neutral-950 shadow-2xl">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <IconScan className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">BARCODE: {currentScannedBarcode}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="ml-2 flex-shrink-0 rounded-md bg-neutral-950 px-2 py-0.5 text-[9px] text-orange-400">READY</span>
+                        <button 
+                          onClick={() => {
+                            setBarcodeStep('scanning');
+                            setCurrentScannedBarcode('');
+                          }}
+                          className="flex items-center gap-1 rounded-md border border-neutral-800 bg-neutral-950 px-2 py-0.5 text-[9px] font-bold text-white shadow-sm transition-colors hover:bg-neutral-900"
+                        >
+                          <IconRefresh className="h-3 w-3" />
+                          ပြန်ဖတ်မည်
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -800,8 +984,8 @@ export default function IntakePage() {
             {/* iOS Shutter Style Core Action Control Panel */}
             <div className="flex items-center justify-between px-10 pt-2">
               {/* Media Gallery Pick Button */}
-              <label className="w-12 h-12 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-full flex items-center justify-center active:scale-90 transition-all cursor-pointer text-lg shadow-xl">
-                🖼️
+              <label className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-neutral-900/90 shadow-xl transition-all hover:bg-neutral-800 active:scale-90">
+                <IconImage className="h-5 w-5 text-gray-200" />
                 <input type="file" accept="image/*" multiple onChange={handleGallerySelect} className="hidden" />
               </label>
 
@@ -827,10 +1011,10 @@ export default function IntakePage() {
               ) : (
                 <button 
                   onClick={() => { setFlowMode('preview'); stopCamera(); }}
-                  className="w-12 h-12 bg-neutral-900 border border-neutral-800 rounded-full flex items-center justify-center active:scale-90 transition-all text-sm font-bold relative shadow-xl text-orange-400"
+                  className="relative flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-neutral-900/90 text-orange-400 shadow-xl transition-all active:scale-90"
                 >
-                  ➡️
-                  <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-gradient-to-r from-orange-500 to-amber-500 text-neutral-950 font-black text-[10px] flex items-center justify-center rounded-full border-2 border-black shadow">{capturedImages.length}</span>
+                  <IconArrowRight className="h-5 w-5" />
+                  <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-black bg-gradient-to-r from-orange-500 to-amber-500 text-[10px] font-black text-neutral-950 shadow">{capturedImages.length}</span>
                 </button>
               )}
             </div>
@@ -845,23 +1029,28 @@ export default function IntakePage() {
           <style>{`
             @keyframes slideInFromRight { from { transform: translateX(100%); opacity: 0.5; } to { transform: translateX(0); opacity: 1; } }
             @keyframes slideInFromLeft { from { transform: translateX(-100%); opacity: 0.5; } to { transform: translateX(0); opacity: 1; } }
+
+            
+
             .animate-slide-in-right { animation: slideInFromRight 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
             .animate-slide-in-left { animation: slideInFromLeft 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
           `}</style>
 
           {/* Sub Top Action Controls Bar Header */}
-          <div className="flex items-center justify-between pb-3 border-b border-neutral-900">
+          <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-neutral-900/70 px-3 py-3 backdrop-blur-xl">
             <button 
               onClick={() => { setFlowMode('camera'); }} 
-              className="text-xs bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 px-3.5 py-2 rounded-xl font-bold text-gray-300 active:scale-95 transition-all"
+              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-neutral-800/80 px-3.5 py-2 text-xs font-bold text-gray-200 transition-all active:scale-95"
             >
-              📷 ဓာတ်ပုံထပ်ရိုက်မည်
+              <IconCamera className="h-4 w-4 text-orange-400" />
+              ဓာတ်ပုံထပ်ရိုက်မည်
             </button>
-            <div className="text-xs font-black text-gray-400 bg-neutral-900/50 px-2.5 py-1 rounded-lg border border-neutral-900">ပုံစစ်ဆေးခြင်း ({currentIdx + 1}/{capturedImages.length})</div>
+            <div className="rounded-lg border border-neutral-800 bg-neutral-950/60 px-2.5 py-1 text-xs font-black text-gray-400">ပုံစစ်ဆေးခြင်း ({currentIdx + 1}/{capturedImages.length})</div>
             <button 
               onClick={(e) => deleteImage(currentImgObj.id, e)} 
-              className="text-xs bg-red-950/20 hover:bg-red-950/40 border border-red-900/30 px-3.5 py-2 rounded-xl font-bold text-red-400 active:scale-95 transition-all"
+              className="inline-flex items-center gap-2 rounded-xl border border-red-900/30 bg-red-950/20 px-3.5 py-2 text-xs font-bold text-red-400 transition-all active:scale-95"
             >
+              <IconTrash className="h-3.5 w-3.5" />
               ဖျက်မည်
             </button>
           </div>
@@ -885,9 +1074,10 @@ export default function IntakePage() {
             setCurrentScannedBarcode('');
           }
         }}
-        className="text-[10px] bg-red-950/40 border border-red-900/40 text-red-400 px-2 py-1 rounded-md font-bold hover:bg-red-950/60 transition-colors"
+        className="inline-flex items-center gap-1 rounded-md border border-red-900/40 bg-red-950/40 px-2 py-1 text-[10px] font-bold text-red-400 transition-colors hover:bg-red-950/60"
       >
-        🔄 ပြန်ဖတ်မည်
+        <IconRefresh className="h-3 w-3" />
+        ပြန်ဖတ်မည်
       </button>
     </div>
   </div>
