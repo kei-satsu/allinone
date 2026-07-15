@@ -421,6 +421,15 @@ const tableDeliFeeTotal = officePaidTotal + billdeliTotal;
     (acc, senders) => acc + Object.values(senders).reduce((sum, amount) => sum + amount, 0), 
     0
   );
+
+  const othersPaidTotal = reportData
+    .filter(o => 
+      o.received_date === selectedDate && 
+      (o.fee_type === 'Cash' || o.fee_type === 'Kpay') && 
+      o.receiver_loc !== 'MDY' && 
+  o.receiver_loc !== 'YGN'
+    )
+    .reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
   
 
   // ၃။ တစ်ဖက်မြို့က ရှင်းလိုက်သည့် Opposite Paid စုစုပေါင်းကို တွက်ချက်သည်
@@ -438,7 +447,7 @@ const tableDeliFeeTotal = officePaidTotal + billdeliTotal;
     .reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
 
   // ၅။ ✨ သင်အလိုရှိသော ပုံသေနည်းအတိုင်း ဒေတာ ၃ ခုကို ပေါင်းပြီး tableTotalAmount ကို သတ်မှတ်သည်
-  const tableTotalAmount = grandTotalToPayCalculated + oppositePaidTotal + officePaidTotal;
+  const tableTotalAmount = grandTotalToPayCalculated + oppositePaidTotal + officePaidTotal + othersPaidTotal;
 
   const handleExportFullExcel = async () => {
   if (filteredOrders.length === 0) {
@@ -889,13 +898,13 @@ const tableDeliFeeTotal = officePaidTotal + billdeliTotal;
               </div>
 
               
-              {/* 🔴 အနီရောင်နေရာ (Bottom Left Placeholder - ပုံထဲက Rider Name List နေရာ) 
+              {/* 🔴 အနီရောင်နေရာ (Bottom Left Placeholder - ပုံထဲက Rider Name List နေရာ) */}
               <div className="flex-1 p-2 bg-red-50/40 relative">
                 <div className="absolute inset-1 top-2  rounded flex flex-col items-center justify-center">
-                   <span className="text-[10px] uppercase tracking-wide text-orange-600">Total</span>
-              <span className="text-right text-sm font-bold">{oppositePaidTotal.toLocaleString()} Ks</span>
+                   <span className="text-[10px] uppercase tracking-wide text-orange-600">Others Paid</span>
+              <span className="text-right text-sm font-bold">{othersPaidTotal.toLocaleString()} Ks</span>
                 </div>
-              </div> */}
+              </div> 
 
            
 
