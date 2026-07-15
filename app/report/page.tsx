@@ -366,12 +366,13 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
     return o[key] || '-'
   }
 
+  
   // Delivered ဖြစ်ပြီးသား ပါဆယ်များအတွက် Senders နှင့် မြို့အလိုက် COD စာရင်းတွက်ချက်ခြင်း
   const senderCodByLoc = reportData
     .filter(o => 
-      o.status === 'Delivered' && 
-      o.sender_name && 
-      o.deliver_date === selectedDate // 👈 ဒီ Filter အခြေအနေကို အသစ်ဖြည့်သွင်းလိုက်တာပါ
+      o.status === 'Delivered' &&       // 👈 ၁။ Status သည် Delivered ဖြစ်ရမည်
+      o.sender_name &&                  // 👈 ၂။ Sender အမည် ပါဝင်ရမည်
+      o.deliver_date === selectedDate   // 👈 ၃။ ယနေ့ ရက်စွဲနှင့် ကိုက်ညီရမည်
     )
     .reduce((acc: Record<string, Record<string, number>>, o) => {
       const loc = o.sender_loc || 'Unknown City';
@@ -390,18 +391,6 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
   const riderSummaryOop = handovers.filter(h => h.transaction_type === 'OOP').reduce((sum, h) => sum + (Number(h.amount) || 0), 0);
   const riderSummaryGap = riderSummaryTotal - (riderSummaryCashIn + riderSummaryOop);
 
-  // ၁။ Deli Fee စုစုပေါင်းများနှင့် မြို့အလိုက် သတ်မှတ်ချက်များကို အရင်တွက်ချက်သည်
-  const tableDeliFeeTotal = reportData.reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
-  const oppositeCity = userBranch === 'MDY' ? 'YGN' : 'MDY';
-  const oppositeCityDeliTotal = reportData
-    .filter(o => o.sender_loc === oppositeCity)
-    .reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
-  const oppositeCityDeliHalf = oppositeCityDeliTotal / 2;
-  const oppositeCityDeliRemaining = tableDeliFeeTotal - oppositeCityDeliHalf;
-
-  const senderLocCount = Object.keys(senderCodByLoc).length;
-  const senderCodTotal = Object.values(senderCodByLoc).reduce((acc, senders) => acc + Object.values(senders).reduce((sum, amount) => sum + amount, 0), 0);
-
   // ၂။ ရုံးခွဲအလိုက် ရှင်းပြီးသား Office Paid စုစုပေါင်းကို တွက်ချက်သည်
   const officePaidTotal = reportData
     .filter(o => 
@@ -410,6 +399,29 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
       o.receiver_loc === userBranch
     )
     .reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
+
+  // ၁။ Deli Fee စုစုပေါင်းများနှင့် မြို့အလိုက် သတ်မှတ်ချက်များကို အရင်တွက်ချက်သည်
+  const billdeliTotal = reportData.reduce((sum, o) => 
+  sum + ((o.status === 'Delivered' && (o.fee_type === 'Deli' || o.fee_type === 'Bill')) ? (Number(o.deli_fee) || 0) : 0), 
+  0
+);
+
+const tableDeliFeeTotal = officePaidTotal + billdeliTotal;
+
+  const oppositeCity = userBranch === 'MDY' ? 'YGN' : 'MDY';
+  const oppositeCityDeliTotal = reportData.reduce((sum, o) => 
+  sum + ((o.sender_loc === oppositeCity && o.status === 'Delivered') ? (Number(o.deli_fee) || 0) : 0), 
+  0
+);
+  const oppositeCityDeliHalf = oppositeCityDeliTotal / 2;
+  const oppositeCityDeliRemaining = tableDeliFeeTotal - oppositeCityDeliHalf;
+
+  const senderLocCount = Object.keys(senderCodByLoc).length;
+  const senderCodTotal = Object.values(senderCodByLoc).reduce(
+    (acc, senders) => acc + Object.values(senders).reduce((sum, amount) => sum + amount, 0), 
+    0
+  );
+  
 
   // ၃။ တစ်ဖက်မြို့က ရှင်းလိုက်သည့် Opposite Paid စုစုပေါင်းကို တွက်ချက်သည်
   const oppositePaidTotal = reportData
@@ -876,14 +888,14 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
                 </div>
               </div>
 
-               
-              {/* 🔴 အနီရောင်နေရာ (Bottom Left Placeholder - ပုံထဲက Rider Name List နေရာ) */}
+              
+              {/* 🔴 အနီရောင်နေရာ (Bottom Left Placeholder - ပုံထဲက Rider Name List နေရာ) 
               <div className="flex-1 p-2 bg-red-50/40 relative">
                 <div className="absolute inset-1 top-2  rounded flex flex-col items-center justify-center">
                    <span className="text-[10px] uppercase tracking-wide text-orange-600">Total</span>
               <span className="text-right text-sm font-bold">{oppositePaidTotal.toLocaleString()} Ks</span>
                 </div>
-              </div>
+              </div> */}
 
            
 
