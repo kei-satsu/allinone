@@ -77,8 +77,8 @@ export default function Dashboard() {
             className="w-8 h-8 object-contain rounded-xl shadow-sm border border-slate-100"
           />
           <div className="flex flex-col">
-            <span className="text-slate-900 text-[16px] font-black tracking-tight uppercase">ALL IN ONE</span>
-            <span className="text-[10px] text-slate-400 font-bold tracking-wider uppercase -mt-0.5">Express Logistics</span>
+            <span className="text-slate-900 text-[16px] font-black tracking-tight uppercase">ALL IN ONE Express</span>
+            <span className="text-[10px] text-slate-400 font-bold tracking-wider uppercase -mt-0.5"></span>
           </div>
         </div>
         
