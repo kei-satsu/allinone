@@ -291,22 +291,36 @@ useEffect(() => {
         
         // 🌟 ၁။ အော့ဖ်လိုင်းတုန်းက Sender အသစ်ပါ တွဲရိုက်ခဲ့တဲ့ Payload ဖြစ်နေရင်
         if (payload && payload.type === 'update_order_with_new_sender') {
-          // (က) Sender အသစ်ကို Database ထဲ အရင် Insert လုပ်ပြီး ID အသစ် ယူမယ်
-          const { data: newSender, error: sErr } = await supabase
-            .from('senders')
-            .insert([{ name: payload.sender.name, phone: payload.sender.phone, LOC: payload.sender.LOC }])
-            .select()
-            .single()
-          
-          if (sErr) throw sErr
+          // Try to find an existing sender first to avoid duplicates
+          const nameTrim = String(payload.sender?.name || '').trim()
+          let senderToUse: any = null
+          if (nameTrim) {
+            const { data: found, error: findErr } = await supabase
+              .from('senders')
+              .select('*')
+              .ilike('name', nameTrim)
+              .eq('LOC', payload.sender?.LOC)
+              .maybeSingle()
+            if (!findErr && found) senderToUse = found
+          }
 
-          // (ခ) ရလာတဲ့ Sender ID အသစ်ကို Order Payload ထဲ တွဲထည့်ပြီးမှ အော်ဒါကို Update လုပ်မယ်
-          const finalOrder = { ...payload.order, sender_id: newSender.id }
+          if (!senderToUse) {
+            const { data: newSender, error: sErr } = await supabase
+              .from('senders')
+              .insert([{ name: nameTrim, phone: payload.sender?.phone, LOC: payload.sender?.LOC }])
+              .select()
+              .single()
+            if (sErr) throw sErr
+            senderToUse = newSender
+          }
+
+          // Update order with sender id
+          const finalOrder = { ...payload.order, sender_id: senderToUse.id }
           const { error: oErr } = await supabase.from('orders').update(finalOrder).eq('id', finalOrder.id)
           if (oErr) throw oErr
 
-          // Dropdown state ထဲကိုပါ အသစ်တိုးပေးထားမယ် (ရွေးစရာထဲ တန်းပေါ်အောင်)
-          setSenders(prev => [...prev, newSender])
+          // Ensure dropdown state has this sender
+          setSenders(prev => prev.some(s => String(s.id) === String(senderToUse.id)) ? prev : [...prev, senderToUse])
         } 
         // 🌟 ၂။ ပုံမှန် ရှိပြီးသား Sender မို့ အော်ဒါတစ်ခုတည်း Update လုပ်မည့်အပိုင်း
         else if (payload && payload.type === 'update_order') {
@@ -508,19 +522,39 @@ useEffect(() => {
         // 🟢 အွန်လိုင်းဖြစ်နေချိန် လုပ်ဆောင်ချက် Flow
         // အကယ်၍ finalSenderId က null ဖြစ်နေရင် (လူအသစ်ရိုက်ထားတာဆိုရင်) အရင်ဆောက်မယ်
         if (!finalSenderId) {
-          const { data: newSender, error: senderError } = await supabase
-            .from('senders')
-            .insert([{ name: formData.sender_name, phone: formData.sender_phone, LOC: formData.sender_loc }])
-            .select()
-            .single()
+          // Try to find existing sender by name and LOC (case-insensitive) to avoid duplicates
+          const nameTrim = (formData.sender_name || '').trim()
+          let existingSender: any = null
+          if (nameTrim) {
+            const { data: found, error: findErr } = await supabase
+              .from('senders')
+              .select('*')
+              .ilike('name', nameTrim)
+              .eq('LOC', formData.sender_loc)
+              .maybeSingle()
+            if (!findErr && found) existingSender = found
+          }
 
-          if (senderError) throw new Error("Sender အသစ်သိမ်းဆည်းမှု မအောင်မြင်ပါ: " + senderError.message)
-          
-          if (newSender) {
-            finalSenderId = newSender.id
-            baseOrderPayload.sender_id = newSender.id
-            // Local state ထဲပါ တန်းထည့်ပေးထားမယ် နောက်တစ်ခါ Dropdown မှာ တန်းပေါ်အောင်လို့
-            setSenders(prev => [...prev, newSender])
+          if (existingSender) {
+            finalSenderId = existingSender.id
+            baseOrderPayload.sender_id = existingSender.id
+            // ensure local state contains this sender
+            setSenders(prev => prev.some(s => String(s.id) === String(existingSender.id)) ? prev : [...prev, existingSender])
+          } else {
+            const { data: newSender, error: senderError } = await supabase
+              .from('senders')
+              .insert([{ name: nameTrim, phone: formData.sender_phone, LOC: formData.sender_loc }])
+              .select()
+              .single()
+
+            if (senderError) throw new Error("Sender အသစ်သိမ်းဆည်းမှု မအောင်မြင်ပါ: " + senderError.message)
+            
+            if (newSender) {
+              finalSenderId = newSender.id
+              baseOrderPayload.sender_id = newSender.id
+              // Local state ထဲပါ တန်းထည့်ပေးထားမယ်
+              setSenders(prev => [...prev, newSender])
+            }
           }
         }
 
