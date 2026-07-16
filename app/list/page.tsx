@@ -37,6 +37,79 @@ const COLUMN_DEFS = [
 ]
 
 
+type FilterValue = string | string[];
+
+function MultiSelectFilter({
+  label,
+  options,
+  selectedValues,
+  onChange,
+}: {
+  label: string;
+  options: { label: string; value: string }[];
+  selectedValues: string[];
+  onChange: (values: string[]) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOutsideClick = () => setIsOpen(false);
+    window.addEventListener('click', handleOutsideClick);
+    return () => window.removeEventListener('click', handleOutsideClick);
+  }, []);
+
+  return (
+    <div className="relative w-full" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(prev => !prev)}
+        className="w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-[11px] font-medium text-gray-700 shadow-sm hover:border-orange-400"
+      >
+        <span className="truncate">
+          {selectedValues.length > 0 ? `${selectedValues.length} selected` : 'All'}
+        </span>
+      </button>
+
+      {isOpen && (
+        <div className="absolute z-40 mt-1 w-[180px] rounded-lg border border-gray-200 bg-white p-2 shadow-xl">
+          <div className="mb-2 flex items-center justify-between border-b border-gray-100 pb-2">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{label}</span>
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className="text-[10px] font-semibold text-orange-600"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="max-h-40 space-y-1 overflow-y-auto">
+            {options.map(option => {
+              const checked = selectedValues.includes(option.value);
+              return (
+                <label key={option.value} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => {
+                      if (checked) {
+                        onChange(selectedValues.filter(val => val !== option.value));
+                      } else {
+                        onChange([...selectedValues, option.value]);
+                      }
+                    }}
+                    className="h-3.5 w-3.5 rounded border-gray-300 accent-orange-500"
+                  />
+                  <span>{option.label}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function OrderList() {
   const router = useRouter()
   const [orders, setOrders] = useState<any[]>([])
@@ -61,6 +134,7 @@ export default function OrderList() {
   
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false); // Header checkbox အတွက်
+  const [isDraggingSelection, setIsDraggingSelection] = useState(false);
 
   // Toggle order တစ်ခုချင်း select / deselect
 const toggleOrderSelection = (orderId: string) => {
@@ -142,7 +216,8 @@ useEffect(() => {
 }, []);
 
   const [showColDropdown, setShowColDropdown] = useState(false)
-  const [colFilters, setColFilters] = useState<Record<string, string>>({})
+  const [showFilterBar, setShowFilterBar] = useState(true)
+  const [colFilters, setColFilters] = useState<Record<string, FilterValue>>({})
 
 
   // 💡 (အစားထိုးရန်) fetchData Function အသစ်
@@ -217,24 +292,43 @@ useEffect(() => {
   }, [])
 
   const filteredOrders = orders.filter(o => {
-    
-
-    // 💻 Desktop Grid Filter Logics
     return Object.keys(colFilters).every(key => {
       if (key === 'global_search') return true
-      const filterValue = colFilters[key]?.toLowerCase()
-      if (!filterValue) return true
+
+      const filterValue = colFilters[key];
+      if (!filterValue || (Array.isArray(filterValue) && filterValue.length === 0)) return true;
+
       let cellValue = ""
       if (key === 'pickup_rider') cellValue = o.pickup_rider?.name || ""
       else if (key === 'deliver_rider') cellValue = o.deliver_rider?.name || ""
       else cellValue = String(o[key] || "")
-      return cellValue.toLowerCase().includes(filterValue)
+
+      if (Array.isArray(filterValue)) {
+        return filterValue.some(val => cellValue.toLowerCase().includes(val.toLowerCase()));
+      }
+
+      return cellValue.toLowerCase().includes(filterValue.toLowerCase())
     })
   })
 
-  const handleFilterChange = (col: string, val: string) => {
+  const selectedOrderList = filteredOrders.filter(o => selectedOrders.has(o.id));
+  const selectedCount = selectedOrderList.length;
+  const selectedCodTotal = selectedOrderList.reduce((sum, o) => sum + (Number(o.cod_amount) || 0), 0);
+  const selectedDeliTotal = selectedOrderList.reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
+  const selectedGrandTotal = selectedOrderList.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+
+  const handleFilterChange = (col: string, val: string | string[]) => {
     setColFilters(prev => ({ ...prev, [col]: val }))
   }
+
+  const resetFilters = () => {
+    setColFilters({})
+  }
+
+  const activeFilterCount = Object.values(colFilters).filter(value => {
+    if (Array.isArray(value)) return value.length > 0
+    return Boolean(value)
+  }).length
 
   const toggleColumn = (colKey: string) => {
   setVisibleCols(prev => {
@@ -341,6 +435,35 @@ useEffect(() => {
     return o[key] || '-'
   }
 
+  useEffect(() => {
+    const stopDragging = () => setIsDraggingSelection(false);
+    window.addEventListener('mouseup', stopDragging);
+    return () => window.removeEventListener('mouseup', stopDragging);
+  }, []);
+
+  const handleRowMouseDown = (orderId: string) => {
+    setIsDraggingSelection(true);
+    setSelectedOrders(prev => {
+      const next = new Set(prev);
+      next.add(orderId);
+      return next;
+    });
+  };
+
+  const handleRowMouseEnter = (orderId: string) => {
+    if (!isDraggingSelection) return;
+    setSelectedOrders(prev => {
+      const next = new Set(prev);
+      next.add(orderId);
+      return next;
+    });
+  };
+
+  const locationOptions = Array.from(new Set([
+    ...orders.map(o => o.sender_loc).filter(Boolean),
+    ...orders.map(o => o.receiver_loc).filter(Boolean),
+  ])).sort() as string[];
+
   const filterInputCls = "w-full bg-transparent border-b border-gray-300 focus:border-orange-500 focus:outline-none py-1 text-[11px] text-gray-700 placeholder:text-gray-400 font-medium transition-colors"
 
   return (
@@ -372,27 +495,50 @@ useEffect(() => {
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
           {/* ── Columns Show/Hide Dropdown ── */}
 {selectedOrders.size > 0 && (
-  <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-1.5 ml-2">
-    <span className="text-xs font-bold text-orange-800 whitespace-nowrap">
-      Selected: <span className="bg-orange-500 text-white px-2 py-0.5 rounded-full ml-1">{selectedOrders.size}</span> items
+  <div className="ml-2 flex flex-wrap items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-2.5 shadow-sm">
+    <span className="text-sm font-bold text-orange-800 whitespace-nowrap">
+      Selected: <span className="ml-1 rounded-full bg-orange-500 px-2 py-0.5 text-white">{selectedCount}</span>
+    </span>
+    <span className="text-[11px] font-semibold text-gray-700">
+      COD: <span className="text-orange-700">{selectedCodTotal.toLocaleString()} Ks</span>
+    </span>
+    <span className="text-[11px] font-semibold text-gray-700">
+      Deli: <span className="text-orange-700">{selectedDeliTotal.toLocaleString()} Ks</span>
+    </span>
+    <span className="text-[11px] font-semibold text-gray-700">
+      Total: <span className="text-orange-700">{selectedGrandTotal.toLocaleString()} Ks</span>
     </span>
     <button 
       onClick={clearSelection}
-      className="text-[10px] font-semibold text-red-600 bg-red-50 hover:bg-red-100 px-2 py-0.5 rounded-md transition-colors"
+      className="rounded-md bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-600 transition-colors hover:bg-red-100"
     >
       ဖြုတ်မည်
     </button>
   </div>
 )}
 
-          <div className="relative">
-
-
-
-            <button 
-              onClick={() => setShowColDropdown(!showColDropdown)}
-              className="bg-white border border-gray-300 hover:border-gray-400 text-gray-700 font-medium px-3 py-1.5 rounded-md transition-all text-xs flex items-center gap-1.5 shadow-sm"
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowFilterBar(prev => !prev)}
+              className={`rounded-md border px-3 py-1.5 text-xs font-medium shadow-sm transition-all ${showFilterBar ? 'border-orange-300 bg-orange-50 text-orange-700' : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'}`}
             >
+              {showFilterBar ? 'Hide Filters' : 'Show Filters'}
+            </button>
+
+            {activeFilterCount > 0 && (
+              <button
+                onClick={resetFilters}
+                className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 shadow-sm hover:bg-red-100"
+              >
+                Clear Filters
+              </button>
+            )}
+
+            <div className="relative">
+              <button 
+                onClick={() => setShowColDropdown(!showColDropdown)}
+                className="bg-white border border-gray-300 hover:border-gray-400 text-gray-700 font-medium px-3 py-1.5 rounded-md transition-all text-xs flex items-center gap-1.5 shadow-sm"
+              >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
@@ -402,28 +548,29 @@ useEffect(() => {
 
             
             
-            {showColDropdown && (
-              <>
-                <div className="fixed inset-0 bg-black/20 sm:bg-transparent z-40 transition-opacity animate-in fade-in duration-200" onClick={() => setShowColDropdown(false)} />
-                <div className="fixed bottom-4 inset-x-4 sm:absolute sm:bottom-auto sm:inset-x-auto sm:right-0 sm:top-full sm:mt-1 w-auto sm:w-52 bg-white border border-gray-200 rounded-xl sm:rounded-lg shadow-2xl sm:shadow-xl z-50 py-2.5 max-h-[70vh] sm:max-h-80 overflow-y-auto animate-in slide-in-from-bottom-5 sm:slide-in-from-top-2 duration-200">
-                  <div className="px-3.5 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 sm:border-none mb-1.5">Show/Hide Columns</div>
-                  <div className="grid grid-cols-2 sm:grid-cols-1 gap-x-2 gap-y-0.5 px-2 sm:px-0">
-                    {COLUMN_DEFS.map(col => (
-                      <label key={col.key} className="flex items-center px-2.5 py-2 sm:py-1.5 hover:bg-gray-50 active:bg-gray-100 cursor-pointer text-xs text-gray-700 font-medium rounded-md sm:rounded-none transition-colors">
-                        <input 
-                          type="checkbox" 
-                          className="mr-2.5 w-4 h-4 sm:w-3.5 sm:h-3.5 text-orange-500 rounded border-gray-300 accent-orange-500"
-                          checked={visibleCols[col.key] || false }  
-                          onChange={() => toggleColumn(col.key)}
-                          disabled={col.key === 'item_id'} 
-                        />
-                        <span className="truncate">{col.label}</span>
-                      </label>
-                    ))}
+              {showColDropdown && (
+                <>
+                  <div className="fixed inset-0 bg-black/20 sm:bg-transparent z-40 transition-opacity animate-in fade-in duration-200" onClick={() => setShowColDropdown(false)} />
+                  <div className="fixed bottom-4 inset-x-4 sm:absolute sm:bottom-auto sm:inset-x-auto sm:right-0 sm:top-full sm:mt-1 w-auto sm:w-52 bg-white border border-gray-200 rounded-xl sm:rounded-lg shadow-2xl sm:shadow-xl z-50 py-2.5 max-h-[70vh] sm:max-h-80 overflow-y-auto animate-in slide-in-from-bottom-5 sm:slide-in-from-top-2 duration-200">
+                    <div className="px-3.5 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 sm:border-none mb-1.5">Show/Hide Columns</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-1 gap-x-2 gap-y-0.5 px-2 sm:px-0">
+                      {COLUMN_DEFS.map(col => (
+                        <label key={col.key} className="flex items-center px-2.5 py-2 sm:py-1.5 hover:bg-gray-50 active:bg-gray-100 cursor-pointer text-xs text-gray-700 font-medium rounded-md sm:rounded-none transition-colors">
+                          <input 
+                            type="checkbox" 
+                            className="mr-2.5 w-4 h-4 sm:w-3.5 sm:h-3.5 text-orange-500 rounded border-gray-300 accent-orange-500"
+                            checked={visibleCols[col.key] || false }  
+                            onChange={() => toggleColumn(col.key)}
+                            disabled={col.key === 'item_id'} 
+                          />
+                          <span className="truncate">{col.label}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              </>
-            )}
+                </>
+              )}
+            </div>
           </div>
 
 
@@ -472,38 +619,49 @@ useEffect(() => {
     <div className="px-3 pb-3 pt-1 grid grid-cols-2 gap-2 bg-gray-50 border-t border-gray-100 animate-in slide-in-from-top-2 duration-150">
       <div>
         <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Branch</label>
-        <select className="w-full text-xs p-1.5 bg-white border border-gray-200 rounded-md" value={colFilters['branch'] || ''} onChange={e => handleFilterChange('branch', e.target.value)}>
-          <option value="">All Branches</option>
-          <option value="MDY">Mandalay</option>
-          <option value="YGN">Yangon</option>
-        </select>
+        <MultiSelectFilter
+          label="Branch"
+          options={[{ label: 'Mandalay', value: 'MDY' }, { label: 'Yangon', value: 'YGN' }]}
+          selectedValues={Array.isArray(colFilters['branch']) ? colFilters['branch'] as string[] : []}
+          onChange={(values) => handleFilterChange('branch', values)}
+        />
       </div>
       <div>
         <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Status</label>
-        <select className="w-full text-xs p-1.5 bg-white border border-gray-200 rounded-md" value={colFilters['status'] || ''} onChange={e => handleFilterChange('status', e.target.value)}>
-          <option value="">All Status</option>
-          <option value="At Office">At Office</option>
-          <option value="On Way">On Way</option>
-          <option value="Delivered">Delivered</option>
-          <option value="In-Transit">In-Transit</option>
-        </select>
+        <MultiSelectFilter
+          label="Status"
+          options={[
+            { label: 'At Office', value: 'At Office' },
+            { label: 'On Way', value: 'On Way' },
+            { label: 'Delivered', value: 'Delivered' },
+            { label: 'In-Transit', value: 'In-Transit' },
+          ]}
+          selectedValues={Array.isArray(colFilters['status']) ? colFilters['status'] as string[] : []}
+          onChange={(values) => handleFilterChange('status', values)}
+        />
       </div>
       <div>
         <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Payment Type</label>
-        <select className="w-full text-xs p-1.5 bg-white border border-gray-200 rounded-md" value={colFilters['fee_type'] || ''} onChange={e => handleFilterChange('fee_type', e.target.value)}>
-          <option value="">All Types</option>
-          <option value="Deli">Deli</option>
-          <option value="Kpay">Kpay</option>
-          <option value="Cash">Cash</option>
-          <option value="Bill">Bill</option>
-        </select>
+        <MultiSelectFilter
+          label="Payment Type"
+          options={[
+            { label: 'Deli', value: 'Deli' },
+            { label: 'Kpay', value: 'Kpay' },
+            { label: 'Cash', value: 'Cash' },
+            { label: 'Bill', value: 'Bill' },
+          ]}
+          selectedValues={Array.isArray(colFilters['fee_type']) ? colFilters['fee_type'] as string[] : []}
+          onChange={(values) => handleFilterChange('fee_type', values)}
+        />
       </div>
       <div>
         <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Deliver Rider</label>
-        <select className="w-full text-xs p-1.5 bg-white border border-gray-200 rounded-md" value={colFilters['deliver_rider'] || ''} onChange={e => handleFilterChange('deliver_rider', e.target.value)}>
-          <option value="">All Riders</option>
-          {riders.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
-        </select>
+        <MultiSelectFilter
+          label="Deliver Rider"
+          options={riders.map(r => ({ label: r.name, value: r.name }))}
+          selectedValues={Array.isArray(colFilters['deliver_rider']) ? colFilters['deliver_rider'] as string[] : []}
+          onChange={(values) => handleFilterChange('deliver_rider', values)}
+        />
       </div>
     </div>
   )}
@@ -538,63 +696,59 @@ useEffect(() => {
                   </th>
                 ))}
               </tr>
-             <tr className="bg-gray-50/80 border-b border-gray-200">
-  {COLUMN_DEFS.map(col => visibleCols[col.key] && (
-    <th key={`filter-${col.key}`} className="px-2 py-1.5 font-normal">
-      {col.key === 'image_url' ? (
-        <div className="h-5" />
-      ) : ['branch', 'status', 'fee_type'].includes(col.key) ? (
-        <select
-          className="w-full bg-transparent border-b border-gray-300 focus:border-orange-500 focus:outline-none py-1 text-[11px] text-gray-700 font-medium cursor-pointer"
-          value={colFilters[col.key] || ''}
-          onChange={e => handleFilterChange(col.key, e.target.value)}
-        >
-          <option value="">All</option>
-          {col.key === 'branch' && (
-            <>
-              <option value="MDY">MDY</option>
-              <option value="YGN">YGN</option>
-            </>
-          )}
-          {col.key === 'status' && (
-            <>
-              <option value="At Office">At Office</option>
-              <option value="On Way">On Way</option>
-              <option value="Delivered">Delivered</option>
-              <option value="In-Transit">In-Transit</option>
-            </>
-          )}
-          {col.key === 'fee_type' && (
-            <>
-              <option value="Deli">Deli</option>
-              <option value="Kpay">Kpay</option>
-              <option value="Cash">Cash</option>
-              <option value="Bill">Bill</option>
-            </>
-          )}
-        </select>
-      ) : ['pickup_rider', 'deliver_rider'].includes(col.key) ? (
-        <select
-          className="w-full bg-transparent border-b border-gray-300 focus:border-orange-500 focus:outline-none py-1 text-[11px] text-gray-700 font-medium cursor-pointer"
-          value={colFilters[col.key] || ''}
-          onChange={e => handleFilterChange(col.key, e.target.value)}
-        >
-          <option value="">All Riders</option>
-          {riders.map(r => (
-            <option key={r.id} value={r.name}>{r.name}</option>
-          ))}
-        </select>
-      ) : (
-        <input 
-          className={filterInputCls} 
-          placeholder="Filter..." 
-          value={colFilters[col.key] || ''}
-          onChange={e => handleFilterChange(col.key, e.target.value)} 
-        />
-      )}
-    </th>
-  ))}
-</tr> 
+{showFilterBar && (
+  <tr className="bg-gray-50/80 border-b border-gray-200">
+    <th className="w-10 px-2 py-1.5" />
+    {COLUMN_DEFS.map(col => visibleCols[col.key] && (
+      <th key={`filter-${col.key}`} className="px-2 py-1.5 font-normal">
+        {col.key === 'image_url' ? (
+          <div className="h-5" />
+        ) : ['branch', 'status', 'fee_type', 'pickup_rider', 'deliver_rider', 'sender_loc', 'receiver_loc'].includes(col.key) ? (
+          <MultiSelectFilter
+            label={col.label}
+            options={
+              col.key === 'branch'
+                ? [{ label: 'MDY', value: 'MDY' }, { label: 'YGN', value: 'YGN' }]
+                : col.key === 'status'
+                  ? [
+                      { label: 'At Office', value: 'At Office' },
+                      { label: 'On Way', value: 'On Way' },
+                      { label: 'Delivered', value: 'Delivered' },
+                      { label: 'In-Transit', value: 'In-Transit' },
+                    ]
+                  : col.key === 'fee_type'
+                    ? [
+                        { label: 'Deli', value: 'Deli' },
+                        { label: 'Kpay', value: 'Kpay' },
+                        { label: 'Cash', value: 'Cash' },
+                        { label: 'Bill', value: 'Bill' },
+                      ]
+                    : col.key === 'pickup_rider' || col.key === 'deliver_rider'
+                      ? riders.map(r => ({ label: r.name, value: r.name }))
+                      : locationOptions.map(loc => ({ label: loc, value: loc }))
+            }
+            selectedValues={Array.isArray(colFilters[col.key]) ? colFilters[col.key] as string[] : []}
+            onChange={(values) => handleFilterChange(col.key, values)}
+          />
+        ) : ['received_date', 'deliver_date', 'cleared_date', 'created_at', 'transit_date'].includes(col.key) ? (
+          <input
+            type="date"
+            className={filterInputCls}
+            value={typeof colFilters[col.key] === 'string' ? colFilters[col.key] : ''}
+            onChange={(e) => handleFilterChange(col.key, e.target.value)}
+          />
+        ) : (
+          <input 
+            className={filterInputCls}
+            placeholder="Filter..." 
+            value={typeof colFilters[col.key] === 'string' ? colFilters[col.key] : ''}
+            onChange={e => handleFilterChange(col.key, e.target.value)} 
+          />
+        )}
+      </th>
+    ))}
+  </tr>
+)}
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
@@ -611,8 +765,13 @@ useEffect(() => {
                   key={o.id} 
                   onClick={() => setViewingDetailOrder(o)}
                   onContextMenu={(e) => handleRowContextMenu(e, o)} 
-                  
-                  className="hover:bg-gray-50/80 transition-colors cursor-context-menu"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    handleRowMouseDown(o.id);
+                  }}
+                  onMouseEnter={() => handleRowMouseEnter(o.id)}
+                  onMouseUp={() => setIsDraggingSelection(false)}
+                  className="hover:bg-gray-50/80 transition-colors cursor-context-menu select-none"
                 >
                   {/* 👇 Checkbox Cell */}
       <td className="py-2.5 px-2 text-center" onClick={(e) => e.stopPropagation()}>

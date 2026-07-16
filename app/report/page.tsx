@@ -461,6 +461,19 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
   const riderSummaryOop = handovers.filter(h => h.transaction_type === 'OOP').reduce((sum, h) => sum + (Number(h.amount) || 0), 0);
   const riderSummaryGap = riderSummaryTotal - (riderSummaryCashIn + riderSummaryOop);
 
+  const oppositeCity = userBranch === 'MDY' ? 'YGN' : 'MDY';
+
+  const oppositebillTotal = reportData
+    .filter(o => 
+      o.deliver_date === selectedDate && 
+      (o.fee_type === 'Cash' || o.fee_type === 'Kpay') && 
+      o.sender_loc === oppositeCity &&
+      o.receiver_loc === userBranch
+    )
+    .reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
+
+  const oppositebillby2 = oppositebillTotal / 2;
+
   // ၂။ ရုံးခွဲအလိုက် ရှင်းပြီးသား Office Paid စုစုပေါင်းကို တွက်ချက်သည်
   const officePaidTotal = reportData
     .filter(o => 
@@ -473,18 +486,17 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
 
   // ၁။ Deli Fee စုစုပေါင်းများနှင့် မြို့အလိုက် သတ်မှတ်ချက်များကို အရင်တွက်ချက်သည်
   const billdeliTotal = reportData.reduce((sum, o) => 
-  sum + (((o.status === 'Delivered' || o.status === 'Settled') && (o.fee_type === 'Deli' || o.fee_type === 'Bill')) ? (Number(o.deli_fee) || 0) : 0), 
-  0
-);
+    sum + (((o.status === 'Delivered' || o.status === 'Settled') && (o.fee_type === 'Deli' || o.fee_type === 'Bill')) ? (Number(o.deli_fee) || 0) : 0), 
+    0
+  );
 
-const tableDeliFeeTotal = officePaidTotal + billdeliTotal ;
+  const tableDeliFeeTotal = officePaidTotal + billdeliTotal + oppositebillby2;
 
-  const oppositeCity = userBranch === 'MDY' ? 'YGN' : 'MDY';
   const oppositeCityDeliTotal = reportData.reduce((sum, o) => 
-  sum + ((o.sender_loc === oppositeCity && (o.status === 'Delivered' || o.status === 'Settled')) ? (Number(o.deli_fee) || 0) : 0), 
-  0
-);
-  const oppositeCityDeliHalf = oppositeCityDeliTotal / 2;
+    sum + ((o.sender_loc === oppositeCity && (o.status === 'Delivered' || o.status === 'Settled')) ? (Number(o.deli_fee) || 0) : 0), 
+    0
+  );
+  const oppositeCityDeliHalf = (oppositeCityDeliTotal / 2) - oppositebillby2;
   const oppositeCityDeliRemaining = tableDeliFeeTotal - oppositeCityDeliHalf;
 
   const senderLocCount = Object.keys(senderCodByLoc).length;
@@ -501,17 +513,6 @@ const tableDeliFeeTotal = officePaidTotal + billdeliTotal ;
   o.receiver_loc !== 'YGN'
     )
     .reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
-
-     const oppositebillTotal = reportData
-    .filter(o => 
-      o.deliver_date === selectedDate && 
-      (o.fee_type === 'Cash' || o.fee_type === 'Kpay') && 
-      o.sender_loc === oppositeCity &&
-      o.receiver_loc === userBranch
-    )
-    .reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
-
-    const oppositebillby2 = oppositebillTotal/2 ;
 
   // ၃။ တစ်ဖက်မြို့က ရှင်းလိုက်သည့် Opposite Paid စုစုပေါင်းကို တွက်ချက်သည်
   const oppositePaidTotal = reportData

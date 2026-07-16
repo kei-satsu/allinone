@@ -508,7 +508,6 @@ export default function BulkUpdatePage() {
                   setBulkStatus(e.target.value);
                   setBulkRiderId(''); 
                 }} className={winSelect}>
-                  
                   <option value="On Way">🚵 On Way</option>
                   <option value="Delivered">✅ Delivered</option>
                   <option value="In-Transit">🚚 In-Transit</option>

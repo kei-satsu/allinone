@@ -557,27 +557,25 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                     value={formData.cleared_date ? "yes" : "no"} 
                     onChange={e => setFormData({
                       ...formData, 
-                      cleared_date: e.target.value === "yes" ? new Date().toISOString().split('T')[0] : ""
+                      cleared_date: e.target.value === "yes" ? (formData.cleared_date || new Date().toISOString().split('T')[0]) : ""
                     })} 
                     className={winSelect}
                   >
                     <option value="no">Not Cleared</option>
                     <option value="yes">Cleared</option>
                   </select>
-
-                  {formData.cleared_date && (
-                    <div className="mt-2">
-                      <label className="block text-gray-500 font-medium mb-1 text-[10px] uppercase tracking-wide">Cleared Date</label>
-                      <input 
-                        type="date" 
-                        value={formData.cleared_date} 
-                        onChange={e => setFormData({...formData, cleared_date: e.target.value})} 
-                        className={`${winInput} font-mono`}
-                        required
-                      />
-                    </div>
-                  )}
                 </div>
+              </div>
+
+              <div className="mt-3">
+                <label className={labelStyle}>Cleared Date</label>
+                <input 
+                  type="date" 
+                  value={formData.cleared_date || ''} 
+                  onChange={e => setFormData({...formData, cleared_date: e.target.value})} 
+                  className={`${winInput} font-mono`} 
+                />
+                <p className="text-[10px] text-gray-500 mt-1">Leave blank to mark as uncleared.</p>
               </div>
             </div>
 
