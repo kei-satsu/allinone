@@ -528,6 +528,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                       <option value="Delivered">✅ Delivered</option>
                       <option value="In-Transit">🚚 In-Transit</option>
                       <option value="Returned">↗️ Returned</option>
+                      <option value="Settled">💰 Settled</option>
                   </select>
                 </div>
                 <div>

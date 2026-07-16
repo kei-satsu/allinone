@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import EditOrderModal from '@/components/EditOrderModal'
@@ -42,6 +42,7 @@ export default function DailyReport() {
   const [userBranch, setUserBranch] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
   const [handovers, setHandovers] = useState<any[]>([])
+  const [settling, setSettling] = useState(false)
 
 
   
@@ -231,6 +232,13 @@ export default function DailyReport() {
   // 💡 (ကုဒ်သစ်) ရွေးချယ်ထားသော ပါဆယ် ID များကို ထိန်းချုပ်ရန် State
 const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
+  // Drag selection states
+  const tableRef = useRef<HTMLDivElement | null>(null)
+  const [isSelecting, setIsSelecting] = useState(false)
+  const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null)
+  const [selectionBox, setSelectionBox] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
+  const [selectionMode, setSelectionMode] = useState<'add' | 'remove'>('add')
+
 // 💡 (ကုဒ်သစ်) Select All အားလုံးကို တစ်ပြိုင်နက် ရွေးရန်/ဖျက်ရန်
 const handleSelectAll = (checked: boolean) => {
   if (checked) {
@@ -249,6 +257,67 @@ const handleSelectRow = (id: string, checked: boolean) => {
     setSelectedIds(prev => prev.filter(itemId => itemId !== id));
   }
 };
+
+// Drag/select handlers
+const startDragSelection = (clientX: number, clientY: number, initialRowId?: string) => {
+  setIsSelecting(true)
+  setSelectionStart({ x: clientX, y: clientY })
+  // if initial row exists and is selected, we will remove intersected rows, otherwise add
+  if (initialRowId && selectedIds.includes(String(initialRowId))) setSelectionMode('remove')
+  else setSelectionMode('add')
+}
+
+const stopDragSelection = () => {
+  setIsSelecting(false)
+  setSelectionStart(null)
+  setSelectionBox(null)
+}
+
+const updateSelectionBox = (clientX: number, clientY: number) => {
+  if (!selectionStart || !tableRef.current) return
+  const rect = tableRef.current.getBoundingClientRect()
+  const left = Math.min(selectionStart.x, clientX)
+  const top = Math.min(selectionStart.y, clientY)
+  const right = Math.max(selectionStart.x, clientX)
+  const bottom = Math.max(selectionStart.y, clientY)
+
+  const box = { left, top, width: right - left, height: bottom - top }
+  setSelectionBox(box)
+
+  // determine rows that intersect
+  const rows = Array.from(tableRef.current.querySelectorAll('tbody tr')) as HTMLElement[]
+  const intersectedIds: string[] = []
+  rows.forEach(row => {
+    const r = row.getBoundingClientRect()
+    const overlap = !(r.right < box.left || r.left > box.left + box.width || r.bottom < box.top || r.top > box.top + box.height)
+    if (overlap) {
+      const id = row.getAttribute('data-id')
+      if (id) intersectedIds.push(id)
+    }
+  })
+
+  setSelectedIds(prev => {
+    if (selectionMode === 'add') {
+      const set = new Set(prev)
+      intersectedIds.forEach(id => set.add(id))
+      return Array.from(set)
+    } else {
+      return prev.filter(id => !intersectedIds.includes(id))
+    }
+  })
+}
+
+// Global listeners so dragging out of container still works
+useEffect(() => {
+  const onMove = (e: MouseEvent) => { if (isSelecting) updateSelectionBox(e.clientX, e.clientY) }
+  const onUp = () => { if (isSelecting) stopDragSelection() }
+  window.addEventListener('mousemove', onMove)
+  window.addEventListener('mouseup', onUp)
+  return () => {
+    window.removeEventListener('mousemove', onMove)
+    window.removeEventListener('mouseup', onUp)
+  }
+}, [isSelecting, selectionStart, selectionMode, selectedIds])
 
 // 💡 (ကုဒ်သစ်) ရွေးချယ်ထားသော ပါဆယ်များ၏ အရေအတွက်နှင့် ပမာဏများကို တွက်ချက်ခြင်း
 const selectedOrders = filteredOrders.filter(o => selectedIds.includes(o.id));
@@ -340,8 +409,9 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
     if (key === 'status') return (
       <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wide ${
         o.status === 'Delivered' ? 'bg-green-50 text-green-700 border border-green-200' : 
-        o.status === 'Pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 
-        o.status === 'On Way' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-gray-100 text-gray-600 border border-gray-200'
+        o.status === 'Settled' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 
+        o.status === 'On Way' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 
+        'bg-gray-50 text-gray-700 border border-gray-200'
       }`}>{o.status}</span>
     )
     if (key === 'image_url') return o.image_url ? (
@@ -370,7 +440,7 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
   // Delivered ဖြစ်ပြီးသား ပါဆယ်များအတွက် Senders နှင့် မြို့အလိုက် COD စာရင်းတွက်ချက်ခြင်း
   const senderCodByLoc = reportData
     .filter(o => 
-      o.status === 'Delivered' &&       // 👈 ၁။ Status သည် Delivered ဖြစ်ရမည်
+      (o.status === 'Delivered' || o.status === 'Settled') &&       // 👈 ၁။ Status သည် Delivered သို့မဟုတ် Settled ဖြစ်ရမည်
       o.sender_name &&                  // 👈 ၂။ Sender အမည် ပါဝင်ရမည်
       o.deliver_date === selectedDate   // 👈 ၃။ ယနေ့ ရက်စွဲနှင့် ကိုက်ညီရမည်
     )
@@ -385,7 +455,7 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
       return acc;
     }, {});
 
-  const deliveredOrders = reportData.filter(o => o.status === 'Delivered');
+  const deliveredOrders = reportData.filter(o => o.status === 'Delivered' || o.status === 'Settled');
   const riderSummaryTotal = deliveredOrders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
   const riderSummaryCashIn = handovers.filter(h => h.transaction_type === 'Cash-in').reduce((sum, h) => sum + (Number(h.amount) || 0), 0);
   const riderSummaryOop = handovers.filter(h => h.transaction_type === 'OOP').reduce((sum, h) => sum + (Number(h.amount) || 0), 0);
@@ -396,21 +466,22 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
     .filter(o => 
       o.received_date === selectedDate && 
       (o.fee_type === 'Cash' || o.fee_type === 'Kpay') && 
-      o.receiver_loc === userBranch
+      o.receiver_loc === userBranch &&
+      o.sender_loc === userBranch
     )
     .reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
 
   // ၁။ Deli Fee စုစုပေါင်းများနှင့် မြို့အလိုက် သတ်မှတ်ချက်များကို အရင်တွက်ချက်သည်
   const billdeliTotal = reportData.reduce((sum, o) => 
-  sum + ((o.status === 'Delivered' && (o.fee_type === 'Deli' || o.fee_type === 'Bill')) ? (Number(o.deli_fee) || 0) : 0), 
+  sum + (((o.status === 'Delivered' || o.status === 'Settled') && (o.fee_type === 'Deli' || o.fee_type === 'Bill')) ? (Number(o.deli_fee) || 0) : 0), 
   0
 );
 
-const tableDeliFeeTotal = officePaidTotal + billdeliTotal;
+const tableDeliFeeTotal = officePaidTotal + billdeliTotal ;
 
   const oppositeCity = userBranch === 'MDY' ? 'YGN' : 'MDY';
   const oppositeCityDeliTotal = reportData.reduce((sum, o) => 
-  sum + ((o.sender_loc === oppositeCity && o.status === 'Delivered') ? (Number(o.deli_fee) || 0) : 0), 
+  sum + ((o.sender_loc === oppositeCity && (o.status === 'Delivered' || o.status === 'Settled')) ? (Number(o.deli_fee) || 0) : 0), 
   0
 );
   const oppositeCityDeliHalf = oppositeCityDeliTotal / 2;
@@ -430,7 +501,17 @@ const tableDeliFeeTotal = officePaidTotal + billdeliTotal;
   o.receiver_loc !== 'YGN'
     )
     .reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
-  
+
+     const oppositebillTotal = reportData
+    .filter(o => 
+      o.deliver_date === selectedDate && 
+      (o.fee_type === 'Cash' || o.fee_type === 'Kpay') && 
+      o.sender_loc === oppositeCity &&
+      o.receiver_loc === userBranch
+    )
+    .reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
+
+    const oppositebillby2 = oppositebillTotal/2 ;
 
   // ၃။ တစ်ဖက်မြို့က ရှင်းလိုက်သည့် Opposite Paid စုစုပေါင်းကို တွက်ချက်သည်
   const oppositePaidTotal = reportData
@@ -443,7 +524,7 @@ const tableDeliFeeTotal = officePaidTotal + billdeliTotal;
 
   // ၄။ ယနေ့ရက်စွဲအတိုင်း Delivered ဖြစ်သွားသည့် Rider ပါဆယ်များ၏ တန်ဖိုးစုစုပေါင်း (grandTotalToPay) ကို ကြိုတင်တွက်ထုတ်သည်
   const grandTotalToPayCalculated = reportData
-    .filter(o => o.status === 'Delivered' && o.deliver_date === selectedDate)
+    .filter(o => (o.status === 'Delivered' || o.status === 'Settled') && o.deliver_date === selectedDate)
     .reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
 
   // ၅။ ✨ သင်အလိုရှိသော ပုံသေနည်းအတိုင်း ဒေတာ ၃ ခုကို ပေါင်းပြီး tableTotalAmount ကို သတ်မှတ်သည်
@@ -801,6 +882,7 @@ const tableDeliFeeTotal = officePaidTotal + billdeliTotal;
                 <option value="On Way">On Way</option>
                 <option value="Delivered">Delivered</option>
                 <option value="In-Transit">In-Transit</option>
+                <option value="Settled">Settled</option>
               </select>
             </div>
             <div>
@@ -877,38 +959,49 @@ const tableDeliFeeTotal = officePaidTotal + billdeliTotal;
             {/* ---------------------------------------------------- */}
             {/* ဘယ်ဘက်ခြမ်း (Purple & Red Areas) - Width 30% */}
             {/* ---------------------------------------------------- */}
-            <div className="w-[30%] flex flex-col border-r border-gray-200 shrink-0">
-              
-              {/* 🟣 ခရမ်းရောင်နေရာ (Top Left Placeholder - ပုံထဲက Title နေရာ) */}
+            <div className="w-[30%] flex flex-col border-r border-gray-200 shrink-0 bg-gray-50/30">
+  
+  {/* 🟣 ၁။ Opposite Paid Card */}
+  <div className="flex-1 p-4 border-b border-gray-200 flex flex-col items-center justify-center bg-white hover:bg-purple-50/20 transition-colors">
+    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">
+      {userBranch === 'MDY' ? 'Yangon' : 'Mandalay'} Paid
+    </span>
+    <span className="text-base font-extrabold text-gray-900">
+      {oppositePaidTotal.toLocaleString()} Ks
+    </span>
+  </div>
 
+  {/* 🟣 ၂။ Opposite Bill Card (မှနှုတ်ရန်) */}
+  <div className="flex-1 p-4 border-b border-gray-200 flex flex-col items-center justify-center bg-white hover:bg-purple-50/20 transition-colors">
+    <span className="text-[10px] font-bold uppercase tracking-wider text-orange-600 mb-1">
+      {userBranch === 'MDY' ? 'ရန်ကုန်' : 'မန္တလေး'} မှနှုတ်ရန်
+    </span>
+    <span className="text-base font-extrabold text-orange-600">
+      {oppositebillby2.toLocaleString()} Ks
+    </span>
+  </div>
 
-              <div className="h-[100px] p-2 bg-purple-50/40 border-b border-gray-200 relative">
-                <div className="absolute inset-1  rounded flex flex-col items-center justify-center">
-                  <span className="text-[10px] uppercase tracking-wide text-orange-600">{userBranch === 'MDY' ? 'Yangon' : 'Mandalay'} Paid</span>
-              <span className="text-right text-sm font-bold">{oppositePaidTotal.toLocaleString()} Ks</span>
-                </div>
-              </div>
+  {/* 🟣 ၃။ Office Paid Card */}
+  <div className="flex-1 p-4 border-b border-gray-200 flex flex-col items-center justify-center bg-white hover:bg-purple-50/20 transition-colors">
+    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">
+      Office Paid
+    </span>
+    <span className="text-base font-extrabold text-gray-900">
+      {officePaidTotal.toLocaleString()} Ks
+    </span>
+  </div>
 
-                   {/* 🟣 ခရမ်းရောင်နေရာ (Top Left Placeholder - ပုံထဲက Title နေရာ) */}
-              <div className="h-[100px] p-2 bg-purple-50/40 border-b border-gray-200 relative">
-                <div className="absolute inset-1  rounded flex flex-col items-center justify-center">
-                  <span className="text-[10px] uppercase tracking-wide text-orange-600">Office Paid</span>
-              <span className="text-right text-sm font-bold">{officePaidTotal.toLocaleString()} Ks</span>
-                </div>
-              </div>
+  {/* 🔴 ၄။ Others Paid Card */}
+  <div className="flex-1 p-4 flex flex-col items-center justify-center bg-white hover:bg-red-50/20 transition-colors">
+    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">
+      Others Paid
+    </span>
+    <span className="text-base font-extrabold text-gray-900">
+      {othersPaidTotal.toLocaleString()} Ks
+    </span>
+  </div>
 
-              
-              {/* 🔴 အနီရောင်နေရာ (Bottom Left Placeholder - ပုံထဲက Rider Name List နေရာ) */}
-              <div className="flex-1 p-2 bg-red-50/40 relative">
-                <div className="absolute inset-1 top-2  rounded flex flex-col items-center justify-center">
-                   <span className="text-[10px] uppercase tracking-wide text-orange-600">Others Paid</span>
-              <span className="text-right text-sm font-bold">{othersPaidTotal.toLocaleString()} Ks</span>
-                </div>
-              </div> 
-
-           
-
-            </div>
+</div>
 
            {/* ---------------------------------------------------- */}
 {/* ညာဘက်ခြမ်း (Blue Area - Table & Buttons) - Width 70% */}
@@ -954,11 +1047,11 @@ const tableDeliFeeTotal = officePaidTotal + billdeliTotal;
         o.deliver_date === selectedDate
       );
 
-      const deliveredCount = riderOrders.filter(o => o.status === 'Delivered').length;
+      const deliveredCount = riderOrders.filter(o => o.status === 'Delivered' || o.status === 'Settled').length;
       const onWayCount = riderOrders.filter(o => o.status === 'On Way').length;
       const totalWayCount = riderOrders.length; 
 
-      const totalToPay = riderOrders.filter(o => o.status === 'Delivered').reduce((sum, o) => sum + (o.total_amount || 0), 0);
+      const totalToPay = riderOrders.filter(o => o.status === 'Delivered' || o.status === 'Settled').reduce((sum, o) => sum + (o.total_amount || 0), 0);
       
       const riderHandovers = handovers.filter(h => h.rider_name === rider.name);
       const cashIn = riderHandovers.filter(h => h.transaction_type === 'Cash-in').reduce((sum, h) => sum + (h.amount || 0), 0);
@@ -1142,7 +1235,21 @@ const tableDeliFeeTotal = officePaidTotal + billdeliTotal;
 </div> {/* 👈 အပြင်ဘက်ဆုံး Layout အတွက် မူလအတိုင်း ပိတ်ပေးထားသည့် ဒုတိယမြောက် Div */}
 
       {/* ── Workspace Table / List Area (Flex item optimized) ── */}
-      <div className="flex-1 overflow-auto bg-white sm:mx-4 sm:my-3 sm:rounded-lg sm:border sm:border-gray-200 sm:shadow-sm">
+      <div
+        ref={tableRef}
+        onMouseDown={(e) => {
+          const tgt = e.target as HTMLElement
+          if (tgt.closest && tgt.closest('button, a, input, select, textarea')) return
+          const row = tgt.closest ? (tgt.closest('tr') as HTMLElement | null) : null
+          const initialId = row ? row.getAttribute('data-id') || undefined : undefined
+          startDragSelection((e as any).clientX, (e as any).clientY, initialId)
+          e.preventDefault()
+        }}
+        className="flex-1 overflow-auto bg-white sm:mx-4 sm:my-3 sm:rounded-lg sm:border sm:border-gray-200 sm:shadow-sm"
+      >
+        {selectionBox && (
+          <div style={{ position: 'fixed', left: selectionBox.left, top: selectionBox.top, width: selectionBox.width, height: selectionBox.height, backgroundColor: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.6)', zIndex: 60, pointerEvents: 'none' }} />
+        )}
         
         {/* Desktop View Table */}
         <div className="hidden sm:block">
@@ -1209,6 +1316,7 @@ const tableDeliFeeTotal = officePaidTotal + billdeliTotal;
                           <option value="On Way">On Way</option>
                           <option value="Delivered">Delivered</option>
                           <option value="In-Transit">In-Transit</option>
+                          <option value="Settled">Settled</option>
                         </select>
                       ) : col.key === 'pickup_rider' || col.key === 'deliver_rider' ? (
                         <select
@@ -1248,6 +1356,7 @@ const tableDeliFeeTotal = officePaidTotal + billdeliTotal;
   ) : filteredOrders.map(o => (
     <tr 
       key={o.id} 
+      data-id={String(o.id)}
       className={`hover:bg-gray-50/80 transition-colors cursor-context-menu ${selectedIds.includes(o.id) ? 'bg-orange-50/30' : ''}`}
       onContextMenu={(e) => {
         e.preventDefault(); 
@@ -1256,6 +1365,11 @@ const tableDeliFeeTotal = officePaidTotal + billdeliTotal;
           y: e.clientY,
           order: o
         });
+      }}
+      onClick={(e) => {
+        const tgt = e.target as HTMLElement
+        if (tgt.closest && tgt.closest('button, a, input')) return
+        handleSelectRow(o.id, !selectedIds.includes(o.id))
       }}
     >
       {/* 💡 တစ်ကွက်ချင်းစီအတွက် Row Checkbox အသစ် */}
@@ -1307,6 +1421,36 @@ const tableDeliFeeTotal = officePaidTotal + billdeliTotal;
       <div className="flex flex-col items-start border-l border-gray-100 pl-4 bg-orange-50/80 px-3 py-0.5 rounded-md border border-orange-100">
         <span className="text-[9px] text-orange-600 font-black uppercase tracking-wider">Net Total Amount</span>
         <span className="font-black text-orange-600 text-[12px]">{grandTotal.toLocaleString()} Ks</span>
+      </div>
+
+      {/* Mark Settled Button */}
+      <div className="ml-2">
+        <button
+          onClick={async () => {
+            if (selectedIds.length === 0) return
+            if (!confirm('ရွေးချယ်ထားသော မှတ်တမ်းများကို Settled အဖြစ် အတည်ပြုပါသလား?')) return
+            try {
+              setSettling(true)
+              const idsForQuery = selectedIds.map(id => isNaN(Number(id)) ? id : Number(id))
+              const { error } = await supabase
+                .from('orders')
+                .update({ status: 'Settled' })
+                .in('id', idsForQuery)
+              if (error) throw error
+              alert('ရွေးချယ်ထားသော မှတ်တမ်းများအား Settled ဖြစ်စေပြီးပါပြီ။')
+              setSelectedIds([])
+              fetchData(userBranch, selectedDate)
+            } catch (err: any) {
+              alert('Error: ' + (err.message || err))
+            } finally {
+              setSettling(false)
+            }
+          }}
+          disabled={settling}
+          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm disabled:opacity-50"
+        >
+          {settling ? 'Settling...' : 'Mark Settled'}
+        </button>
       </div>
 
     </div>
