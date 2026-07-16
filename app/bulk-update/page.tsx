@@ -508,10 +508,11 @@ export default function BulkUpdatePage() {
                   setBulkStatus(e.target.value);
                   setBulkRiderId(''); 
                 }} className={winSelect}>
-                  <option value="At Office">📦 At Office</option>
+                  
                   <option value="On Way">🚵 On Way</option>
                   <option value="Delivered">✅ Delivered</option>
                   <option value="In-Transit">🚚 In-Transit</option>
+                  <option value="Returned">↗️ Returned</option>
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">▼</div>
               </div>
