@@ -30,6 +30,38 @@ const openOfflineDB = (): Promise<IDBDatabase> => {
   });
 };
 
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        const base64Data = reader.result.includes(',') ? reader.result.split(',')[1] : reader.result;
+        resolve(base64Data);
+      } else {
+        reject(new Error('Failed to read file as Base64'));
+      }
+    };
+    reader.onerror = () => reject(reader.error || new Error('Failed to read file as Base64'));
+    reader.readAsDataURL(file);
+  });
+};
+
+const base64ToFile = (base64String: string, fileName: string): File => {
+  const cleanedBase64 = base64String.includes(',') ? base64String.split(',')[1] : base64String;
+  const byteCharacters = atob(cleanedBase64);
+  const byteNumbers = new Array(byteCharacters.length);
+
+  for (let i = 0; i < byteCharacters.length; i += 1) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+
+  const byteArray = new Uint8Array(byteNumbers);
+  const mimeTypeMatch = base64String.match(/^data:(.*?);base64,/i);
+  const mimeType = mimeTypeMatch?.[1] || 'application/octet-stream';
+
+  return new File([byteArray], fileName, { type: mimeType });
+};
+
 // Queue ထဲသို့ ဒေတာ သိမ်းဆည်းခြင်း
 const saveToOfflineQueue = async (item: any) => {
   const db = await openOfflineDB();
@@ -222,6 +254,15 @@ export default function IntakePage() {
   const [isBackgroundUploading, setIsBackgroundUploading] = useState(false);
   const [backgroundUploadCount, setBackgroundUploadCount] = useState(0); 
   const [backgroundUploadStatus, setBackgroundUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const [queueItems, setQueueItems] = useState<any[]>([]);
+  const [queueManagerOpen, setQueueManagerOpen] = useState(false);
+  const [queueActionItemId, setQueueActionItemId] = useState<string | null>(null);
+
+  const refreshQueue = async () => {
+    const items = await getOfflineQueue();
+    setQueueItems(items);
+    return items;
+  };
 
   const clearAllOfflineQueue = async () => {
   const db = await openOfflineDB();
@@ -345,11 +386,16 @@ export default function IntakePage() {
       const remainingQueue = await getOfflineQueue();
       if (remainingQueue.length > 0) {
         setBackgroundUploadCount(remainingQueue.length);
-        setBackgroundUploadStatus('error'); // အနီရောင် Status ပြထားပြီး ဝန်ထမ်းကို Retry နှိပ်ခွင့်ပြုမည်
+        setBackgroundUploadStatus('error');
       }
     };
     checkUnfinishedUploads();
   }, []);
+
+  useEffect(() => {
+    if (!queueManagerOpen) return;
+    refreshQueue();
+  }, [queueManagerOpen]);
 
   // Sound System (Beep & Shutter)
   const playBeepSound = () => {
@@ -517,31 +563,78 @@ export default function IntakePage() {
 
   const switchFacingMode = () => setFacingMode(prev => prev === 'environment' ? 'user' : 'environment');
 
-  const deleteImage = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation(); 
-    setCapturedImages((prev) => {
-      const filtered = prev.filter((img) => img.id !== id);
-      if (currentIdx >= filtered.length) setCurrentIdx(Math.max(0, filtered.length - 1));
-      return filtered;
-    });
-  };
+ const deleteImage = (id: string, e: React.MouseEvent) => {
+  e.stopPropagation(); 
+  
+  // ဖျက်ပြီးနောက် ကျန်ရှိမည့် ပုံအသစ်စာရင်းကို ကြိုတင်တွက်ချက်မည်
+  const updatedImages = capturedImages.filter((img) => img.id !== id);
+  
+  // အကယ်၍ ပုံတစ်ပုံမှ မကျန်တော့ပါက (Length က 0 ဖြစ်သွားပါက)
+  if (updatedImages.length === 0) {
+    setCapturedImages([]);                 // ပုံစာရင်းကို Empty ဖြစ်အောင်လုပ်မည်
+    setIntakeMethod('choose');             // စစဝင်ချင်း 'Barcode ပါ/မပါ' ရွေးချယ်သည့် Screen သို့ ပြန်သွားမည်
+    setFlowMode('camera');                 // FlowMode ကို ကင်မရာအခြေအနေသို့ ပြန်ပြောင်းမည်
+    setBarcodeStep('scanning');            // Barcode အဆင့်ကိုလည်း scanning အဖြစ် ပြန်ပြင်မည်
+    setCurrentScannedBarcode('');          // သိမ်းထားမိသော Barcode အဟောင်းကို ဖျက်မည်
+    setCurrentIdx(0);                      // Index ကို 0 သို့ ပြန်ညှိမည်
+  } else {
+    // ပုံများ ကျန်သေးပါက ပုံမှန်အတိုင်း ရှေ့ဆက်သွားမည်
+    setCapturedImages(updatedImages);
+    if (currentIdx >= updatedImages.length) {
+      setCurrentIdx(Math.max(0, updatedImages.length - 1));
+    }
+  }
+};
 
   // Text Annotations Operations
   const addTextToCanvas = () => {
-    if (currentImgObj && newText.trim()) {
-      const annotationId = `text_${Date.now()}`;
-      setCapturedImages(capturedImages.map((img) => img.id === currentImgObj.id ? { ...img, textAnnotations: [...img.textAnnotations, { id: annotationId, text: newText.trim(), x: 50, y: 120 }] } : img));
-      setNewText('');
-      setDrawingText(false);
-    }
+    if (!currentImgObj || !newText.trim()) return;
+
+    const annotationId = `text_${Date.now()}`;
+    const textValue = newText.trim();
+
+    setCapturedImages((prev) =>
+      prev.map((img) =>
+        img.id === currentImgObj.id
+          ? {
+              ...img,
+              textAnnotations: [...img.textAnnotations, { id: annotationId, text: textValue, x: 50, y: 120 }],
+            }
+          : img
+      )
+    );
+    setNewText('');
+    setDrawingText(false);
   };
 
   const handleAnnotationDrag = (annId: string, x: number, y: number) => {
-    setCapturedImages(capturedImages.map((img) => img.id === currentImgObj.id ? { ...img, textAnnotations: img.textAnnotations.map((ann) => ann.id === annId ? { ...ann, x, y } : ann) } : img));
+    if (!currentImgObj) return;
+
+    setCapturedImages((prev) =>
+      prev.map((img) =>
+        img.id === currentImgObj.id
+          ? {
+              ...img,
+              textAnnotations: img.textAnnotations.map((ann) => (ann.id === annId ? { ...ann, x, y } : ann)),
+            }
+          : img
+      )
+    );
   };
 
   const deleteAnnotation = (annId: string) => {
-    setCapturedImages(capturedImages.map((img) => img.id === currentImgObj.id ? { ...img, textAnnotations: img.textAnnotations.filter((ann) => ann.id !== annId) } : img));
+    if (!currentImgObj) return;
+
+    setCapturedImages((prev) =>
+      prev.map((img) =>
+        img.id === currentImgObj.id
+          ? {
+              ...img,
+              textAnnotations: img.textAnnotations.filter((ann) => ann.id !== annId),
+            }
+          : img
+      )
+    );
   };
 
   const handleCropComplete = useCallback((croppedArea: Area, croppedAreaPixels: Area) => setCroppedAreaPixels(croppedAreaPixels), []);
@@ -601,6 +694,104 @@ export default function IntakePage() {
     document.body.removeChild(link);
   };
 
+  const processSingleOfflineItem = async (item: any) => {
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'YOUR_CLOUD_NAME';
+    const uploadPreset = 'for_allinone';
+
+    const recoveredFile = item.file instanceof File
+      ? item.file
+      : item.fileBase64
+        ? base64ToFile(item.fileBase64, item.fileName || 'offline-image.jpg')
+        : (item.file as File | undefined);
+
+    if (!recoveredFile) {
+      throw new Error('Offline queue item is missing its image payload');
+    }
+
+    let fileToUpload: File = recoveredFile;
+
+    if (item.textAnnotations && item.textAnnotations.length > 0) {
+      const temporaryPreviewUrl = URL.createObjectURL(recoveredFile);
+      const adaptedItem = { ...item, preview: temporaryPreviewUrl, file: recoveredFile };
+      fileToUpload = (await bakeImageWithText(adaptedItem)) as File;
+      URL.revokeObjectURL(temporaryPreviewUrl);
+    }
+
+    const formData = new FormData();
+    formData.append('file', fileToUpload);
+    formData.append('upload_preset', uploadPreset);
+
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+      { method: 'POST', body: formData }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Cloudinary Upload Failed: ${response.statusText}`);
+    }
+
+    const cloudinaryData = await response.json();
+    const secureUrl = cloudinaryData.secure_url;
+
+    const { error: dbError } = await supabase
+      .from('orders')
+      .insert([
+        {
+          image_url: secureUrl,
+          branch: item.branch,
+          status: 'Pending',
+          received_date: item.received_date,
+          uploader_note: item.uploader_note || null,
+          barcode: item.barcode || null,
+        },
+      ]);
+
+    if (dbError) {
+      throw dbError;
+    }
+
+    await sendToTelegram(secureUrl, item.uploader_note, item.barcode, item.branch);
+  };
+
+  const uploadSingleItem = async (itemId: string) => {
+    const item = queueItems.find((entry) => entry.id === itemId);
+    if (!item) return;
+
+    setQueueActionItemId(itemId);
+    try {
+      await processSingleOfflineItem(item);
+      await deleteFromOfflineQueue(itemId);
+      const remainingItems = await refreshQueue();
+      setBackgroundUploadCount(remainingItems.length);
+      setBackgroundUploadStatus(remainingItems.length > 0 ? 'error' : 'idle');
+    } catch (error) {
+      console.error('Single Item Upload Error:', error);
+      setBackgroundUploadStatus('error');
+    } finally {
+      setQueueActionItemId(null);
+    }
+  };
+
+  const deleteSingleItem = async (itemId: string) => {
+    if (!window.confirm('ဒီ Pending Item ကို ဖျက်ပစ်မလား?')) return;
+
+    setQueueActionItemId(itemId);
+    try {
+      await deleteFromOfflineQueue(itemId);
+      const remainingItems = await refreshQueue();
+      setBackgroundUploadCount(remainingItems.length);
+      setBackgroundUploadStatus(remainingItems.length > 0 ? 'error' : 'idle');
+      if (remainingItems.length === 0) {
+        setQueueManagerOpen(false);
+      }
+    } catch (error) {
+      console.error('Single Item Delete Error:', error);
+      setBackgroundUploadStatus('error');
+    } finally {
+      setQueueActionItemId(null);
+    }
+  };
+
   // 🌟 [Core Engine] ဒေတာနှင့် ဓာတ်ပုံ တစ်တွဲတည်း အောင်မြင်မှ Queue ထဲက ဖျက်မည့် စနစ်
   // 🌟 Database အောင်မြင်မှ Telegram ပို့ပြီး Queue ထဲကဖျက်မည့် စနစ်သစ်
   const processOfflineQueue = async () => {
@@ -609,6 +800,7 @@ export default function IntakePage() {
     const pendingItems = await getOfflineQueue();
     if (pendingItems.length === 0) {
       setBackgroundUploadStatus('idle');
+      setQueueItems([]);
       return;
     }
 
@@ -617,66 +809,11 @@ export default function IntakePage() {
     setBackgroundUploadStatus('uploading');
 
     try {
-      const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'YOUR_CLOUD_NAME'; 
-      const uploadPreset = 'for_allinone'; 
-
       for (const item of pendingItems) {
-        let fileToUpload = item.file;
-
-        // Bake Text Logic (ရှိခဲ့လျှင်)
-        if (item.textAnnotations && item.textAnnotations.length > 0) {
-          const temporaryPreviewUrl = URL.createObjectURL(item.file);
-          const adaptedItem = { ...item, preview: temporaryPreviewUrl };
-          fileToUpload = (await bakeImageWithText(adaptedItem)) as File;
-          URL.revokeObjectURL(temporaryPreviewUrl);
-        }
-
-        // ─── အဆင့် (၁) - CLOUDINARY သို့ ဓာတ်ပုံအရင်တင်ခြင်း ───
-        const formData = new FormData();
-        formData.append('file', fileToUpload);
-        formData.append('upload_preset', uploadPreset);
-
-        const response = await fetch(
-          `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
-          { method: 'POST', body: formData }
-        );
-
-        if (!response.ok) {
-          throw new Error(`Cloudinary Upload Failed: ${response.statusText}`);
-        }
-
-        const cloudinaryData = await response.json();
-        const secureUrl = cloudinaryData.secure_url; 
-
-        // ─── အဆင့် (၂) - SUPABASE DATABASE ထဲသို့ အရင်ဆုံး စာရင်းသွင်းခြင်း ───
-        // (ဒီနေရာကို အပေါ်သို့ ရွှေ့လိုက်ပါသည်)
-        const { error: dbError } = await supabase
-          .from('orders')
-          .insert([
-            {
-              image_url: secureUrl,                                  
-              branch: item.branch,                                    
-              status: 'Pending',                                     
-              received_date: item.received_date, 
-              uploader_note: item.uploader_note || null,                      
-              barcode: item.barcode || null,                       
-            },
-          ]);
-
-        // အကယ်၍ DB ထဲသွင်းတာ Error တက်ရင် အောက်က Telegram အဆင့်ကို ဆက်မသွားဘဲ ဒီမှာတင် ရပ်ပစ်ပါမည်
-        if (dbError) {
-          console.error("Supabase Database Insert Error:", dbError);
-          throw dbError; 
-        }
-
-        // ─── အဆင့် (၃) - DATABASE အောင်မြင်မှ TELEGRAM သို့ လှမ်းပို့ခြင်း ───
-        // (DB အောင်မြင်ပြီးမှ ဤကုဒ်အလုပ်လုပ်ပါမည်)
-        await sendToTelegram(secureUrl, item.uploader_note, item.barcode, item.branch);
-
-        // ─── အဆင့် (၄) - အားလုံး ရာနှုန်းပြည့်အောင်မြင်မှ ဖုန်းထဲက Queue ကို ဖျက်ခြင်း ───
+        await processSingleOfflineItem(item);
         await deleteFromOfflineQueue(item.id);
-        
         setBackgroundUploadCount(prev => Math.max(0, prev - 1));
+        await refreshQueue();
       }
 
       setBackgroundUploadStatus('success');
@@ -685,8 +822,7 @@ export default function IntakePage() {
       setBackgroundUploadStatus('error');
     } finally {
       setIsBackgroundUploading(false);
-      
-      const remaining = await getOfflineQueue();
+      const remaining = await refreshQueue();
       if (remaining.length > 0) {
         setBackgroundUploadStatus('error');
       }
@@ -700,10 +836,12 @@ export default function IntakePage() {
     // တစ်ပုံချင်းစီကို တစ်ခုချင်းစီစီမံနိုင်အောင် ခွဲထုတ်ပြီး Queue Item ပြုလုပ်ခြင်း
     for (const img of capturedImages) {
       const queueItemId = `queue_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const base64Data = await fileToBase64(img.file);
       
       const offlineItem = {
         id: queueItemId,
-        file: img.file, // Native File (Binary Object) ကို IndexedDB က တိုက်ရိုက်သိမ်းပေးနိုင်ပါသည်
+        fileBase64: base64Data,
+        fileName: img.file.name,
         barcode: img.barcode || null,
         textAnnotations: img.textAnnotations || [],
         branch: userBranch,
@@ -747,35 +885,36 @@ export default function IntakePage() {
                 <IconCheck className="h-4 w-4 text-emerald-400" />
               </div>
             ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-500/15">
-                <IconAlert className="h-4 w-4 text-red-400" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/15">
+                <IconAlert className="h-4 w-4 text-amber-400" />
               </div>
             )}
-            <span>
-              {backgroundUploadStatus === 'uploading' && `ပါဆယ်ပုံရိပ်များ တင်နေဆဲ... ကျန် (${backgroundUploadCount} ပုံ)`}
-              {backgroundUploadStatus === 'success' && 'ပါဆယ်မှတ်တမ်းများ အားလုံး အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။'}
-              {backgroundUploadStatus === 'error' && 'ပုံတင်ရန် အဆင်မပြေပါ။ လိုင်းစစ်ဆေးပေးပါဗျာ။'}
-            </span>
+            <div className="flex flex-col">
+              {backgroundUploadStatus === 'uploading' && (
+                <span className="text-[11px] font-semibold text-amber-300">ပါဆယ်ပုံရိပ်များ တင်နေဆဲ... ကျန် ({backgroundUploadCount} ပုံ)</span>
+              )}
+              {backgroundUploadStatus === 'success' && (
+                <span className="text-[11px] font-semibold text-emerald-300">ပါဆယ်မှတ်တမ်းများ အားလုံး အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။</span>
+              )}
+              {backgroundUploadStatus === 'error' && (
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.28em] text-amber-300">⚠ Pending Review</span>
+                  <span className="text-[11px] font-semibold text-amber-300">အချို့ item များကို လေ့လာပြီး တင်ရန်လိုအပ်ပါသည်</span>
+                </div>
+              )}
+            </div>
           </div>
           {backgroundUploadStatus === 'error' && (
             <div className="flex gap-2">
               <button
-                onClick={processOfflineQueue}
-                className="inline-flex items-center gap-1.5 text-[10px] font-black bg-gradient-to-r from-orange-500 to-amber-500 px-3 py-1.5 rounded-lg text-white"
-              >
-                <IconRefresh className="h-3.5 w-3.5" />
-                Retry Upload
-              </button>
-              <button
                 onClick={() => {
-                  if(confirm('တင်ရန်ကျန်နေသော ပါဆယ်စာရင်းများကို တကယ်ပဲ ဖျက်ပစ်မလားဗျာ?')) {
-                    clearAllOfflineQueue();
-                  }
+                  setQueueManagerOpen(true);
+                  refreshQueue();
                 }}
-                className="inline-flex items-center gap-1.5 text-[10px] font-bold bg-red-600 px-2 py-1.5 rounded-lg text-white border border-red-700 active:scale-95"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-amber-400/30 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-400 px-3 py-1.5 text-[10px] font-black text-neutral-950 shadow-[0_0_24px_rgba(249,115,22,0.25)]"
               >
-                <IconTrash className="h-3.5 w-3.5" />
-                စာရင်းဖျက်ပစ်မည်
+                <span className="text-sm">🔍</span>
+                Review Pending Items ({backgroundUploadCount})
               </button>
             </div>
           )}
@@ -790,48 +929,184 @@ export default function IntakePage() {
         </div>
       )}
 
-      {/* METHOD SELECTION SCREEN (UI/UX UPGRADED) */}
-      {intakeMethod === 'choose' && (
-        <div className="flex-1 flex flex-col items-center justify-center p-6 bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.16),_transparent_45%),linear-gradient(135deg,_#09090b,_#111114,_#020202)] text-center animate-fade-in">
-          <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-[1.75rem] bg-gradient-to-br from-orange-500 to-amber-400 shadow-[0_18px_50px_rgba(249,115,22,0.2)] ring-1 ring-white/10">
-            <IconPackage className="h-9 w-9 text-neutral-950" />
+      {queueManagerOpen && (
+        <div className="absolute inset-0 z-[60] flex flex-col bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.16),_transparent_45%),linear-gradient(135deg,_#030303,_#111114,_#020202)] px-3 py-4">
+          <div className="mb-3 flex items-start justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.32em] text-amber-400">Offline Queue Manager</p>
+              <h3 className="mt-1 text-xl font-black text-white">PENDING UPLOADS DESK</h3>
+            </div>
+            <button
+              onClick={() => setQueueManagerOpen(false)}
+              className="rounded-full border border-neutral-800 bg-neutral-900/70 px-3 py-1.5 text-[11px] font-semibold text-neutral-300"
+            >
+              Close
+            </button>
           </div>
-          <h2 className="mb-1 text-2xl font-extrabold uppercase tracking-[0.24em] text-transparent bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text">ALL IN ONE EXPRESS</h2>
-          <p className="mb-10 max-w-xs text-xs font-medium text-gray-400">ပါဆယ်မှတ်တမ်း မစတင်မီ အသုံးပြုမည့် စနစ်ကို ရွေးချယ်ပေးပါ</p>
-          
-          <div className="w-full max-w-xs flex flex-col gap-4">
-            <button 
-              onClick={() => setIntakeMethod('no-barcode')}
-              className="group w-full rounded-2xl border border-white/10 bg-white/5 p-4 text-left shadow-[0_10px_30px_rgba(0,0,0,0.25)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/10 active:scale-[0.99]"
-            >
-              <div className="flex items-center gap-4">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-neutral-800 text-orange-400 transition-colors group-hover:bg-orange-500/10">
-                  <IconCamera className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-white">Barcode မပါဘဲ ပုံရိုက်မည်</p>
-                  <p className="text-[11px] font-normal text-gray-400">ပါဆယ်ကို တိုက်ရိုက်ဓာတ်ပုံရိုက်သိမ်းရန်</p>
-                </div>
-              </div>
-            </button>
 
-            <button 
-              onClick={() => { setIntakeMethod('with-barcode'); setBarcodeStep('scanning'); }}
-              className="group w-full rounded-2xl bg-gradient-to-br from-orange-500 to-amber-400 p-4 text-left text-neutral-950 shadow-[0_18px_50px_rgba(249,115,22,0.2)] transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.99]"
+          <div className="mb-3 flex flex-col gap-2 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200 shadow-[0_0_24px_rgba(245,158,11,0.12)]">
+            <span>Review, upload, or discard each pending item with precision from this cinematic desk view.</span>
+            <button
+              onClick={() => processOfflineQueue()}
+              disabled={isBackgroundUploading}
+              className="inline-flex w-fit items-center gap-2 rounded-xl border border-amber-400/30 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-400 px-3 py-2 text-[11px] font-black text-neutral-950 shadow-[0_0_18px_rgba(249,115,22,0.2)] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              <div className="flex items-center gap-4">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/20 text-neutral-950">
-                  <IconScan className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-black">Barcode စကင်ဖတ်ပြီး ပုံရိုက်မည်</p>
-                  <p className="text-[11px] font-medium text-neutral-900/75">Barcode ID တွဲဖက်၍ မှတ်တမ်းတင်ရန်</p>
-                </div>
-              </div>
+              {isBackgroundUploading ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-neutral-950/30 border-t-neutral-950" />
+                  Reuploading All...
+                </span>
+              ) : (
+                '🚀 Reupload All Queue Items'
+              )}
             </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto pb-4">
+            {queueItems.length === 0 ? (
+              <div className="rounded-3xl border border-neutral-800 bg-neutral-900/70 p-6 text-center shadow-[0_12px_30px_rgba(0,0,0,0.25)]">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-300">
+                  <IconCheck className="h-6 w-6" />
+                </div>
+                <p className="text-sm font-semibold text-white">Queue is clear</p>
+                <p className="mt-1 text-[11px] text-neutral-400">There are no pending uploads waiting for review.</p>
+              </div>
+            ) : (
+              <div className="grid gap-3">
+                {queueItems.map((item) => (
+                  <div key={item.id} className="rounded-3xl border border-neutral-800 bg-neutral-900/80 p-3 shadow-[0_10px_35px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+                    <div className="flex items-start gap-3">
+                      <div className="h-24 min-w-[88px] overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950">
+                        {item.fileBase64 ? (
+                          <img
+                            src={`data:image/jpeg;base64,${item.fileBase64}`}
+                            alt="pending upload preview"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold uppercase tracking-[0.25em] text-neutral-500">
+                            No Preview
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="rounded-full border border-neutral-800 bg-neutral-800/70 px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] text-neutral-400">
+                            {item.received_date || 'No Date'}
+                          </span>
+                          {item.barcode ? (
+                            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 font-mono text-[10px] text-amber-300">
+                              {item.barcode}
+                            </span>
+                          ) : (
+                            <span className="rounded-full border border-neutral-800 bg-neutral-800/70 px-2.5 py-1 text-[10px] text-neutral-500">
+                              No Barcode
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <span className="rounded-full border border-neutral-800 bg-neutral-800/60 px-2.5 py-1 text-[10px] text-neutral-400">
+                            Branch: {item.branch || '—'}
+                          </span>
+                          <span className="rounded-full border border-neutral-800 bg-neutral-800/60 px-2.5 py-1 text-[10px] text-neutral-400">
+                            Date: {item.received_date || '—'}
+                          </span>
+                        </div>
+                        {item.uploader_note ? (
+                          <p className="mt-3 text-[11px] leading-5 text-neutral-300">{item.uploader_note}</p>
+                        ) : (
+                          <p className="mt-3 text-[11px] italic text-neutral-500">No note attached</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={() => uploadSingleItem(item.id)}
+                        disabled={queueActionItemId === item.id}
+                        className="flex-1 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-400 px-3 py-2 text-[11px] font-black text-neutral-950 shadow-[0_0_18px_rgba(249,115,22,0.2)] transition-all duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        {queueActionItemId === item.id ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-neutral-950/30 border-t-neutral-950" />
+                            Uploading...
+                          </span>
+                        ) : (
+                          '🚀 Upload Now'
+                        )}
+                      </button>
+                      <button
+                        onClick={() => deleteSingleItem(item.id)}
+                        disabled={queueActionItemId === item.id}
+                        className="rounded-2xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-[11px] font-semibold text-red-300 transition-all duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        {queueActionItemId === item.id ? 'Removing...' : '🗑️ Discard'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
+
+      {/* METHOD SELECTION SCREEN (UI/UX UPGRADED) */}
+{intakeMethod === 'choose' && (
+  <div className="flex-1 flex flex-col items-center justify-center p-6 bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.16),_transparent_45%),linear-gradient(135deg,_#09090b,_#111114,_#020202)] text-center animate-fade-in relative">
+    
+    {/* အပေါ် ဘယ်ဘက်ဒေါင့် မျှားပုံစံ ခလုပ်အဝိုင်းလေး */}
+    <button 
+      onClick={() => {
+        // အပြင်ပြန်ထွက်ရန် သို့မဟုတ် Dashboard/Home သို့ ပြန်သွားရန် Logic ကို ဒီမှာထည့်ပါ
+        // ဥပမာ - setIntakeMethod('home'); သို့မဟုတ် router.back();
+      }}
+      className="absolute top-6 left-6 flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-gray-400 backdrop-blur-md shadow-lg transition-all duration-150 hover:bg-white/10 hover:text-white active:scale-95"
+      title="နောက်သို့"
+    >
+      <IconArrowLeft className="h-5 w-5" />
+    </button>
+
+    <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-[1.75rem] bg-gradient-to-br from-orange-500 to-amber-400 shadow-[0_18px_50px_rgba(249,115,22,0.2)] ring-1 ring-white/10">
+      <IconPackage className="h-9 w-9 text-neutral-950" />
+    </div>
+    <h2 className="mb-1 text-2xl font-extrabold uppercase tracking-[0.24em] text-transparent bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text">ALL IN ONE EXPRESS</h2>
+    <p className="mb-10 max-w-xs text-xs font-medium text-gray-400">ပါဆယ်မှတ်တမ်း မစတင်မီ အသုံးပြုမည့် စနစ်ကို ရွေးချယ်ပေးပါ</p>
+    
+    <div className="w-full max-w-xs flex flex-col gap-4">
+      {/* ကင်မရာခလုပ် (Pill Shape) */}
+      <button 
+        onClick={() => setIntakeMethod('no-barcode')}
+        className="group w-full rounded-full border border-white/10 bg-white/5 pl-5 pr-6 py-3.5 text-left shadow-[0_10px_30px_rgba(0,0,0,0.25)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/10 active:scale-[0.99]"
+      >
+        <div className="flex items-center gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-orange-400 transition-colors group-hover:bg-orange-500/10">
+            <IconCamera className="h-5 w-5" />
+          </div>
+          <div className="truncate">
+            <p className="text-sm font-bold text-white">Barcode မပါဘဲ ပုံရိုက်မည်</p>
+            <p className="text-[11px] font-normal text-gray-400 truncate">ပါဆယ်ကို တိုက်ရိုက်ဓာတ်ပုံရိုက်သိမ်းရန်</p>
+          </div>
+        </div>
+      </button>
+
+      {/* စကင်ဖတ်ရန်ခလုပ် (Pill Shape) */}
+      <button 
+        onClick={() => { setIntakeMethod('with-barcode'); setBarcodeStep('scanning'); }}
+        className="group w-full rounded-full bg-gradient-to-br from-orange-500 to-amber-400 pl-5 pr-6 py-3.5 text-left text-neutral-950 shadow-[0_18px_50px_rgba(249,115,22,0.2)] transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.99]"
+      >
+        <div className="flex items-center gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/20 text-neutral-950">
+            <IconScan className="h-5 w-5" />
+          </div>
+          <div className="truncate">
+            <p className="text-sm font-black">Barcode စကင်ဖတ်ပြီး ပုံရိုက်မည်</p>
+            <p className="text-[11px] font-medium text-neutral-900/75 truncate">Barcode ID တွဲဖက်၍ မှတ်တမ်းတင်ရန်</p>
+          </div>
+        </div>
+      </button>
+    </div>
+  </div>
+)}
 
       {/* PREMIUM CAMERA / SCANNER MODE INTERFACE */}
       {intakeMethod !== 'choose' && flowMode === 'camera' && (
@@ -1025,67 +1300,34 @@ export default function IntakePage() {
 
       {/* PREVIEW & RICH EDITING CONSOLE MODE (UI/UX UPGRADED) */}
       {flowMode === 'preview' && currentImgObj && (
-        <div className="flex-1 flex flex-col bg-neutral-950 justify-between p-4 relative h-full">
+        <div className="flex-1 flex flex-col bg-black justify-between p-3 relative h-full">
           <style>{`
             @keyframes slideInFromRight { from { transform: translateX(100%); opacity: 0.5; } to { transform: translateX(0); opacity: 1; } }
             @keyframes slideInFromLeft { from { transform: translateX(-100%); opacity: 0.5; } to { transform: translateX(0); opacity: 1; } }
-
-            
-
             .animate-slide-in-right { animation: slideInFromRight 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
             .animate-slide-in-left { animation: slideInFromLeft 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
           `}</style>
 
-          {/* Sub Top Action Controls Bar Header */}
-          <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-neutral-900/70 px-3 py-3 backdrop-blur-xl">
-            <button 
-              onClick={() => { setFlowMode('camera'); }} 
-              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-neutral-800/80 px-3.5 py-2 text-xs font-bold text-gray-200 transition-all active:scale-95"
+          <div className="mb-2 flex items-center justify-between rounded-full border border-white/10 bg-black/45 px-2.5 py-2 backdrop-blur-xl">
+            <button
+              onClick={() => { setFlowMode('camera'); }}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-neutral-900/80 text-gray-200 shadow-lg shadow-black/20 transition-all active:scale-95"
             >
-              <IconCamera className="h-4 w-4 text-orange-400" />
-              ဓာတ်ပုံထပ်ရိုက်မည်
+              <IconArrowLeft className="h-4 w-4 text-orange-400" />
             </button>
-            <div className="rounded-lg border border-neutral-800 bg-neutral-950/60 px-2.5 py-1 text-xs font-black text-gray-400">ပုံစစ်ဆေးခြင်း ({currentIdx + 1}/{capturedImages.length})</div>
-            <button 
-              onClick={(e) => deleteImage(currentImgObj.id, e)} 
-              className="inline-flex items-center gap-2 rounded-xl border border-red-900/30 bg-red-950/20 px-3.5 py-2 text-xs font-bold text-red-400 transition-all active:scale-95"
+            <div className="rounded-full border border-neutral-800 bg-neutral-900/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-neutral-400">
+              {currentIdx + 1} OF {capturedImages.length}
+            </div>
+            <button
+              onClick={(e) => deleteImage(currentImgObj.id, e)}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-red-900/30 bg-red-950/30 text-red-400 shadow-lg shadow-black/20 transition-all active:scale-95"
             >
-              <IconTrash className="h-3.5 w-3.5" />
-              ဖျက်မည်
+              <IconTrash className="h-4 w-4" />
             </button>
           </div>
 
-          {/* Linked Barcode Indicator Panel Badge */}
-{currentImgObj.barcode && (
-  <div className="mt-3 bg-neutral-900/80 border border-orange-500/20 rounded-xl p-3 flex items-center justify-between text-xs animate-fade-in shadow-inner">
-    <span className="text-gray-400 font-medium">ချိတ်ဆက်ထားသော Barcode ID:</span>
-    <div className="flex items-center gap-2">
-      <span className="font-black text-orange-400 tracking-widest font-mono text-sm bg-neutral-950 px-2 py-0.5 rounded-md border border-neutral-800">{currentImgObj.barcode}</span>
-      
-      {/* 💡 Preview မှာလည်း Barcode မှားနေရင် ဖြုတ်ပြီး ကင်မရာ စကင်နာသို့ ပြန်သွားစေမည့် ခလုတ် */}
-      <button
-        onClick={() => {
-          if(window.confirm('ဒီပုံရဲ့ Barcode ကို ဖျက်ပြီး စကင်နာဖြင့် ပြန်ဖတ်လိုပါသလားဗျာ?')) {
-            // လက်ရှိ ပုံထဲက Barcode ကို ဖျက်ထုတ်ခြင်း
-            setCapturedImages(capturedImages.map((img, i) => i === currentIdx ? { ...img, barcode: undefined } : img));
-            // Scanner စာမျက်နှာသို့ ပြန်ပို့ခြင်း
-            setFlowMode('camera');
-            setBarcodeStep('scanning');
-            setCurrentScannedBarcode('');
-          }
-        }}
-        className="inline-flex items-center gap-1 rounded-md border border-red-900/40 bg-red-950/40 px-2 py-1 text-[10px] font-bold text-red-400 transition-colors hover:bg-red-950/60"
-      >
-        <IconRefresh className="h-3 w-3" />
-        ပြန်ဖတ်မည်
-      </button>
-    </div>
-  </div>
-)}
-
-          {/* Canvas Component Stage Studio Area */}
-          <div 
-            className="flex-1 my-4 flex items-center justify-center relative touch-none bg-neutral-950 rounded-2xl border border-neutral-900/80 shadow-2xl overflow-hidden"
+          <div
+            className="relative flex-1 overflow-hidden rounded-[28px] border border-white/10 bg-neutral-950/80 shadow-[0_30px_80px_rgba(0,0,0,0.45)]"
             onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
             onTouchEnd={(e) => {
               if (touchStartX.current === null) return;
@@ -1102,14 +1344,20 @@ export default function IntakePage() {
               }
             }}
           >
-            <div className={`overflow-hidden rounded-xl shadow-2xl relative border border-neutral-800/40 bg-neutral-900 ${slideDirection === 'next' ? 'animate-slide-in-right' : 'animate-slide-in-left'}`} key={currentImgObj.id}>
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.14),_transparent_45%)]" />
+            {currentImgObj.barcode && (
+              <div className="absolute left-3 top-3 z-10 rounded-full border border-orange-500/20 bg-black/55 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-orange-300 backdrop-blur-md">
+                {currentImgObj.barcode}
+              </div>
+            )}
+            <div className={`absolute inset-0 flex items-center justify-center ${slideDirection === 'next' ? 'animate-slide-in-right' : 'animate-slide-in-left'}`} key={currentImgObj.id}>
               <Stage width={stageDimensions.width} height={stageDimensions.height} ref={stageRef}>
                 <Layer>
                   {konvaImage && (
-                    <KonvaImage 
-                      image={konvaImage} 
-                      width={stageDimensions.width} 
-                      height={stageDimensions.height} 
+                    <KonvaImage
+                      image={konvaImage}
+                      width={stageDimensions.width}
+                      height={stageDimensions.height}
                       crop={currentImgObj.croppedAreaPixels ? {
                         x: (currentImgObj.croppedAreaPixels.x / 100) * konvaImage.width,
                         y: (currentImgObj.croppedAreaPixels.y / 100) * konvaImage.height,
@@ -1138,79 +1386,128 @@ export default function IntakePage() {
               </Stage>
             </div>
 
-            {/* Interactive Flow Add Text Box Overlay Menu Layout */}
             {drawingText && (
-              <div className="absolute inset-x-3 bottom-3 p-4 bg-neutral-900/95 backdrop-blur-xl rounded-2xl border border-neutral-800 shadow-2xl flex flex-col gap-3 z-40 animate-fade-in animate-slide-up">
-                <input 
-                  type="text" autoFocus
-                  className="w-full px-4 py-2.5 bg-neutral-950 border border-neutral-700/80 rounded-xl text-white text-sm outline-none focus:border-orange-500 transition-colors"
-                  value={newText} onChange={e => setNewText(e.target.value)}
+              <div className="absolute inset-x-3 bottom-3 z-40 flex flex-col gap-3 rounded-[22px] border border-white/10 bg-neutral-900/95 p-3 shadow-2xl backdrop-blur-xl">
+                <input
+                  type="text"
+                  autoFocus
+                  className="w-full rounded-full border border-neutral-800 bg-neutral-950 px-3.5 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-neutral-600 focus:border-orange-500"
+                  value={newText}
+                  onChange={(e) => setNewText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addTextToCanvas();
+                    }
+                  }}
                   placeholder="ပုံပေါ်တင်မည့် စာသားရိုက်ထည့်ပါ..."
                 />
-                <div className="flex gap-2 justify-end">
-                  <button onClick={() => setDrawingText(false)} className="px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white transition-colors">ပယ်ဖျက်</button>
-                  <button onClick={addTextToCanvas} className="px-5 py-2 text-xs bg-gradient-to-r from-orange-500 to-amber-500 text-neutral-950 font-black rounded-lg active:scale-95 transition-transform shadow-md">ထည့်မည်</button>
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => setDrawingText(false)} className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-neutral-400 transition-colors hover:text-white">Cancel</button>
+                  <button onClick={addTextToCanvas} className="rounded-full bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-950 shadow-lg shadow-orange-500/20 transition-transform active:scale-95">Add</button>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Form Parameters Settings Panel Configurations layout */}
-          <div className="flex flex-col gap-3 bg-neutral-900/60 backdrop-blur-md p-4 rounded-2xl border border-neutral-900 mb-3 shadow-xl">
-            
-            {/* Batch Note Form Group */}
-            <div>
-              <label className="block text-[10px] uppercase font-black tracking-widest text-neutral-500 mb-1.5">စုပေါင်းမှတ်ချက် (Batch Note)</label>
-              <input 
-                type="text" value={batchNote} onChange={e => setBatchNote(e.target.value)}
-                placeholder="ဥပမာ - အထုပ်ပျက်စီးမှုစစ်ဆေးပြီး၊ အရေးကြီးပါဆယ်..."
-                className="w-full bg-neutral-950 border border-neutral-800 text-neutral-200 placeholder-neutral-700 rounded-xl px-3.5 py-2.5 text-xs outline-none focus:border-orange-500/40 transition-all shadow-inner font-medium"
-              />
+          <div className="mt-3 rounded-[28px] border border-white/10 bg-neutral-900/70 p-3 shadow-[0_20px_50px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+            <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
+              {capturedImages.map((img, idx) => (
+                <div
+                  key={img.id}
+                  onClick={() => { setFlowMode('preview'); setCurrentIdx(idx); stopCamera(); }}
+                  className={`relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-2xl border ${currentImgObj.id === img.id ? 'border-orange-400/60' : 'border-white/10'} bg-neutral-950/80 shadow-inner transition-all active:scale-95`}
+                >
+                  <img src={img.preview} alt="" className="h-full w-full object-cover" />
+                  {img.barcode && (
+                    <div className="absolute inset-x-0 bottom-0 bg-orange-500/90 px-1 py-0.5 text-[8px] font-black text-center text-neutral-950">
+                      {img.barcode}
+                    </div>
+                  )}
+                  <button
+                    onClick={(e) => deleteImage(img.id, e)}
+                    className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm active:scale-90"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-2.5 w-2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
             </div>
 
-            <div className="mt-2">
-  <label className="block text-[10px] uppercase font-black tracking-widest text-neutral-500 mb-1.5">ရက်စွဲ သတ်မှတ်ရန် (Received Date)</label>
-  <input 
-    type="date" 
-    value={receivedDate} 
-    onChange={e => setReceivedDate(e.target.value)}
-    className="w-full bg-neutral-950 border border-neutral-800 text-neutral-200 rounded-xl px-3.5 py-2.5 text-xs outline-none focus:border-orange-500/40 transition-all shadow-inner font-medium"
-  />
+           <div className="mt-2 flex items-center justify-between gap-1.5 rounded-full border border-white/5 bg-neutral-900/40 p-2 backdrop-blur-md">
+  
+  {/* Quality Selector Pill (SD/HD) */}
+  <div className="flex rounded-full bg-black/40 p-0.5 border border-white/5">
+    <button
+      onClick={() => setCapturedImages(capturedImages.map((img, i) => i === currentIdx ? { ...img, quality: 'SD' } : img))}
+      className={`rounded-full px-3 py-1 text-[10px] font-black tracking-wider transition-all ${currentImgObj.quality === 'SD' ? 'bg-orange-500 text-neutral-950 shadow' : 'text-neutral-400'}`}
+    >
+      SD
+    </button>
+    <button
+      onClick={() => setCapturedImages(capturedImages.map((img, i) => i === currentIdx ? { ...img, quality: 'HD' } : img))}
+      className={`rounded-full px-3 py-1 text-[10px] font-black tracking-wider transition-all ${currentImgObj.quality === 'HD' ? 'bg-orange-500 text-neutral-950 shadow' : 'text-neutral-400'}`}
+    >
+      HD
+    </button>
+  </div>
+
+  {/* Editing Tools (Crop & Text) */}
+  <div className="flex items-center gap-1.5">
+    {/* Crop Button */}
+    <button
+      onClick={() => { setCurrentCropOrder(currentImgObj); setShowCropModal(true); }}
+      className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 border border-white/5 text-neutral-300 active:scale-90 transition-all"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-4 w-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6 2v16h16M2 6h16v16" />
+      </svg>
+    </button>
+
+    {/* Text Button */}
+    <button
+      onClick={() => setDrawingText(!drawingText)}
+      className={`flex h-8 w-8 items-center justify-center rounded-full border active:scale-90 transition-all ${drawingText ? 'border-orange-500/30 bg-orange-500 text-neutral-950 shadow' : 'border-white/5 bg-white/5 text-neutral-300'}`}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-4 w-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+      </svg>
+    </button>
+  </div>
+
+  {/* Date Picker Pill */}
+  <div className="flex items-center gap-1.5 rounded-full border border-white/5 bg-black/40 px-3 py-1">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-3.5 w-3.5 text-neutral-400">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+    </svg>
+    <input
+      type="date"
+      value={receivedDate}
+      onChange={(e) => setReceivedDate(e.target.value)}
+      className="bg-transparent text-[10px] font-black text-neutral-200 outline-none w-[78px] tracking-wide"
+    />
+  </div>
+
 </div>
 
-            <div className="flex items-center justify-between pt-0.5 gap-4">
-              {/* Image Resolution Quality Config Selector */}
-              <div className="flex bg-neutral-950 p-1 rounded-xl border border-neutral-800 w-1/2 shadow-inner">
-                <button onClick={() => setCapturedImages(capturedImages.map((img, i) => i === currentIdx ? { ...img, quality: 'SD' } : img))} className={`flex-1 text-center py-1.5 text-[10px] font-black rounded-lg transition-all ${currentImgObj.quality === 'SD' ? 'bg-neutral-800 text-orange-400 shadow' : 'text-neutral-500'}`}>SD</button>
-                <button onClick={() => setCapturedImages(capturedImages.map((img, i) => i === currentIdx ? { ...img, quality: 'HD' } : img))} className={`flex-1 text-center py-1.5 text-[10px] font-black rounded-lg transition-all ${currentImgObj.quality === 'HD' ? 'bg-neutral-800 text-orange-400 shadow' : 'text-neutral-500'}`}>HD</button>
-              </div>
-
-              {/* Action Toolkit Controllers Trigger buttons */}
-              <div className="flex gap-2.5 w-1/2 justify-end">
-                <button 
-                  onClick={() => { setCurrentCropOrder(currentImgObj); setShowCropModal(true); }}
-                  className="px-3.5 py-2 bg-neutral-950 hover:bg-neutral-900 border border-neutral-800 text-neutral-300 font-bold text-xs rounded-xl flex items-center gap-2 active:scale-95 transition-all shadow-sm"
-                >
-                  ✂️ ဖြတ်မည်
-                </button>
-                <button 
-                  onClick={() => setDrawingText(!drawingText)}
-                  className={`px-3.5 py-2 border font-bold text-xs rounded-xl flex items-center gap-2 active:scale-95 transition-all shadow-sm ${drawingText ? 'bg-orange-500/10 border-orange-500 text-orange-400 shadow-orange-500/5' : 'bg-neutral-950 border-neutral-800 text-neutral-300'}`}
-                >
-                  ✍️ စာသား
-                </button>
-              </div>
-            </div>
-
+            <div className="mt-3 relative flex items-center w-full">
+  <input
+    type="text"
+    value={batchNote}
+    onChange={(e) => setBatchNote(e.target.value)}
+    placeholder="Add a caption..."
+    className="w-full rounded-full border border-white/10 bg-neutral-950/80 pl-4 pr-12 py-3 text-[13px] text-neutral-100 outline-none placeholder:text-neutral-600 focus:border-orange-500/40"
+  />
+  <button
+    onClick={handleFinalSubmit}
+    className="absolute right-1.5 flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-amber-400 text-neutral-950 shadow-[0_0_12px_rgba(249,115,22,0.2)] active:scale-95 transition-all"
+  >
+    <IconArrowRight className="h-4 w-4" />
+  </button>
+</div>
           </div>
-
-          {/* Global Process Submission Fire CTA Button */}
-          <button 
-            onClick={handleFinalSubmit}
-            className="w-full py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-neutral-950 font-black rounded-2xl shadow-xl shadow-orange-500/5 active:scale-[0.98] transition-all text-sm tracking-wider uppercase font-sans"
-          >
-            ပါဆယ်မှတ်တမ်းတင်ခြင်း အတည်ပြုမည် ({capturedImages.length} ပုံ)
-          </button>
         </div>
       )}
 
@@ -1218,13 +1515,17 @@ export default function IntakePage() {
       {showCropModal && currentCropOrder && (
         <div className="absolute inset-0 bg-black z-50 flex flex-col justify-between animate-fade-in">
           <div className="p-4 pt-6 border-b border-neutral-900 flex justify-between items-center bg-neutral-950">
-            <h3 className="text-sm font-bold text-gray-300">ပုံရိပ်ဖြတ်တောက်ပြင်ဆင်ခြင်း</h3>
-            <button 
-              onClick={() => { setShowCropModal(false); setCurrentCropOrder(null); }} 
-              className="text-xs bg-neutral-900 px-2.5 py-1.5 border border-neutral-800 rounded-lg text-neutral-400 hover:text-white transition-colors"
-            >
-              ပိတ်မည်
-            </button>
+            <h3 className="text-sm font-bold text-gray-300"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-4 w-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6 2v16h16M2 6h16v16" />
+      </svg></h3>
+           <button 
+  onClick={() => { setShowCropModal(false); setCurrentCropOrder(null); }} 
+  className="flex h-8 w-8 items-center justify-center bg-white/5 hover:bg-white/10 border border-white/5 rounded-full text-neutral-300 active:scale-90 transition-all"
+>
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-4 w-4">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+  </svg>
+</button>
           </div>
           <div className="flex-1 relative bg-black">
             <EasyCrop
@@ -1245,7 +1546,7 @@ export default function IntakePage() {
               onClick={handleCropSave} 
               className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 text-neutral-950 font-black text-xs rounded-xl active:scale-95 transition-all shadow-lg"
             >
-              ဖြတ်တောက်မှု အတည်ပြုသိမ်းဆည်းမည်
+              Save Crop
             </button>
           </div>
         </div>
