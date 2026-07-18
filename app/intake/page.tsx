@@ -407,11 +407,7 @@ useEffect(() => {
     stopCamera();
   }
 
-  // Cleanup Function
-  return () => {
-    if (timeoutId) clearTimeout(timeoutId);
-  };
-}, [flowMode, intakeMethod, barcodeStep, startCamera, stopCamera]);
+  
 
   // Cleanup Function
   return () => {
