@@ -115,6 +115,8 @@ export default function OrderList() {
   const [orders, setOrders] = useState<any[]>([])
   const [riders, setRiders] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
   const [editingOrder, setEditingOrder] = useState<any>(null)
   const [userBranch, setUserBranch] = useState<string>('')
 
@@ -220,42 +222,97 @@ useEffect(() => {
   const [colFilters, setColFilters] = useState<Record<string, FilterValue>>({})
 
 
-  // 💡 (အစားထိုးရန်) fetchData Function အသစ်
-  const fetchData = async (branchCode?: string, dateStr?: string, searchStr?: string) => {
+  const fetchData = async ({
+    append = false,
+    branchCode,
+    dateStr,
+    searchStr,
+  }: {
+    append?: boolean;
+    branchCode?: string;
+    dateStr?: string;
+    searchStr?: string;
+  } = {}) => {
     const activeBranch = branchCode || userBranch;
     if (!activeBranch) return;
 
-    setLoading(true);
-
-    // အခြေခံ Query (Branch ကိုသာ စစ်ထားသည်)
-    let query = supabase
-      .from('orders')
-      .select(`
-        *,
-        pickup_rider:riders!orders_pickup_rider_id_fkey(name),
-        deliver_rider:riders!orders_deliver_rider_id_fkey(name)
-      `)
-      .eq('is_deleted', false)
-      .eq('branch', activeBranch)
-      .order('created_at', { ascending: false });
-
-    // Search စာသားရှိရင် Database တစ်ခုလုံးထဲက ရှာမည်၊ မရှိရင် Date နဲ့ပဲ စစ်ထုတ်မည်
-    if (searchStr && searchStr.trim() !== '') {
-      const s = searchStr.trim();
-      // ID, Phone, Name တစ်ခုခုနဲ့ တူတာရှိရင် ဆွဲထုတ်မည့် Logic
-      query = query.or(`item_id.ilike.%${s}%,receiver_phone.ilike.%${s}%,receiver_name.ilike.%${s}%,sender_name.ilike.%${s}%`);
+    if (append) {
+      setLoadingMore(true);
     } else {
-      const activeDate = dateStr || selectedDate;
-      if (activeDate) {
-        query = query.eq('received_date', activeDate);
-      }
+      setLoading(true);
     }
 
-    const { data, error } = await query;
-    if (error) console.error(error);
-    else setOrders(data || []);
-    
+    const start = append ? orders.length : 0;
+    const end = start + 99;
+
+    let query = supabase
+      .from('orders')
+      .select(
+        `
+          *,
+          pickup_rider:riders!orders_pickup_rider_id_fkey(name),
+          deliver_rider:riders!orders_deliver_rider_id_fkey(name)
+        `,
+        { count: 'exact' }
+      )
+      .eq('is_deleted', false)
+      .eq('branch', activeBranch)
+      .order('created_at', { ascending: false })
+      .range(start, end);
+
+    const activeSearch = (searchStr ?? globalSearch).trim();
+    const activeDate = dateStr || selectedDate;
+
+    if (activeSearch) {
+      const escapedSearch = activeSearch.replace(/'/g, "''");
+      query = query.or(
+        `item_id.ilike.%${escapedSearch}%,receiver_phone.ilike.%${escapedSearch}%,receiver_name.ilike.%${escapedSearch}%,sender_name.ilike.%${escapedSearch}%`
+      );
+    } else if (activeDate) {
+      query = query.eq('received_date', activeDate);
+    }
+
+    Object.entries(colFilters).forEach(([key, value]) => {
+      if (!value || (Array.isArray(value) && value.length === 0)) return;
+      if (key === 'global_search') return;
+
+      if (Array.isArray(value)) {
+        const values = value.filter(Boolean);
+        if (values.length > 0) {
+          query = query.in(key, values);
+        }
+        return;
+      }
+
+      const filterValue = String(value).trim();
+      if (!filterValue) return;
+
+      if (['received_date', 'deliver_date', 'cleared_date', 'created_at', 'transit_date'].includes(key)) {
+        query = query.eq(key, filterValue);
+      } else if (key === 'pickup_rider') {
+        query = query.ilike('pickup_rider.name', `%${filterValue}%`);
+      } else if (key === 'deliver_rider') {
+        query = query.ilike('deliver_rider.name', `%${filterValue}%`);
+      } else {
+        query = query.ilike(key, `%${filterValue}%`);
+      }
+    });
+
+    const { data, error, count } = await query;
+
+    if (error) {
+      console.error(error);
+      setOrders([]);
+      setHasMore(false);
+    } else {
+      const nextData = data || [];
+      const loadedCount = append ? orders.length + nextData.length : nextData.length;
+      setOrders((prev) => (append ? [...prev, ...nextData] : nextData));
+      setHasMore((count ?? 0) > loadedCount);
+    }
+
     setLoading(false);
+    setLoadingMore(false);
   }
 
   const fetchRiders = async () => {
@@ -273,17 +330,21 @@ useEffect(() => {
     }
   }, [router])
 
-  // 💡 (အသစ်ထည့်ရန်) Date သို့မဟုတ် Search ပြောင်းလဲတိုင်း Data Auto ဆွဲမည့် Effect
+  const colFiltersKey = JSON.stringify(colFilters);
+
   useEffect(() => {
     if (!userBranch) return;
-    
-    // Search ရိုက်ထည့်နေစဉ် Database သို့ ဆက်တိုက်မသွားစေရန် 500ms Delay (Debounce) ခံထားခြင်း
-    const timer = setTimeout(() => {
-      fetchData(userBranch, selectedDate, globalSearch);
-    }, 500);
 
-    return () => clearTimeout(timer);
-  }, [selectedDate, globalSearch, userBranch]);
+    const timer = window.setTimeout(() => {
+      fetchData({
+        branchCode: userBranch,
+        dateStr: selectedDate,
+        searchStr: globalSearch,
+      });
+    }, 400);
+
+    return () => window.clearTimeout(timer);
+  }, [selectedDate, globalSearch, userBranch, colFiltersKey]);
 
   useEffect(() => {
     const handleCloseMenu = () => setContextMenu(null)
@@ -291,25 +352,7 @@ useEffect(() => {
     return () => window.removeEventListener('click', handleCloseMenu)
   }, [])
 
-  const filteredOrders = orders.filter(o => {
-    return Object.keys(colFilters).every(key => {
-      if (key === 'global_search') return true
-
-      const filterValue = colFilters[key];
-      if (!filterValue || (Array.isArray(filterValue) && filterValue.length === 0)) return true;
-
-      let cellValue = ""
-      if (key === 'pickup_rider') cellValue = o.pickup_rider?.name || ""
-      else if (key === 'deliver_rider') cellValue = o.deliver_rider?.name || ""
-      else cellValue = String(o[key] || "")
-
-      if (Array.isArray(filterValue)) {
-        return filterValue.some(val => cellValue.toLowerCase().includes(val.toLowerCase()));
-      }
-
-      return cellValue.toLowerCase().includes(filterValue.toLowerCase())
-    })
-  })
+  const filteredOrders = orders;
 
   const selectedOrderList = filteredOrders.filter(o => selectedOrders.has(o.id));
   const selectedCount = selectedOrderList.length;
@@ -374,7 +417,7 @@ useEffect(() => {
         .eq('id', orderId)
 
       if (error) alert(error.message)
-      else fetchData() 
+      else fetchData({ append: false })
     }
   }
 
@@ -760,19 +803,21 @@ useEffect(() => {
                     </div>
                   </td>
                 </tr>
-              ) : filteredOrders.map((o) => (
-                <tr 
-                  key={o.id} 
-                  onClick={() => setViewingDetailOrder(o)}
-                  onContextMenu={(e) => handleRowContextMenu(e, o)} 
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    handleRowMouseDown(o.id);
-                  }}
-                  onMouseEnter={() => handleRowMouseEnter(o.id)}
-                  onMouseUp={() => setIsDraggingSelection(false)}
-                  className="hover:bg-gray-50/80 transition-colors cursor-context-menu select-none"
-                >
+              ) : (
+                <>
+                  {filteredOrders.map((o) => (
+                    <tr 
+                      key={o.id} 
+                      onClick={() => setViewingDetailOrder(o)}
+                      onContextMenu={(e) => handleRowContextMenu(e, o)} 
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleRowMouseDown(o.id);
+                      }}
+                      onMouseEnter={() => handleRowMouseEnter(o.id)}
+                      onMouseUp={() => setIsDraggingSelection(false)}
+                      className="hover:bg-gray-50/80 transition-colors cursor-context-menu select-none"
+                    >
                   {/* 👇 Checkbox Cell */}
       <td className="py-2.5 px-2 text-center" onClick={(e) => e.stopPropagation()}>
         <input
@@ -782,13 +827,28 @@ useEffect(() => {
           onChange={() => toggleOrderSelection(o.id)}
         />
       </td>
-                  {COLUMN_DEFS.map(col => visibleCols[col.key] && (
-                    <td key={`${o.id}-${col.key}`} className={`py-2.5 px-3 text-gray-700 ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right' : ''}`}>
-                      {renderCell(o, col.key)}
-                    </td>
+                      {COLUMN_DEFS.map(col => visibleCols[col.key] && (
+                        <td key={`${o.id}-${col.key}`} className={`py-2.5 px-3 text-gray-700 ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right' : ''}`}>
+                          {renderCell(o, col.key)}
+                        </td>
+                      ))}
+                    </tr>
                   ))}
-                </tr>
-              ))}
+                  {hasMore && (
+                    <tr>
+                      <td colSpan={COLUMN_DEFS.filter(col => visibleCols[col.key]).length + 1} className="px-3 py-3">
+                        <button
+                          onClick={() => fetchData({ append: true })}
+                          disabled={loadingMore}
+                          className="w-full rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-[11px] font-semibold text-orange-700 transition-all hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {loadingMore ? 'Loading...' : 'Load More'}
+                        </button>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              )}
             </tbody>
           </table>
         </div>
@@ -805,12 +865,13 @@ useEffect(() => {
               မှတ်တမ်းများ မရှိသေးပါ (သို့) ရှာဖွေမှု မတွေ့ရှိပါ။
             </div>
           ) : (
-            filteredOrders.map((o) => (
-              <div 
-                key={o.id} 
-                onClick={() => setViewingDetailOrder(o)}
-                className="bg-white p-3.5 flex flex-col gap-2.5 shadow-sm border-b border-gray-100 active:bg-gray-50/80 transition-colors"
-              >
+            <>
+              {filteredOrders.map((o) => (
+                <div 
+                  key={o.id} 
+                  onClick={() => setViewingDetailOrder(o)}
+                  className="bg-white p-3.5 flex flex-col gap-2.5 shadow-sm border-b border-gray-100 active:bg-gray-50/80 transition-colors"
+                >
                 {/* Card Top Header */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -884,8 +945,20 @@ useEffect(() => {
 
           
 
-        </div>   
-            ))
+                </div>
+              ))}
+              {hasMore && (
+                <div className="border-t border-gray-100 bg-white p-3">
+                  <button
+                    onClick={() => fetchData({ append: true })}
+                    disabled={loadingMore}
+                    className="w-full rounded-full border border-orange-200 bg-orange-50 px-3 py-2 text-[11px] font-semibold text-orange-700 transition-all hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {loadingMore ? 'Loading...' : 'Load More'}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -971,7 +1044,7 @@ useEffect(() => {
   onClose={() => setEditingOrder(null)} 
   orderData={editingOrder} 
   onSaveSuccess={() => {
-    fetchData(); // Update အောင်မြင်သွားရင် List ထဲမှာ Data ချက်ချင်း Refresh ဖြစ်အောင် ပြန်ခေါ်ပေးခြင်း
+    fetchData({ append: false }); // Update အောင်မြင်သွားရင် List ထဲမှာ Data ချက်ချင်း Refresh ဖြစ်အောင် ပြန်ခေါ်ပေးခြင်း
   }} 
 />
 
