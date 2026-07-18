@@ -229,6 +229,7 @@ const IconUpload = ({ className }: IconProps) => (
 export default function IntakePage() {
   const router = useRouter();
   const [isThumbExpanded, setIsThumbExpanded] = useState(true);
+  const [isTransitYGN, setIsTransitYGN] = useState<boolean>(false);
   
   // useRef ချိန်ညှိမှုများ
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -344,17 +345,15 @@ const startCamera = useCallback(async (retryCount = 0) => {
       streamRef.current = null;
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { 
-        facingMode, 
-        aspectRatio: 3 / 4, 
-        width: { ideal: 1080 }, 
-        height: { ideal: 1440 },
-        frameRate: { ideal: 30, max: 60 },
-        advanced: [{ focusMode: 'continuous' } as any]
-      },
-      audio: false,
-    });
+   const stream = await navigator.mediaDevices.getUserMedia({
+  video: { 
+    facingMode, 
+    // 💡AspectRatio အတင်းမချုပ်တော့ဘဲ ကင်မရာ native hardware အတိုင်း ပေးဖွင့်စေခြင်း
+    frameRate: { ideal: 30, max: 60 },
+    advanced: [{ focusMode: 'continuous' } as any]
+  },
+  audio: false,
+});
     
     streamRef.current = stream;
     setCameraActive(true);
@@ -559,71 +558,58 @@ useEffect(() => {
   };
 
   // ဓာတ်ပုံရိုက်ယူခြင်း စနစ်
- // ဓာတ်ပုံရိုက်ယူခြင်း စနစ်
-  const capturePhoto = useCallback(async () => {
-    if (!videoRef.current || !canvasRef.current || !shutterFlashRef.current) return;
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (video.videoWidth === 0 || video.videoHeight === 0) return;
+// ဓာတ်ပုံရိုက်ယူခြင်း စနစ်
+const capturePhoto = useCallback(async () => {
+  if (!videoRef.current || !canvasRef.current || !shutterFlashRef.current) return;
+  const video = videoRef.current;
+  const canvas = canvasRef.current;
+  if (video.videoWidth === 0 || video.videoHeight === 0) return;
 
-    shutterFlashRef.current.classList.remove('hidden');
-    shutterFlashRef.current.classList.add('animate-flash');
-    playShutterSound();
+  shutterFlashRef.current.classList.remove('hidden');
+  shutterFlashRef.current.classList.add('animate-flash');
+  playShutterSound();
 
-    // ─── 3:4 အချိုး ဖြစ်အောင် Center Crop တွက်ချက်ခြင်း ───
-    const targetRatio = 3 / 4;
-    let sWidth = video.videoWidth;
-    let sHeight = video.videoHeight;
-    let sx = 0;
-    let sy = 0;
+  // ─── 💡 ပြင်ဆင်ချက်: Crop မလုပ်တော့ဘဲ ကင်မရာ Native Size အပြည့်ယူခြင်း ───
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    // ဗီဒီယိုမြင်ကွင်းတစ်ခုလုံးကို Crop မလုပ်ဘဲ Canvas ပေါ် တိုက်ရိုက်ဆွဲထည့်မည်
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  }
 
-    if (sWidth / sHeight > targetRatio) {
-      sWidth = sHeight * targetRatio;
-      sx = (video.videoWidth - sWidth) / 2;
-    } else {
-      sHeight = sWidth / targetRatio;
-      sy = (video.videoHeight - sHeight) / 2;
-    }
-
-    canvas.width = sWidth;
-    canvas.height = sHeight;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      // ဗီဒီယိုမူရင်းထဲက 3:4 အချိုးကျ အလယ်ဗဟိုအပိုင်းကိုပဲ ဖြတ်ယူဆွဲခြင်း
-      ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, sWidth, sHeight);
-    }
-
-    canvas.toBlob((blob) => {
-      setTimeout(() => {
-        if (shutterFlashRef.current) {
-          shutterFlashRef.current.classList.add('hidden');
-          shutterFlashRef.current.classList.remove('animate-flash');
-        }
-      }, 150);
-
-      if (blob) {
-        const fileId = `photo_${Date.now()}`;
-        const file = new File([blob], `${fileId}.jpg`, { type: 'image/jpeg' });
-        const newImg: CapturedFile = {
-          id: fileId, file: file, preview: URL.createObjectURL(file), quality: 'HD', textAnnotations: [],
-          barcode: intakeMethod === 'with-barcode' ? currentScannedBarcode : undefined, 
-        };
-
-        setCapturedImages((prev) => {
-          const updated = [...prev, newImg];
-          setCurrentIdx(updated.length - 1);
-          return updated;
-        });
-
-        if (intakeMethod === 'with-barcode') {
-          setBarcodeStep('scanning');
-          setCurrentScannedBarcode('');
-        }
+  canvas.toBlob((blob) => {
+    setTimeout(() => {
+      if (shutterFlashRef.current) {
+        shutterFlashRef.current.classList.add('hidden');
+        shutterFlashRef.current.classList.remove('animate-flash');
       }
-    }, 'image/jpeg', 0.95);
-  }, [intakeMethod, currentScannedBarcode]);
+    }, 150);
+
+    if (blob) {
+      const fileId = `photo_${Date.now()}`;
+      const file = new File([blob], `${fileId}.jpg`, { type: 'image/jpeg' });
+      const newImg: CapturedFile = {
+        id: fileId, file: file, preview: URL.createObjectURL(file), quality: 'HD', textAnnotations: [],
+        barcode: intakeMethod === 'with-barcode' ? currentScannedBarcode : undefined, 
+      };
+
+      setCapturedImages((prev) => {
+        const updated = [...prev, newImg];
+        setCurrentIdx(updated.length - 1);
+        return updated;
+      });
+
+      if (intakeMethod === 'with-barcode') {
+        setBarcodeStep('scanning');
+        setCurrentScannedBarcode('');
+      }
+    }
+  }, 'image/jpeg', 0.95);
+}, [intakeMethod, currentScannedBarcode]);
 
   const switchFacingMode = () => setFacingMode(prev => prev === 'environment' ? 'user' : 'environment');
 
@@ -805,10 +791,12 @@ useEffect(() => {
         {
           image_url: secureUrl,
           branch: item.branch,
-          status: 'Pending',
+          status: item.transit_to ? 'In-Transit' : 'Pending',
           received_date: item.received_date,
           uploader_note: item.uploader_note || null,
           barcode: item.barcode || null,
+          transit_to: item.transit_to || null,      
+          transit_date: item.transit_date || null,
         },
       ]);
 
@@ -912,7 +900,10 @@ useEffect(() => {
         textAnnotations: img.textAnnotations || [],
         branch: userBranch,
         received_date: receivedDate,
-        uploader_note: batchNote || null
+        uploader_note: batchNote || null,
+        transit_to: isTransitYGN ? 'YGN' : null,        
+        transit_date: isTransitYGN ? receivedDate : null,
+        status: isTransitYGN ? 'In-Transit' : 'Pending'
       };
 
       // Browser Storage ထဲသို့ သိမ်းဆည်းခြင်း
@@ -922,6 +913,7 @@ useEffect(() => {
     // UI & State အားလုံးကို ဒုတိယအကြိမ် ထပ်မံရိုက်ကူးနိုင်ရန် ချက်ချင်း Clear လုပ်ပါသည်
     setCapturedImages([]); 
     setBatchNote('');
+    setIsTransitYGN(false);
     setReceivedDate(new Date().toISOString().split('T')[0]);
     setFlowMode('camera');
     setIntakeMethod('choose');
@@ -934,9 +926,9 @@ useEffect(() => {
   return (
     <div className="flex flex-col h-screen bg-neutral-950 text-white select-none overflow-hidden max-w-md mx-auto relative font-sans antialiased">
       
-      {/* BACKGROUND UPLOADER STATUS NOTIFICATION CARD (PREMIUM PILL SHAPE) */}
+     {/* BACKGROUND UPLOADER STATUS NOTIFICATION CARD (PREMIUM PILL SHAPE) */}
 {backgroundUploadStatus !== 'idle' && (
-  <div className={`absolute top-20 left-4 right-4 w-[calc(100%-2rem)] md:left-1/2 md:-translate-x-1/2 md:max-w-2xl z-50 p-2 pl-5 pr-2 rounded-[28px] sm:rounded-full border flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-xs font-semibold shadow-[0_20px_50px_rgba(0,0,0,0.6)] backdrop-blur-xl transition-all duration-300 ${
+  <div className={`absolute top-20 left-4 right-4 w-[calc(100%-2rem)] md:left-1/2 md:-translate-x-1/2 md:max-w-2xl z-50 p-2 pl-5 pr-2 rounded-[24px] sm:rounded-full border flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-xs font-semibold shadow-[0_20px_50px_rgba(0,0,0,0.6)] backdrop-blur-xl transition-all duration-300 ${
     backgroundUploadStatus === 'uploading' ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :
     backgroundUploadStatus === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
     'bg-red-500/10 border-red-500/20 text-red-400'
@@ -970,27 +962,23 @@ useEffect(() => {
       {/* စာသားအပိုင်း (Flexible Width & No Wrap Error) */}
       <div className="flex-1 min-w-0 text-left">
         {backgroundUploadStatus === 'uploading' && (
-          <p className="text-[12px] font-semibold text-amber-300 leading-none">
-            Uploading...<span className="text-amber-400 font-bold">({backgroundUploadCount})</span> ကျန်
+          <p className="text-[13px] font-bold text-amber-300 leading-none">
+            Uploading... <span className="text-white-400 font-bold">{backgroundUploadCount}</span> ပုံကျန်
           </p>
         )}
         {backgroundUploadStatus === 'success' && (
-          <p className="text-[12px] font-semibold text-emerald-300 leading-none flex items-center gap-1.5">
+          <p className="text-[13px] font-bold text-emerald-300 leading-none">
             အောင်မြင်ပါသည်
-            
           </p>
         )}
         {backgroundUploadStatus === 'error' && (
-          <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2 min-w-0">
-           
-            <p className="text-[15px] font-bold text-red-300 leading-tight block whitespace-normal break-words">
+          <p className="text-[13px] font-bold text-red-300 leading-tight block whitespace-normal break-words">
             Upload Failed! <span className="text-red-400 font-bold">({backgroundUploadCount})</span> ကျန်
-            </p>
-          </div>
+          </p>
         )}
       </div>
-    </div>
-
+    </div> {/* 💡 တပ်ဆင်လိုက်သော ဘယ်ဘက်ခြမ်း ပိတ်ဂရမ် (Closing Tag) */}
+    
     {/* ညာဘက်ခြမ်း: Action Buttons (Pill Shaped Controls) */}
     <div className="flex items-center justify-end gap-1.5 shrink-0 w-full sm:w-auto pb-1 sm:pb-0">
       {backgroundUploadStatus === 'error' && (
@@ -1009,27 +997,26 @@ useEffect(() => {
       )}
       
       {backgroundUploadStatus !== 'uploading' && (
-       <button 
-  onClick={() => setBackgroundUploadStatus('idle')} 
-  className="flex-1 sm:flex-initial inline-flex items-center justify-center text-[11px] font-bold bg-white/5 hover:bg-white/10 px-4 py-2 rounded-full border border-white/5 text-neutral-400 hover:text-neutral-200 text-center transition-all active:scale-95"
-  title="ပိတ်မည်"
->
-  {/* Modern Close (X) SVG Icon */}
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    fill="none" 
-    viewBox="0 0 24 24" 
-    strokeWidth={2.5} 
-    stroke="currentColor" 
-    className="h-3.5 w-3.5"
-  >
-    <path 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      d="M6 18 18 6M6 6l12 12" 
-    />
-  </svg>
-</button>
+        <button 
+          onClick={() => setBackgroundUploadStatus('idle')} 
+          className="flex-1 sm:flex-initial inline-flex items-center justify-center text-[11px] font-bold bg-white/5 hover:bg-white/10 px-4 py-2 rounded-full border border-white/5 text-neutral-400 hover:text-neutral-200 text-center transition-all active:scale-95"
+          title="ပိတ်မည်"
+        >
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            fill="none" 
+            viewBox="0 0 24 24" 
+            strokeWidth={2.5} 
+            stroke="currentColor" 
+            className="h-3.5 w-3.5"
+          >
+            <path 
+              strokeLinecap="round" 
+              strokeLinejoin="round" 
+              d="M6 18 18 6M6 6l12 12" 
+            />
+          </svg>
+        </button>
       )}
     </div>
 
@@ -1117,8 +1104,8 @@ useEffect(() => {
           <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
         </svg>
       </div>
-      <p className="text-sm font-bold text-white">စောင့်ဆိုင်းခန်းထဲတွင် ဘာမှမရှိတော့ပါ</p>
-      <p className="mt-1 text-[11px] text-neutral-400">ပြန်လည်စစ်ဆေးရန် ကျန်ရှိနေသော ပါဆယ်မှတ်တမ်းများ လုံးဝမရှိပါ။</p>
+      <p className="text-sm font-bold text-white">မအောင်မြင်သေးသော ပုံများမရှိတော့ပါ</p>
+      <p className="mt-1 text-[11px] text-neutral-400">ပုံများအားလုံး တင်ပြီးထားပါပြီ</p>
     </div>
   ) : (
     /* CARD LIST */
@@ -1345,220 +1332,132 @@ useEffect(() => {
     </div>
 
     {/* 2. MAIN VIEWPORT (Camera / Scanner) */}
-    <div className="mt-3 w-full aspect-[3/4] relative bg-neutral-950 overflow-hidden  shadow-[0_0_40px_rgba(0,0,0,0.5)] z-10 flex-shrink-0">
+<div className="mt-3 w-full aspect-[3/4] relative bg-neutral-950 overflow-hidden shadow-[0_0_40px_rgba(0,0,0,0.5)] z-10 flex-shrink-0">
+  
+  {intakeMethod === 'with-barcode' && barcodeStep === 'scanning' ? (
+    /* ─── BARCODE SCANNER VIEW ─── */
+    <div className="absolute inset-0 w-full h-full z-10 flex flex-col items-center justify-center bg-black/20 backdrop-blur-[2px]">
+      <Scanner 
+        onScan={handleCameraScan}
+        allowMultiple={false}
+        scanDelay={300}
+        styles={{ container: { width: '100%', height: '100%', position: 'absolute', inset: 0 } }}
+        components={{ finder: false }}
+      />
       
-      {intakeMethod === 'with-barcode' && barcodeStep === 'scanning' ? (
-        /* BARCODE SCANNER VIEW */
-        <div className="absolute inset-0 w-full h-full z-10 flex flex-col items-center justify-center bg-black/20 backdrop-blur-[2px]">
-          <Scanner 
-            onScan={handleCameraScan}
-            allowMultiple={false}
-            scanDelay={300}
-            styles={{ container: { width: '100%', height: '100%', position: 'absolute', inset: 0 } }}
-            components={{ finder: false }}
-          />
-          
-          <style>{`
-            @keyframes scan-laser {
-              0%, 100% { transform: translateY(0); opacity: 0; }
-              10%, 90% { opacity: 1; }
-              50% { transform: translateY(280px); }
-            }
-            .animate-laser { animation: scan-laser 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
-          `}</style>
+      <style>{`
+        @keyframes scan-laser {
+          0%, 100% { transform: translateY(0); opacity: 0; }
+          10%, 90% { opacity: 1; }
+          50% { transform: translateY(280px); }
+        }
+        .animate-laser { animation: scan-laser 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+      `}</style>
 
-          {/* Premium Scanner Reticle */}
-          <div className="relative w-72 h-72 z-20">
-            {/* Corner Brackets */}
-            <div className="absolute top-0 left-0 w-8 h-8 border-t-[3px] border-l-[3px] border-amber-500 rounded-tl-2xl"></div>
-            <div className="absolute top-0 right-0 w-8 h-8 border-t-[3px] border-r-[3px] border-amber-500 rounded-tr-2xl"></div>
-            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-[3px] border-l-[3px] border-amber-500 rounded-bl-2xl"></div>
-            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-[3px] border-r-[3px] border-amber-500 rounded-br-2xl"></div>
-            
-           
-          </div>
-
-          {/* Scanning Hint */}
-          <div className="absolute top-10 inset-x-0 flex justify-center z-20 px-6">
-            <div className="flex animate-fade-in items-center gap-3 rounded-full bg-black/60 px-5 py-2.5 text-xs font-medium text-white shadow-2xl backdrop-blur-xl border border-white/10">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-500 opacity-75"></span>
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500"></span>
-              </span>
-              <p className="tracking-wide">
-                ပါဆယ်ပေါ်ရှိ <span className="font-bold text-amber-400">Barcode</span> ကို ချိန်ပေးပါ
-              </p>              
-            </div>
-            
-          </div>
-{capturedImages.length > 0 && (
-  <div className="absolute bottom-2 right-5 z-30 flex flex-col items-end gap-3">
-    {/* Enhanced Expand Button */}
-    <button
-      onClick={() => setIsThumbExpanded(!isThumbExpanded)}
-      className="group flex items-center gap-2.5 bg-black/60 backdrop-blur-xl text-white border border-white/20 rounded-full pl-3 pr-3 py-1 text-xs font-semibold shadow-2xl transition-all duration-300 hover:border-white/30 hover:shadow-amber-500/10 active:scale-95"
-    >
-      <span className="relative flex items-center gap-2">
-        {/* Image count badge */}
-        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-500/20 border border-amber-400/30 text-amber-400 text-xs font-bold">
-          {capturedImages.length}
-        </span>
-        
-      </span>
-      
-      {/* Animated chevron icon */}
-      <svg 
-        className={`w-4 h-4 transition-transform duration-300 ${isThumbExpanded ? 'rotate-180' : ''}`} 
-        fill="none" 
-        viewBox="0 0 24 24" 
-        stroke="currentColor"
-      >
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-      </svg>
-    </button>
-
-    {isThumbExpanded && (
-      <div className="max-w-[380px] flex items-start gap-3 p-2 overflow-x-auto scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20 animate-fade-in-up origin-bottom-right">
-        {capturedImages.map((img, idx) => (
-          <div 
-            key={img.id} 
-            className="group/card relative"
-          >
-            {/* Image Card */}
-            <div 
-              onClick={() => { setFlowMode('preview'); setCurrentIdx(idx); stopCamera(); }}
-              className="relative w-30 h-30 rounded-xl overflow-hidden border-2 border-white/15 hover:border-amber-400/50 flex-shrink-0 cursor-pointer active:scale-95 transition-all duration-300 hover:shadow-lg hover:shadow-amber-500/10 group-hover/card:scale-[1.02]"
-            >
-              <img src={img.preview} alt="" className="w-full h-full object-cover" />
-              
-              {/* Gradient overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80 group-hover/card:opacity-90 transition-opacity"></div>
-              
-              {/* Barcode label */}
-              {img.barcode && (
-                <div className="absolute bottom-2 inset-x-2">
-                  <span className="block w-full bg-black/60 backdrop-blur-sm rounded-md px-2 py-0.5 text-amber-400 text-[9px] font-mono font-bold text-center truncate border border-amber-400/20">
-                    {img.barcode}
-                  </span>
-                </div>
-              )}
-              
-              
-            </div>
-
-            {/* Image index indicator */}
-            {/* Delete button */}
-              <button 
-                onClick={(e) => deleteImage(img.id, e)}
-                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-amber-500 text-black text-[10px] font-bold flex items-center justify-center shadow-md border border-amber-400/50 opacity-100 transition-opacity"
-                title="Delete image"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-          </div>
-        ))}
+      {/* Premium Scanner Reticle */}
+      <div className="relative w-72 h-72 z-20">
+        <div className="absolute top-0 left-0 w-8 h-8 border-t-[3px] border-l-[3px] border-amber-500 rounded-tl-2xl"></div>
+        <div className="absolute top-0 right-0 w-8 h-8 border-t-[3px] border-r-[3px] border-amber-500 rounded-tr-2xl"></div>
+        <div className="absolute bottom-0 left-0 w-8 h-8 border-b-[3px] border-l-[3px] border-amber-500 rounded-bl-2xl"></div>
+        <div className="absolute bottom-0 right-0 w-8 h-8 border-b-[3px] border-r-[3px] border-amber-500 rounded-br-2xl"></div>
       </div>
-    )}
-  </div>
-)}
 
+      {/* Scanning Hint */}
+      <div className="absolute top-10 inset-x-0 flex justify-center z-20 px-6">
+        <div className="flex animate-fade-in items-center gap-3 rounded-full bg-black/60 px-5 py-2.5 text-xs font-medium text-white shadow-2xl backdrop-blur-xl border border-white/10">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-500 opacity-75"></span>
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500"></span>
+          </span>
+          <p className="tracking-wide">
+            ပါဆယ်ပေါ်ရှိ <span className="font-bold text-amber-400">Barcode</span> ကို ချိန်ပေးပါ
+          </p>              
         </div>
-      ) : (
-        /* NATIVE CAMERA VIEW */
-        <>
-          <video 
-            ref={videoRef} 
-            className="w-full h-full object-cover scale-[1.02]" // Scale slightly to hide any video edges
-            playsInline 
-            muted 
-            autoPlay 
-          />
-          <canvas ref={canvasRef} className="hidden" />
-          <div ref={shutterFlashRef} className="absolute inset-0 bg-white z-40 hidden" />
+      </div>
+    </div>
+  ) : (
+    /* ─── NATIVE CAMERA VIEW ─── */
+    <>
+      <video 
+        ref={videoRef} 
+        className="w-full h-full object-contain" 
+        playsInline 
+        muted 
+        autoPlay 
+      />
+      <canvas ref={canvasRef} className="hidden" />
+      <div ref={shutterFlashRef} className="absolute inset-0 bg-white z-40 hidden" />
 
-          {/* Scanned Barcode Overlay Pill */}
-          {intakeMethod === 'with-barcode' && currentScannedBarcode && (
-            <div className="absolute top-3 inset-x-5 z-20">
-              <div className="flex animate-fade-in items-center justify-between gap-3 rounded-2xl bg-black/50 p-2 pl-4 shadow-2xl backdrop-blur-xl border border-white/15">
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-400">
-                    <IconScan className="h-4 w-4" />
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-[9px] uppercase tracking-wider text-neutral-400 font-bold">Scanned Barcode</span>
-                    <span className="truncate font-mono text-sm text-white font-medium">{currentScannedBarcode}</span>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => { setBarcodeStep('scanning'); setCurrentScannedBarcode(''); }}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20 active:scale-95 transition-all"
-                >
-                  <IconRefresh className="h-4 w-4" />
-                </button>
+      {/* Scanned Barcode Overlay Pill */}
+      {intakeMethod === 'with-barcode' && currentScannedBarcode && (
+        <div className="absolute top-3 inset-x-5 z-20">
+          <div className="flex animate-fade-in items-center justify-between gap-3 rounded-2xl bg-black/50 p-2 pl-4 shadow-2xl backdrop-blur-xl border border-white/15">
+            <div className="flex items-center gap-3 overflow-hidden">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-400">
+                <IconScan className="h-4 w-4" />
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[9px] uppercase tracking-wider text-neutral-400 font-bold">Scanned Barcode</span>
+                <span className="truncate font-mono text-sm text-white font-medium">{currentScannedBarcode}</span>
               </div>
             </div>
-          )}
-
-          {/* Floating Thumbnail Gallery */}
-{capturedImages.length > 0 && (
-  <div className="absolute bottom-2 right-5 z-30 flex flex-col items-end gap-3">
-    {/* Enhanced Expand Button */}
-    <button
-      onClick={() => setIsThumbExpanded(!isThumbExpanded)}
-      className="group flex items-center gap-2.5 bg-black/60 backdrop-blur-xl text-white border border-white/20 rounded-full pl-3 pr-3 py-1 text-xs font-semibold shadow-2xl transition-all duration-300 hover:border-white/30 hover:shadow-amber-500/10 active:scale-95"
-    >
-      <span className="relative flex items-center gap-2">
-        {/* Image count badge */}
-        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-500/20 border border-amber-400/30 text-amber-400 text-xs font-bold">
-          {capturedImages.length}
-        </span>
-        
-      </span>
-      
-      {/* Animated chevron icon */}
-      <svg 
-        className={`w-4 h-4 transition-transform duration-300 ${isThumbExpanded ? 'rotate-180' : ''}`} 
-        fill="none" 
-        viewBox="0 0 24 24" 
-        stroke="currentColor"
-      >
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-      </svg>
-    </button>
-
-    {isThumbExpanded && (
-      <div className="max-w-[380px] flex items-start gap-3 p-2 overflow-x-auto scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20 animate-fade-in-up origin-bottom-right">
-        {capturedImages.map((img, idx) => (
-          <div 
-            key={img.id} 
-            className="group/card relative"
-          >
-            {/* Image Card */}
-            <div 
-              onClick={() => { setFlowMode('preview'); setCurrentIdx(idx); stopCamera(); }}
-              className="relative w-30 h-30 rounded-xl overflow-hidden border-2 border-white/15 hover:border-amber-400/50 flex-shrink-0 cursor-pointer active:scale-95 transition-all duration-300 hover:shadow-lg hover:shadow-amber-500/10 group-hover/card:scale-[1.02]"
+            <button 
+              onClick={() => { setBarcodeStep('scanning'); setCurrentScannedBarcode(''); }}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20 active:scale-95 transition-all"
             >
-              <img src={img.preview} alt="" className="w-full h-full object-cover" />
-              
-              {/* Gradient overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80 group-hover/card:opacity-90 transition-opacity"></div>
-              
-              {/* Barcode label */}
-              {img.barcode && (
-                <div className="absolute bottom-2 inset-x-2">
-                  <span className="block w-full bg-black/60 backdrop-blur-sm rounded-md px-2 py-0.5 text-amber-400 text-[9px] font-mono font-bold text-center truncate border border-amber-400/20">
-                    {img.barcode}
-                  </span>
-                </div>
-              )}
-              
-              
-            </div>
+              <IconRefresh className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  )}
 
-            {/* Image index indicator */}
-            {/* Delete button */}
+  {/* ─── SHARED FLOATING THUMBNAIL GALLERY ─── */}
+  {/* Conditional Block ရဲ့ အပြင်ကို ထုတ်လိုက်တာကြောင့် Scanner ကော Camera Preview ကော နှစ်ခုလုံးမှာ ဒီ UI အတိုင်း ပေါ်နေမှာဖြစ်ပါတယ် */}
+  {capturedImages.length > 0 && (
+    <div className="absolute bottom-2 right-5 z-30 flex flex-col items-end gap-3">
+      {/* Enhanced Expand Button */}
+      <button
+        onClick={() => setIsThumbExpanded(!isThumbExpanded)}
+        className="group flex items-center gap-2.5 bg-black/60 backdrop-blur-xl text-white border border-white/20 rounded-full pl-3 pr-3 py-1 text-xs font-semibold shadow-2xl transition-all duration-300 hover:border-white/30 hover:shadow-amber-500/10 active:scale-95"
+      >
+        <span className="relative flex items-center gap-2">
+          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-500/20 border border-amber-400/30 text-amber-400 text-xs font-bold">
+            {capturedImages.length}
+          </span>
+        </span>
+        <svg 
+          className={`w-4 h-4 transition-transform duration-300 ${isThumbExpanded ? 'rotate-180' : ''}`} 
+          fill="none" 
+          viewBox="0 0 24 24" 
+          stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {isThumbExpanded && (
+        <div className="max-w-[380px] flex items-start gap-3 p-2 overflow-x-auto scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20 animate-fade-in-up origin-bottom-right">
+          {capturedImages.map((img, idx) => (
+            <div key={img.id} className="group/card relative">
+              {/* Image Card */}
+              <div 
+                onClick={() => { setFlowMode('preview'); setCurrentIdx(idx); stopCamera(); }}
+                className="relative w-30 h-30 rounded-xl overflow-hidden border-2 border-white/15 hover:border-amber-400/50 flex-shrink-0 cursor-pointer active:scale-95 transition-all duration-300 hover:shadow-lg hover:shadow-amber-500/10 group-hover/card:scale-[1.02]"
+              >
+                <img src={img.preview} alt="" className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80 group-hover/card:opacity-90 transition-opacity"></div>
+                {img.barcode && (
+                  <div className="absolute bottom-2 inset-x-2">
+                    <span className="block w-full bg-black/60 backdrop-blur-sm rounded-md px-2 py-0.5 text-amber-400 text-[9px] font-mono font-bold text-center truncate border border-amber-400/20">
+                      {img.barcode}
+                    </span>
+                  </div>
+                )}
+              </div>
+              
+              {/* Delete button */}
               <button 
                 onClick={(e) => deleteImage(img.id, e)}
                 className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-amber-500 text-black text-[10px] font-bold flex items-center justify-center shadow-md border border-amber-400/50 opacity-100 transition-opacity"
@@ -1568,15 +1467,13 @@ useEffect(() => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
-          </div>
-        ))}
-      </div>
-    )}
-  </div>
-)}
-        </>
+            </div>
+          ))}
+        </div>
       )}
     </div>
+  )}
+</div>
 
     {/* 3. BOTTOM CONTROLS (Flex Area) */}
     <div className="flex-1 w-full flex flex-col items-center justify-center px-10 pb-4 z-40 relative">
@@ -1798,9 +1695,11 @@ useEffect(() => {
     </button>
   </div>
 
+  
+
   {/* Editing Tools (Crop & Text) */}
   <div className="flex items-center gap-1.5">
-    {/* Crop Button */}
+    {/* Crop Button 
     <button
       onClick={() => { setCurrentCropOrder(currentImgObj); setShowCropModal(true); }}
       className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 border border-white/5 text-neutral-300 active:scale-90 transition-all"
@@ -1808,9 +1707,9 @@ useEffect(() => {
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M6 2v16h16M2 6h16v16" />
       </svg>
-    </button>
+    </button>*/}
 
-    {/* Text Button */}
+    {/* Text Button 
     <button
       onClick={() => setDrawingText(!drawingText)}
       className={`flex h-8 w-8 items-center justify-center rounded-full border active:scale-90 transition-all ${drawingText ? 'border-orange-500/30 bg-orange-500 text-neutral-950 shadow' : 'border-white/5 bg-white/5 text-neutral-300'}`}
@@ -1818,8 +1717,10 @@ useEffect(() => {
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
       </svg>
-    </button>
-  </div>
+    </button>*/}
+  </div> 
+
+
 
   {/* Date Picker Pill */}
   <div className="flex items-center gap-1.5 rounded-full border border-white/5 bg-black/40 px-3 py-1">
@@ -1834,16 +1735,32 @@ useEffect(() => {
     />
   </div>
 
+    <div className=" flex items-center px-1">
+  <label className="flex items-center gap-2.5 cursor-pointer select-none text-[11px] font-bold tracking-wide text-neutral-400 hover:text-neutral-200 transition-colors">
+    <input
+      type="checkbox"
+      checked={isTransitYGN}
+      onChange={(e) => setIsTransitYGN(e.target.checked)}
+      className="w-4 h-4 rounded-md border-white/15 bg-neutral-950 text-orange-500 focus:ring-0 focus:ring-offset-0 accent-orange-500 cursor-pointer"
+    />
+    <span className={isTransitYGN ? "text-orange-400 shadow-sm" : ""}>
+      Transit to YGN 
+    </span>
+  </label>
 </div>
+
+</div>
+
+
 
             <div className="mt-3 relative flex items-center w-full">
   <input
-    type="text"
-    value={batchNote}
-    onChange={(e) => setBatchNote(e.target.value)}
-    placeholder="Add a caption..."
-    className="w-full rounded-full border border-white/10 bg-neutral-950/80 pl-4 pr-12 py-3 text-[13px] text-neutral-100 outline-none placeholder:text-neutral-600 focus:border-orange-500/40"
-  />
+  type="text"
+  value={batchNote}
+  onChange={(e) => setBatchNote(e.target.value)}
+  placeholder="Add a caption..."
+  className="w-full rounded-full border border-white/10 bg-neutral-950/80 pl-4 pr-12 py-3 text-[16px] md:text-[13px] text-neutral-100 outline-none placeholder:text-neutral-600 focus:border-orange-500/40"
+/>
   <button
     onClick={handleFinalSubmit}
     className="absolute right-1.5 flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-amber-400 text-neutral-950 shadow-[0_0_12px_rgba(249,115,22,0.2)] active:scale-95 transition-all"
