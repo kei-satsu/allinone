@@ -333,6 +333,7 @@ export default function IntakePage() {
 
   
   // Native ကင်မရာကို စတင်ဖွင့်လှစ်ခြင်း (Retry Count ပါဝင်သည်)
+// Native ကင်မရာကို စတင်ဖွင့်လှစ်ခြင်း (Redmi Note 14 အတွက် အကြိမ်ကြိမ် ကြိုးစားမည့် စနစ်ပါဝင်သည်)
 const startCamera = useCallback(async (retryCount = 0) => {
   try {
     if (!navigator.mediaDevices?.getUserMedia) return setCameraSupported(false);
@@ -340,6 +341,7 @@ const startCamera = useCallback(async (retryCount = 0) => {
     // ရှိပြီးသား Stream Track တွေကို သေချာရှင်းထုတ်ပစ်ရန်
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
     }
 
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -356,22 +358,22 @@ const startCamera = useCallback(async (retryCount = 0) => {
     
     streamRef.current = stream;
     setCameraActive(true);
-    setCameraSupported(true); // Error ဖြစ်ခဲ့ရင်တောင် ပြန်ပွင့်ရင် Reset လုပ်ရန်
+    setCameraSupported(true); // ပြန်ပွင့်သွားလျှင် Reset လုပ်ရန်
     
     if (videoRef.current) {
       videoRef.current.srcObject = stream;
       videoRef.current.onloadedmetadata = () => videoRef.current?.play().catch(() => {});
     }
   } catch (err) {
-    console.error("Camera connection error:", err);
+    console.error(`Camera connection error (Attempt ${retryCount + 1}):`, err);
     
-    // Hardware လော့ခ်ကျနေပါက 500ms စောင့်ပြီး ၁ ကြိမ် ထပ်မံကြိုးစားကြည့်ရန်
-    if (retryCount < 1) {
+    // 💡 Hardware လော့ခ်ကျနေပါက 600ms စောင့်ပြီး ၃ ကြိမ်အထိ ထပ်မံကြိုးစားကြည့်ရန်
+    if (retryCount < 3) {
       setTimeout(() => {
         startCamera(retryCount + 1);
-      }, 500);
+      }, 600);
     } else {
-      setCameraSupported(false); // တကယ်ဖွင့်မရမှသာ False ပေးမည်
+      setCameraSupported(false); // ၃ ကြိမ်စလုံး ဖွင့်မရမှသာ False ပေးမည်
     }
   }
 }, [facingMode]);
@@ -388,6 +390,7 @@ const startCamera = useCallback(async (retryCount = 0) => {
 
   
  // Camera Resource Lifecycle logic
+// Camera Resource Lifecycle logic
 useEffect(() => {
   let timeoutId: NodeJS.Timeout;
 
@@ -395,14 +398,20 @@ useEffect(() => {
     if (intakeMethod === 'with-barcode' && barcodeStep === 'scanning') {
       stopCamera(); 
     } else {
-      // Scanner Unmount ဖြစ်ပြီး ကင်မရာ Hardware လွတ်သွားအောင် 350ms ခန့် Delay ပေးပြီးမှ ဖွင့်မည်
+      // 💡 Scanner Unmount ဖြစ်ပြီး ကင်မရာ Hardware လွတ်သွားအောင် 650ms ခန့် စောင့်ပြီးမှ Native ကင်မရာကို ဖွင့်မည်
       timeoutId = setTimeout(() => {
         startCamera();
-      }, 350);
+      }, 650);
     }
   } else {
     stopCamera();
   }
+
+  // Cleanup Function
+  return () => {
+    if (timeoutId) clearTimeout(timeoutId);
+  };
+}, [flowMode, intakeMethod, barcodeStep, startCamera, stopCamera]);
 
   // Cleanup Function
   return () => {
