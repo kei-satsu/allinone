@@ -228,6 +228,7 @@ const IconUpload = ({ className }: IconProps) => (
 
 export default function IntakePage() {
   const router = useRouter();
+  const [isThumbExpanded, setIsThumbExpanded] = useState(true);
   
   // useRef ချိန်ညှိမှုများ
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -335,9 +336,16 @@ export default function IntakePage() {
     try {
       if (!navigator.mediaDevices?.getUserMedia) return setCameraSupported(false);
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        audio: false,
-      });
+  video: { 
+    facingMode, 
+    aspectRatio: 3 / 4, // 4:3 အချိုးကို ဒေါင်လိုက်တောင်းခြင်း
+    width: { ideal: 1080 }, 
+    height: { ideal: 1440 } ,
+    frameRate: { ideal: 30, max: 60 },
+    advanced: [{ focusMode: 'continuous' } as any]
+  },
+  audio: false,
+});
       streamRef.current = stream;
       setCameraActive(true);
       if (videoRef.current) {
@@ -516,6 +524,7 @@ export default function IntakePage() {
   };
 
   // ဓာတ်ပုံရိုက်ယူခြင်း စနစ်
+ // ဓာတ်ပုံရိုက်ယူခြင်း စနစ်
   const capturePhoto = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current || !shutterFlashRef.current) return;
     const video = videoRef.current;
@@ -526,10 +535,30 @@ export default function IntakePage() {
     shutterFlashRef.current.classList.add('animate-flash');
     playShutterSound();
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    // ─── 3:4 အချိုး ဖြစ်အောင် Center Crop တွက်ချက်ခြင်း ───
+    const targetRatio = 3 / 4;
+    let sWidth = video.videoWidth;
+    let sHeight = video.videoHeight;
+    let sx = 0;
+    let sy = 0;
+
+    if (sWidth / sHeight > targetRatio) {
+      sWidth = sHeight * targetRatio;
+      sx = (video.videoWidth - sWidth) / 2;
+    } else {
+      sHeight = sWidth / targetRatio;
+      sy = (video.videoHeight - sHeight) / 2;
+    }
+
+    canvas.width = sWidth;
+    canvas.height = sHeight;
     const ctx = canvas.getContext('2d');
-    if (ctx) ctx.drawImage(video, 0, 0);
+    if (ctx) {
+      // ဗီဒီယိုမူရင်းထဲက 3:4 အချိုးကျ အလယ်ဗဟိုအပိုင်းကိုပဲ ဖြတ်ယူဆွဲခြင်း
+      ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, sWidth, sHeight);
+    }
 
     canvas.toBlob((blob) => {
       setTimeout(() => {
@@ -564,26 +593,26 @@ export default function IntakePage() {
   const switchFacingMode = () => setFacingMode(prev => prev === 'environment' ? 'user' : 'environment');
 
  const deleteImage = (id: string, e: React.MouseEvent) => {
-  e.stopPropagation(); 
-  
-  // ဖျက်ပြီးနောက် ကျန်ရှိမည့် ပုံအသစ်စာရင်းကို ကြိုတင်တွက်ချက်မည်
-  const updatedImages = capturedImages.filter((img) => img.id !== id);
-  
-  // အကယ်၍ ပုံတစ်ပုံမှ မကျန်တော့ပါက (Length က 0 ဖြစ်သွားပါက)
-  if (updatedImages.length === 0) {
-    setCapturedImages([]);                 // ပုံစာရင်းကို Empty ဖြစ်အောင်လုပ်မည်
-    setIntakeMethod('choose');             // စစဝင်ချင်း 'Barcode ပါ/မပါ' ရွေးချယ်သည့် Screen သို့ ပြန်သွားမည်
-    setFlowMode('camera');                 // FlowMode ကို ကင်မရာအခြေအနေသို့ ပြန်ပြောင်းမည်
-    setBarcodeStep('scanning');            // Barcode အဆင့်ကိုလည်း scanning အဖြစ် ပြန်ပြင်မည်
-    setCurrentScannedBarcode('');          // သိမ်းထားမိသော Barcode အဟောင်းကို ဖျက်မည်
-    setCurrentIdx(0);                      // Index ကို 0 သို့ ပြန်ညှိမည်
-  } else {
-    // ပုံများ ကျန်သေးပါက ပုံမှန်အတိုင်း ရှေ့ဆက်သွားမည်
-    setCapturedImages(updatedImages);
+  e.stopPropagation();
+
+  setCapturedImages((prev) => {
+    const updatedImages = prev.filter((img) => img.id !== id);
+
+    if (updatedImages.length === 0) {
+      setIntakeMethod('choose');
+      setFlowMode('camera');
+      setBarcodeStep('scanning');
+      setCurrentScannedBarcode('');
+      setCurrentIdx(0);
+      return [];
+    }
+
     if (currentIdx >= updatedImages.length) {
       setCurrentIdx(Math.max(0, updatedImages.length - 1));
     }
-  }
+
+    return updatedImages;
+  });
 };
 
   // Text Annotations Operations
@@ -641,7 +670,9 @@ export default function IntakePage() {
 
   const handleCropSave = () => {
     if (currentCropOrder && croppedAreaPixels) {
-      setCapturedImages(capturedImages.map((img) => img.id === currentCropOrder.id ? { ...img, croppedAreaPixels } : img));
+      setCapturedImages((prev) =>
+        prev.map((img) => (img.id === currentCropOrder.id ? { ...img, croppedAreaPixels } : img))
+      );
       setShowCropModal(false);
       setCurrentCropOrder(null);
     }
@@ -868,209 +899,338 @@ export default function IntakePage() {
   return (
     <div className="flex flex-col h-screen bg-neutral-950 text-white select-none overflow-hidden max-w-md mx-auto relative font-sans antialiased">
       
-      {/* BACKGROUND UPLOADER STATUS NOTIFICATION CARD */}
-      {backgroundUploadStatus !== 'idle' && (
-        <div className={`absolute top-16 left-3 right-3 z-50 p-3.5 rounded-2xl border flex items-center justify-between text-xs font-semibold shadow-2xl backdrop-blur-xl transition-all duration-300 transform translate-y-0 ${
-          backgroundUploadStatus === 'uploading' ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 shadow-amber-500/5' :
-          backgroundUploadStatus === 'success' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-emerald-500/5' :
-          'bg-red-500/10 border-red-500/30 text-red-400 shadow-red-500/5'
-        }`}>
-          <div className="flex items-center gap-3">
-            {backgroundUploadStatus === 'uploading' ? (
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/15">
-                <IconUpload className="h-4 w-4 text-amber-400" />
-              </div>
-            ) : backgroundUploadStatus === 'success' ? (
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/15">
-                <IconCheck className="h-4 w-4 text-emerald-400" />
-              </div>
-            ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/15">
-                <IconAlert className="h-4 w-4 text-amber-400" />
-              </div>
-            )}
-            <div className="flex flex-col">
-              {backgroundUploadStatus === 'uploading' && (
-                <span className="text-[11px] font-semibold text-amber-300">ပါဆယ်ပုံရိပ်များ တင်နေဆဲ... ကျန် ({backgroundUploadCount} ပုံ)</span>
-              )}
-              {backgroundUploadStatus === 'success' && (
-                <span className="text-[11px] font-semibold text-emerald-300">ပါဆယ်မှတ်တမ်းများ အားလုံး အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။</span>
-              )}
-              {backgroundUploadStatus === 'error' && (
-                <div className="flex items-center gap-2">
-                  <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.28em] text-amber-300">⚠ Pending Review</span>
-                  <span className="text-[11px] font-semibold text-amber-300">အချို့ item များကို လေ့လာပြီး တင်ရန်လိုအပ်ပါသည်</span>
-                </div>
-              )}
-            </div>
+      {/* BACKGROUND UPLOADER STATUS NOTIFICATION CARD (PREMIUM PILL SHAPE) */}
+{backgroundUploadStatus !== 'idle' && (
+  <div className={`absolute top-20 left-4 right-4 w-[calc(100%-2rem)] md:left-1/2 md:-translate-x-1/2 md:max-w-2xl z-50 p-2 pl-5 pr-2 rounded-[28px] sm:rounded-full border flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-xs font-semibold shadow-[0_20px_50px_rgba(0,0,0,0.6)] backdrop-blur-xl transition-all duration-300 ${
+    backgroundUploadStatus === 'uploading' ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :
+    backgroundUploadStatus === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
+    'bg-red-500/10 border-red-500/20 text-red-400'
+  }`}>
+    
+    {/* ဘယ်ဘက်ခြမ်း: SVG Icon နှင့် အခြေအနေပြ စာသားများ */}
+    <div className="flex items-center gap-3 min-w-0 flex-1 pt-1 sm:pt-0">
+      {/* Dynamic Inline SVG Icon (Pill Rounded) */}
+      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full shadow-inner ${
+        backgroundUploadStatus === 'uploading' ? 'bg-amber-500/15 text-amber-400' :
+        backgroundUploadStatus === 'success' ? 'bg-emerald-500/15 text-emerald-400' :
+        'bg-red-500/15 text-red-400'
+      }`}>
+        {backgroundUploadStatus === 'uploading' && (
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-4 w-4 animate-pulse">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+          </svg>
+        )}
+        {backgroundUploadStatus === 'success' && (
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-4 w-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+          </svg>
+        )}
+        {backgroundUploadStatus === 'error' && (
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-4 w-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+          </svg>
+        )}
+      </div>
+
+      {/* စာသားအပိုင်း (Flexible Width & No Wrap Error) */}
+      <div className="flex-1 min-w-0 text-left">
+        {backgroundUploadStatus === 'uploading' && (
+          <p className="text-[12px] font-semibold text-amber-300 leading-none">
+            Uploading...<span className="text-amber-400 font-bold">({backgroundUploadCount})</span> ကျန်
+          </p>
+        )}
+        {backgroundUploadStatus === 'success' && (
+          <p className="text-[12px] font-semibold text-emerald-300 leading-none flex items-center gap-1.5">
+            အောင်မြင်ပါသည်
+            
+          </p>
+        )}
+        {backgroundUploadStatus === 'error' && (
+          <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2 min-w-0">
+           
+            <p className="text-[15px] font-bold text-red-300 leading-tight block whitespace-normal break-words">
+            Upload Failed! <span className="text-red-400 font-bold">({backgroundUploadCount})</span> ကျန်
+            </p>
           </div>
-          {backgroundUploadStatus === 'error' && (
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  setQueueManagerOpen(true);
-                  refreshQueue();
-                }}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-amber-400/30 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-400 px-3 py-1.5 text-[10px] font-black text-neutral-950 shadow-[0_0_24px_rgba(249,115,22,0.25)]"
-              >
-                <span className="text-sm">🔍</span>
-                Review Pending Items ({backgroundUploadCount})
-              </button>
-            </div>
-          )}
-          {backgroundUploadStatus !== 'uploading' && (
-            <button 
-              onClick={() => setBackgroundUploadStatus('idle')} 
-              className="text-[10px] uppercase font-black bg-neutral-900/80 px-2 py-1 rounded-md border border-neutral-800 text-gray-400 hover:text-white"
-            >
-              ပိတ်မည်
-            </button>
-          )}
-        </div>
+        )}
+      </div>
+    </div>
+
+    {/* ညာဘက်ခြမ်း: Action Buttons (Pill Shaped Controls) */}
+    <div className="flex items-center justify-end gap-1.5 shrink-0 w-full sm:w-auto pb-1 sm:pb-0">
+      {backgroundUploadStatus === 'error' && (
+        <button
+          onClick={() => {
+            setQueueManagerOpen(true);
+            refreshQueue();
+          }}
+          className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-red-500 to-orange-500 px-4 py-2 text-[11px] font-bold text-white shadow-md shadow-orange-500/10 hover:opacity-95 active:scale-95 transition-all"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-3.5 w-3.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.604 10.604Z" />
+          </svg>
+          Review 
+        </button>
       )}
+      
+      {backgroundUploadStatus !== 'uploading' && (
+       <button 
+  onClick={() => setBackgroundUploadStatus('idle')} 
+  className="flex-1 sm:flex-initial inline-flex items-center justify-center text-[11px] font-bold bg-white/5 hover:bg-white/10 px-4 py-2 rounded-full border border-white/5 text-neutral-400 hover:text-neutral-200 text-center transition-all active:scale-95"
+  title="ပိတ်မည်"
+>
+  {/* Modern Close (X) SVG Icon */}
+  <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    fill="none" 
+    viewBox="0 0 24 24" 
+    strokeWidth={2.5} 
+    stroke="currentColor" 
+    className="h-3.5 w-3.5"
+  >
+    <path 
+      strokeLinecap="round" 
+      strokeLinejoin="round" 
+      d="M6 18 18 6M6 6l12 12" 
+    />
+  </svg>
+</button>
+      )}
+    </div>
+
+  </div>
+)}
 
       {queueManagerOpen && (
-        <div className="absolute inset-0 z-[60] flex flex-col bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.16),_transparent_45%),linear-gradient(135deg,_#030303,_#111114,_#020202)] px-3 py-4">
-          <div className="mb-3 flex items-start justify-between">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.32em] text-amber-400">Offline Queue Manager</p>
-              <h3 className="mt-1 text-xl font-black text-white">PENDING UPLOADS DESK</h3>
-            </div>
-            <button
-              onClick={() => setQueueManagerOpen(false)}
-              className="rounded-full border border-neutral-800 bg-neutral-900/70 px-3 py-1.5 text-[11px] font-semibold text-neutral-300"
-            >
-              Close
-            </button>
-          </div>
+  <div className="absolute inset-0 z-[60] flex flex-col bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.14),_transparent_45%),linear-gradient(135deg,_#030303,_#0d0d11,_#020202)] px-4 py-5 overflow-hidden">
+    
+    {/* HEADER SECTION */}
+    <div className="mb-4 flex items-start justify-between gap-4 shrink-0">
+      <div className="min-w-0">
+        <p className="text-[20px] font-bold uppercase  text-amber-400"> မအောင်မြင်သော ပုံများ</p>
+        
+      </div>
+      <button
+        onClick={() => setQueueManagerOpen(false)}
+        className="inline-flex items-center justify-center gap-1.5 rounded-full border border-neutral-800 bg-neutral-900/80 px-4 py-2 text-[11px] font-bold text-neutral-300 hover:text-white active:scale-95 transition-all"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-3.5 w-3.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+        </svg>
+       
+      </button>
+    </div>
 
-          <div className="mb-3 flex flex-col gap-2 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200 shadow-[0_0_24px_rgba(245,158,11,0.12)]">
-            <span>Review, upload, or discard each pending item with precision from this cinematic desk view.</span>
-            <button
-              onClick={() => processOfflineQueue()}
-              disabled={isBackgroundUploading}
-              className="inline-flex w-fit items-center gap-2 rounded-xl border border-amber-400/30 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-400 px-3 py-2 text-[11px] font-black text-neutral-950 shadow-[0_0_18px_rgba(249,115,22,0.2)] disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {isBackgroundUploading ? (
-                <span className="flex items-center gap-2">
-                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-neutral-950/30 border-t-neutral-950" />
-                  Reuploading All...
+    {/* BULK ACTION BANNER (PILL THEME) */}
+<div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-[24px] border border-amber-500/20 bg-gradient-to-br from-amber-500/10 to-amber-500/[0.02] p-4 text-[12px] text-amber-200/90 shadow-[0_12px_30px_rgba(245,158,11,0.04)] backdrop-blur-md shrink-0">
+  
+  {/* Left Side: Status Icon + Message Text */}
+  <div className="flex items-start gap-3 min-w-0">
+    {/* Alert Icon Wrapper */}
+    <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-400 ring-4 ring-amber-500/5">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-3.5 w-3.5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+      </svg>
+    </div>
+    
+    {/* Text */}
+    <span className="leading-relaxed font-medium">
+      တစ်ပုံချင်း စစ်ဆေးပြီး ပြန်တင်နိုင်ပါသည်
+    </span>
+  </div>
+
+  {/* Right Side: Action Button */}
+  <button
+    onClick={() => processOfflineQueue()}
+    disabled={isBackgroundUploading}
+    className="inline-flex w-full sm:w-auto shrink-0 items-center justify-center gap-2 rounded-full border border-amber-400/20 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-400 px-5 py-2.5 text-[11px] font-black text-neutral-950 shadow-[0_8px_24px_rgba(249,115,22,0.15)] disabled:cursor-not-allowed disabled:opacity-60 active:scale-[0.98] transition-all"
+  >
+    {isBackgroundUploading ? (
+      <span className="flex items-center gap-2">
+        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-neutral-950/30 border-t-neutral-950" />
+        အားလုံးကို စနစ်ထဲသို့ ပြန်တင်နေဆဲ...
+      </span>
+    ) : (
+      <>
+        <svg 
+          xmlns="http://www.w3.org/2000/svg" 
+          fill="none" 
+          viewBox="0 0 24 24" 
+          strokeWidth={2.5} 
+          stroke="currentColor" 
+          className="h-4 w-4"
+        >
+          <path 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" 
+          />
+        </svg>
+        Retry All
+      </>
+    )}
+  </button>
+</div>
+
+   {/* QUEUE LIST CONTAINER */}
+<div className="flex-1 overflow-y-auto pb-6 min-w-0">
+  {queueItems.length === 0 ? (
+    /* EMPTY STATE (PILL DESIGN) */
+    <div className="rounded-[28px] border border-neutral-800/80 bg-neutral-900/40 p-8 text-center shadow-lg backdrop-blur-sm my-6">
+      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400 ring-4 ring-emerald-500/5">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="h-5 w-5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+        </svg>
+      </div>
+      <p className="text-sm font-bold text-white">စောင့်ဆိုင်းခန်းထဲတွင် ဘာမှမရှိတော့ပါ</p>
+      <p className="mt-1 text-[11px] text-neutral-400">ပြန်လည်စစ်ဆေးရန် ကျန်ရှိနေသော ပါဆယ်မှတ်တမ်းများ လုံးဝမရှိပါ။</p>
+    </div>
+  ) : (
+    /* CARD LIST */
+    <div className="grid gap-3">
+  {queueItems.map((item) => (
+    /* Card Container */
+    <div key={item.id} className="rounded-[24px] border border-neutral-800 bg-neutral-900/60 p-3 shadow-[0_12px_30px_rgba(0,0,0,0.3)] backdrop-blur-xl">
+      
+      {/* Main Row: items-stretch ကြောင့် ဘယ်/ညာ ကော်လံနှစ်ခု အမြင့်တူညီနေမှာဖြစ်ပြီး ညာဘက်ခြမ်းကို အောက်ခြေထိ ဆွဲဆန့်ပေးထားပါတယ် */}
+      <div className="flex items-stretch gap-3 min-w-0">
+        
+        {/* LEFT SIDE: Image Preview Window (self-start ထည့်ထားလို့ မှတ်ချက်ရှည်ရင်တောင် ပုံက ပုံပျက်မသွားဘဲ Square အတိုင်း ထိပ်မှာပဲ ရှိနေပါမယ်) */}
+        <div className="h-24 w-24 sm:h-28 sm:w-28 shrink-0 self-start overflow-hidden rounded-[18px] border border-neutral-800 bg-neutral-950 flex items-center justify-center shadow-inner">
+          {item.fileBase64 ? (
+            <img
+              src={`data:image/jpeg;base64,${item.fileBase64}`}
+              alt="pending upload preview"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex flex-col items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-neutral-600 p-1 text-center">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-5 w-5 text-neutral-700">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+              </svg>
+              ပုံမရှိပါ
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT COLUMN: အချက်အလက်များနှင့် ခလုတ်များ တည်ရှိရာနေရာ */}
+        <div className="flex-1 min-w-0 flex flex-col">
+          
+          {/* Top Area: Badges နှင့် မှတ်ချက်စာသား (နေရာအပြည့် ယူထားမည်) */}
+          <div className="w-full">
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="rounded-full border border-neutral-800 bg-neutral-800/60 px-2 py-0.5 text-[9px] uppercase tracking-wider text-neutral-400 font-medium">
+                {item.received_date || 'ရက်စွဲမရှိ'}
+              </span>
+              <span className="rounded-full border border-neutral-800 bg-neutral-800/60 px-2 py-0.5 text-[9px] uppercase tracking-wider text-neutral-400 font-medium">
+                {item.branch || '—'}
+              </span>
+              {item.barcode ? (
+                <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 font-mono text-[10px] text-amber-300 font-bold ring-1 ring-amber-500/10">
+                  {item.barcode}
                 </span>
               ) : (
-                '🚀 Reupload All Queue Items'
+                <span className="rounded-full border border-neutral-800 bg-neutral-800/30 px-2 py-0.5 text-[9px] text-neutral-500 font-medium">
+                  No Barcode
+                </span>
               )}
+            </div>
+
+            {/* User Note Text block */}
+            {item.uploader_note ? (
+              <p className="mt-2 text-[12px] leading-snug text-neutral-300 block whitespace-normal break-words">
+                {item.uploader_note}
+              </p>
+            ) : (
+              <p className="mt-2 text-[12px] italic text-neutral-500">မှတ်ချက် ရေးသားထားခြင်းမရှိပါ</p>
+            )}
+          </div>
+
+          {/* Bottom Area: mt-auto သုံးထား၍ မှတ်ချက်အောက်၊ Right Column ၏ အောက်ခြေတွင် အမြဲ ကပ်နေမည် */}
+          <div className="mt-auto pt-2 flex items-center gap-1.5">
+            <button
+              onClick={() => uploadSingleItem(item.id)}
+              disabled={queueActionItemId === item.id}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-full border border-amber-500/20 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-400 px-2.5 py-1.5 text-[11px] font-black text-neutral-950 shadow-[0_4px_12px_rgba(249,115,22,0.15)] disabled:cursor-not-allowed disabled:opacity-60 active:scale-[0.98] transition-all"
+            >
+              {queueActionItemId === item.id ? (
+                <>
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-neutral-950/30 border-t-neutral-950" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-3.5 w-3.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                  </svg>
+                  Upload
+                </>
+              )}
+            </button>
+            
+            <button
+              onClick={() => deleteSingleItem(item.id)}
+              disabled={queueActionItemId === item.id}
+              className="inline-flex items-center justify-center gap-1.5 rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-[11px] font-bold text-red-400 hover:bg-red-500/15 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-60 active:scale-[0.98] transition-all"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-3.5 w-3.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.34 9m-4.72 0-.34-9m9.48-5V3.5A1.5 1.5 0 0 0 18.5 2h-13A1.5 1.5 0 0 0 4 3.5V4M4 4h16m-1 0v14.35a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 18.35V4h15Z" />
+              </svg>
+              {queueActionItemId === item.id ? 'Deleting...' : 'Delete'}
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto pb-4">
-            {queueItems.length === 0 ? (
-              <div className="rounded-3xl border border-neutral-800 bg-neutral-900/70 p-6 text-center shadow-[0_12px_30px_rgba(0,0,0,0.25)]">
-                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-300">
-                  <IconCheck className="h-6 w-6" />
-                </div>
-                <p className="text-sm font-semibold text-white">Queue is clear</p>
-                <p className="mt-1 text-[11px] text-neutral-400">There are no pending uploads waiting for review.</p>
-              </div>
-            ) : (
-              <div className="grid gap-3">
-                {queueItems.map((item) => (
-                  <div key={item.id} className="rounded-3xl border border-neutral-800 bg-neutral-900/80 p-3 shadow-[0_10px_35px_rgba(0,0,0,0.28)] backdrop-blur-xl">
-                    <div className="flex items-start gap-3">
-                      <div className="h-24 min-w-[88px] overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950">
-                        {item.fileBase64 ? (
-                          <img
-                            src={`data:image/jpeg;base64,${item.fileBase64}`}
-                            alt="pending upload preview"
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold uppercase tracking-[0.25em] text-neutral-500">
-                            No Preview
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="rounded-full border border-neutral-800 bg-neutral-800/70 px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] text-neutral-400">
-                            {item.received_date || 'No Date'}
-                          </span>
-                          {item.barcode ? (
-                            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 font-mono text-[10px] text-amber-300">
-                              {item.barcode}
-                            </span>
-                          ) : (
-                            <span className="rounded-full border border-neutral-800 bg-neutral-800/70 px-2.5 py-1 text-[10px] text-neutral-500">
-                              No Barcode
-                            </span>
-                          )}
-                        </div>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <span className="rounded-full border border-neutral-800 bg-neutral-800/60 px-2.5 py-1 text-[10px] text-neutral-400">
-                            Branch: {item.branch || '—'}
-                          </span>
-                          <span className="rounded-full border border-neutral-800 bg-neutral-800/60 px-2.5 py-1 text-[10px] text-neutral-400">
-                            Date: {item.received_date || '—'}
-                          </span>
-                        </div>
-                        {item.uploader_note ? (
-                          <p className="mt-3 text-[11px] leading-5 text-neutral-300">{item.uploader_note}</p>
-                        ) : (
-                          <p className="mt-3 text-[11px] italic text-neutral-500">No note attached</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        onClick={() => uploadSingleItem(item.id)}
-                        disabled={queueActionItemId === item.id}
-                        className="flex-1 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-400 px-3 py-2 text-[11px] font-black text-neutral-950 shadow-[0_0_18px_rgba(249,115,22,0.2)] transition-all duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
-                      >
-                        {queueActionItemId === item.id ? (
-                          <span className="flex items-center justify-center gap-2">
-                            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-neutral-950/30 border-t-neutral-950" />
-                            Uploading...
-                          </span>
-                        ) : (
-                          '🚀 Upload Now'
-                        )}
-                      </button>
-                      <button
-                        onClick={() => deleteSingleItem(item.id)}
-                        disabled={queueActionItemId === item.id}
-                        className="rounded-2xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-[11px] font-semibold text-red-300 transition-all duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
-                      >
-                        {queueActionItemId === item.id ? 'Removing...' : '🗑️ Discard'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
-      )}
+        
+      </div>
+
+    </div>
+  ))}
+</div>
+  )}
+</div>
+  </div>
+)}
 
       {/* METHOD SELECTION SCREEN (UI/UX UPGRADED) */}
 {intakeMethod === 'choose' && (
   <div className="flex-1 flex flex-col items-center justify-center p-6 bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.16),_transparent_45%),linear-gradient(135deg,_#09090b,_#111114,_#020202)] text-center animate-fade-in relative">
     
     {/* အပေါ် ဘယ်ဘက်ဒေါင့် မျှားပုံစံ ခလုပ်အဝိုင်းလေး */}
-    <button 
-      onClick={() => {
-        // အပြင်ပြန်ထွက်ရန် သို့မဟုတ် Dashboard/Home သို့ ပြန်သွားရန် Logic ကို ဒီမှာထည့်ပါ
-        // ဥပမာ - setIntakeMethod('home'); သို့မဟုတ် router.back();
-      }}
-      className="absolute top-6 left-6 flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-gray-400 backdrop-blur-md shadow-lg transition-all duration-150 hover:bg-white/10 hover:text-white active:scale-95"
-      title="နောက်သို့"
-    >
-      <IconArrowLeft className="h-5 w-5" />
-    </button>
+   <button 
+  onClick={() => {
+    // Next.js ရဲ့ main home page (/) သို့ တိုက်ရိုက် ပြန်ပို့ပေးမှာပါ
+    router.push('/'); 
+  }}
+  className="absolute top-6 left-6 flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-gray-400 backdrop-blur-md shadow-lg transition-all duration-150 hover:bg-white/10 hover:text-white active:scale-95"
+  title="နောက်သို့"
+>
+  <IconArrowLeft className="h-5 w-5" />
+</button>
+
+    {/* အပေါ် ညာဘက်ဒေါင့် Review ခလုပ် (Pill Design) */}
+   <button
+  onClick={() => {
+    setQueueManagerOpen(true);
+    refreshQueue();
+  }}
+  className="absolute top-6 right-6 inline-flex h-11 items-center justify-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-4 text-[11px] font-black text-gray-400 backdrop-blur-md shadow-lg transition-all duration-150 hover:bg-white/10 hover:text-white active:scale-95"
+>
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-3.5 w-3.5">
+    <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.604 10.604Z" />
+  </svg>
+  Review
+</button>
 
     <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-[1.75rem] bg-gradient-to-br from-orange-500 to-amber-400 shadow-[0_18px_50px_rgba(249,115,22,0.2)] ring-1 ring-white/10">
-      <IconPackage className="h-9 w-9 text-neutral-950" />
-    </div>
-    <h2 className="mb-1 text-2xl font-extrabold uppercase tracking-[0.24em] text-transparent bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text">ALL IN ONE EXPRESS</h2>
-    <p className="mb-10 max-w-xs text-xs font-medium text-gray-400">ပါဆယ်မှတ်တမ်း မစတင်မီ အသုံးပြုမည့် စနစ်ကို ရွေးချယ်ပေးပါ</p>
+  <img
+    src="/voclogo.png" // 👈 သင့် Logo ရဲ့ ပုံလမ်းကြောင်း (Path) ကို ဒီမှာထည့်ပါ
+    alt="Company Logo"
+    className="h-18 w-18 object-contain" // 👈 h-11 w-11 နေရာမှာ ပုံအကြီးအသေး ချိန်နိုင်ပါတယ်
+  />
+</div>
+    <h2 className="mb-1 text-2xl font-extrabold uppercase tracking-[0.14em] text-transparent bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text">ALL IN ONE EXPRESS</h2>
+    <p className="mb-10 max-w-xs text-xs font-medium text-gray-400 ">Percel Intake Recoder</p>
     
     <div className="w-full max-w-xs flex flex-col gap-4">
       {/* ကင်မရာခလုပ် (Pill Shape) */}
@@ -1108,195 +1268,340 @@ export default function IntakePage() {
   </div>
 )}
 
-      {/* PREMIUM CAMERA / SCANNER MODE INTERFACE */}
-      {intakeMethod !== 'choose' && flowMode === 'camera' && (
-        <div className="flex-1 flex flex-col bg-black relative justify-between overflow-hidden">
+     {/* PREMIUM CAMERA / SCANNER MODE INTERFACE */}
+{intakeMethod !== 'choose' && flowMode === 'camera' && (
+  <div className="flex-1 w-full h-full bg-black relative flex flex-col overflow-hidden font-sans select-none">
+    
+    {/* 1. TOP HEADER (Fixed Height) */}
+    <div className="h-[90px] w-full flex items-end justify-between px-5 pb-4 z-40">
+      <button 
+        onClick={() => {
+          if(window.confirm('လုပ်ငန်းစဉ်ရွေးချယ်မှု စာမျက်နှာသို့ ပြန်သွားလိုပါသလား?')) {
+            setIntakeMethod('choose');
+            stopCamera();
+          }
+        }}
+        className="flex h-11 w-11 items-center justify-center rounded-full bg-neutral-900/80 text-white transition-transform hover:bg-neutral-800 active:scale-90"
+      >
+        <IconArrowLeft className="h-5 w-5" />
+      </button>
+
+      {/* Mode Indicator Pill */}
+      <div className="flex items-center gap-2 rounded-full bg-neutral-900/80 px-4 py-2 text-[10px] font-bold tracking-[0.15em] text-white backdrop-blur-md">
+        {intakeMethod === 'with-barcode' ? (
+          <>
+            <IconScan className="h-4 w-4 text-amber-500" />
+            <span>{barcodeStep === 'scanning' ? 'SCAN BARCODE' : 'TAKE PHOTO'}</span>
+          </>
+        ) : (
+          <>
+            <IconCamera className="h-4 w-4 text-amber-500" />
+            <span>CAPTURE PARCEL</span>
+          </>
+        )}
+      </div>
+
+      <button 
+        onClick={switchFacingMode} 
+        className="flex h-11 w-11 items-center justify-center rounded-full bg-neutral-900/80 text-white transition-transform hover:bg-neutral-800 active:scale-90"
+      >
+        <IconSwitchCamera className="h-5 w-5" />
+      </button>
+    </div>
+
+    {/* 2. MAIN VIEWPORT (Camera / Scanner) */}
+    <div className="mt-3 w-full aspect-[3/4] relative bg-neutral-950 overflow-hidden  shadow-[0_0_40px_rgba(0,0,0,0.5)] z-10 flex-shrink-0">
+      
+      {intakeMethod === 'with-barcode' && barcodeStep === 'scanning' ? (
+        /* BARCODE SCANNER VIEW */
+        <div className="absolute inset-0 w-full h-full z-10 flex flex-col items-center justify-center bg-black/20 backdrop-blur-[2px]">
+          <Scanner 
+            onScan={handleCameraScan}
+            allowMultiple={false}
+            scanDelay={300}
+            styles={{ container: { width: '100%', height: '100%', position: 'absolute', inset: 0 } }}
+            components={{ finder: false }}
+          />
           
-          {/* Glassmorphic Top Header */}
-          <div className="absolute top-0 inset-x-0 bg-gradient-to-b from-black/90 via-black/50 to-transparent p-4 flex items-center justify-between z-30 px-5 pt-6">
-            <button 
-              onClick={() => {
-                if(window.confirm('လုပ်ငန်းစဉ်ရွေးချယ်မှု စာမျက်နှာသို့ ပြန်သွားလိုပါသလား?')) {
-                  setIntakeMethod('choose');
-                  stopCamera();
-                }
-              }}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-neutral-900/80 text-gray-300 shadow-xl backdrop-blur-md transition-transform active:scale-90"
-            >
-              <IconArrowLeft className="h-4 w-4" />
-            </button>
-            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-neutral-900/90 px-4 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.22em] text-orange-400 shadow-xl backdrop-blur-md">
-              {intakeMethod === 'with-barcode' ? (
-                <>
-                  <IconScan className="h-3.5 w-3.5" />
-                  <span>{barcodeStep === 'scanning' ? 'SCANNING BARCODE' : 'TAKE PARCEL PHOTO'}</span>
-                </>
-              ) : (
-                <>
-                  <IconCamera className="h-3.5 w-3.5" />
-                  <span>{userBranch} CAMERA</span>
-                </>
-              )}
-            </div>
-            <button 
-              onClick={switchFacingMode} 
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-neutral-900/80 text-gray-300 shadow-xl backdrop-blur-md transition-transform active:scale-90"
-            >
-              <IconSwitchCamera className="h-4 w-4" />
-            </button>
-          </div>
+          <style>{`
+            @keyframes scan-laser {
+              0%, 100% { transform: translateY(0); opacity: 0; }
+              10%, 90% { opacity: 1; }
+              50% { transform: translateY(280px); }
+            }
+            .animate-laser { animation: scan-laser 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+          `}</style>
 
-          {/* Viewport Render View */}
-          <div className="flex-1 w-full bg-neutral-950 relative flex items-center justify-center overflow-hidden min-h-[60vh]">
-            {intakeMethod === 'with-barcode' && barcodeStep === 'scanning' ? (
-              /* Barcode Scanner Screen */
-              <div className="w-full h-full absolute inset-0 z-10 flex flex-col justify-center bg-black">
-                <Scanner 
-                  onScan={handleCameraScan}
-                  allowMultiple={false}
-                  scanDelay={300}
-                  styles={{ container: { width: '100%', height: '100%' } }}
-                  components={{ finder: false }}
-                />
-              {/* Visual Target Overlay for Scanner (Square, Larger, Moving Laser) */}
-<div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-  
-  {/* 🌟 ဤနေရာတွင် CSS Animation ကို တစ်ခါတည်း ထည့်သွင်းထားသဖြင့် ဘယ်နေရာမှာမဆို ရာနှုန်းပြည့် အလုပ်လုပ်ပါမည် */}
-  <style>{`
-    @keyframes scan-animation {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(318px); } /* 320px (box h-80) - 2px (laser h-0.5) */
-    }
-    .animate-laser-line {
-      animation: scan-animation 2.5s linear infinite;
-    }
-  `}</style>
-
-  {/* စတုရန်းပုံစံ ဘောင်အကြီး (w-80 h-80) */}
-  <div className="w-80 h-80 border-2 border-dashed border-orange-500/60 bg-orange-500/5 rounded-2xl relative shadow-2xl">
-    
-    {/* Corners (ထောင့်လေး ၄ ခု) */}
-    <div className="absolute top-0 left-0 w-4 h-4 border-t-4 border-l-4 border-orange-500 -mt-1 -ml-1 rounded-tl-md"></div>
-    <div className="absolute top-0 right-0 w-4 h-4 border-t-4 border-r-4 border-orange-500 -mt-1 -mr-1 rounded-tr-md"></div>
-    <div className="absolute bottom-0 left-0 w-4 h-4 border-b-4 border-l-4 border-orange-500 -mb-1 -ml-1 rounded-bl-md"></div>
-    <div className="absolute bottom-0 right-0 w-4 h-4 border-b-4 border-r-4 border-orange-500 -mb-1 -mr-1 rounded-br-md"></div>
-    
-    {/* လေဆာတန်း - Custom Class အသစ်ဖြစ်သော animate-laser-line ကို ပြောင်းသုံးထားပါသည် */}
-    <div className="w-full h-0.5 bg-orange-500 absolute top-0 left-0 animate-laser-line shadow-[0_0_8px_#f97316]"></div>
-  </div>
-</div>
-                <div className="absolute bottom-20 inset-x-0 text-center z-20 px-6">
-                  <div className="inline-block bg-neutral-900/95 text-white font-semibold text-xs px-5 py-3 rounded-2xl border border-neutral-800 shadow-2xl backdrop-blur-md">
-                    ပါဆယ်ပေါ်ရှိ Barcode / QR ကို ဘောင်အလယ်တွင် ထားပေးပါ
-                  </div>
-                </div>
-              </div>
-            ) : (
-              /* Native Capture Camera Screen */
-              <>
-                <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" playsInline muted autoPlay />
-                <canvas ref={canvasRef} className="hidden" />
-                
-                {/* Camera Flash Screen Layer */}
-                <div ref={shutterFlashRef} className="absolute inset-0 bg-white z-40 hidden" />
-
-                {intakeMethod === 'with-barcode' && currentScannedBarcode && (
-                  <div className="absolute top-24 left-4 right-4 z-20">
-                    <div className="flex animate-fade-in items-center justify-between gap-2 rounded-xl border border-orange-400/20 bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-2 text-xs font-black uppercase tracking-wider text-neutral-950 shadow-2xl">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <IconScan className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">BARCODE: {currentScannedBarcode}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="ml-2 flex-shrink-0 rounded-md bg-neutral-950 px-2 py-0.5 text-[9px] text-orange-400">READY</span>
-                        <button 
-                          onClick={() => {
-                            setBarcodeStep('scanning');
-                            setCurrentScannedBarcode('');
-                          }}
-                          className="flex items-center gap-1 rounded-md border border-neutral-800 bg-neutral-950 px-2 py-0.5 text-[9px] font-bold text-white shadow-sm transition-colors hover:bg-neutral-900"
-                        >
-                          <IconRefresh className="h-3 w-3" />
-                          ပြန်ဖတ်မည်
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-          {/* Controls Dock Controller Bottom Section */}
-          <div className="flex flex-col gap-3 flex-shrink-0 pb-6 bg-gradient-to-t from-black via-black/90 to-black/30 backdrop-blur-sm z-20 pt-4">
+          {/* Premium Scanner Reticle */}
+          <div className="relative w-72 h-72 z-20">
+            {/* Corner Brackets */}
+            <div className="absolute top-0 left-0 w-8 h-8 border-t-[3px] border-l-[3px] border-amber-500 rounded-tl-2xl"></div>
+            <div className="absolute top-0 right-0 w-8 h-8 border-t-[3px] border-r-[3px] border-amber-500 rounded-tr-2xl"></div>
+            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-[3px] border-l-[3px] border-amber-500 rounded-bl-2xl"></div>
+            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-[3px] border-r-[3px] border-amber-500 rounded-br-2xl"></div>
             
-            {/* Smooth Thumbnail Preview Horizontal List */}
-            {capturedImages.length > 0 && (
-              <div className="flex items-center gap-3 overflow-x-auto px-4 py-2 bg-neutral-900/40 border border-neutral-800/60 rounded-2xl max-w-[calc(100%-2rem)] mx-auto scrollbar-none animate-fade-in">
-                {capturedImages.map((img, idx) => (
-                  <div 
-                    key={img.id} 
-                    onClick={() => { setFlowMode('preview'); setCurrentIdx(idx); stopCamera(); }}
-                    className="relative w-14 h-14 rounded-xl overflow-hidden border-2 border-neutral-700/60 bg-neutral-900 flex-shrink-0 cursor-pointer active:scale-95 transition-transform"
-                  >
-                    <img src={img.preview} alt="" className="w-full h-full object-cover" />
-                    {img.barcode && (
-                      <div className="absolute bottom-0 inset-x-0 bg-orange-500 text-neutral-950 text-[8px] font-black text-center truncate py-0.5 px-0.5">
-                        {img.barcode}
-                      </div>
-                    )}
-                    <button 
-                      onClick={(e) => deleteImage(img.id, e)}
-                      className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500 rounded-full text-[10px] font-black flex items-center justify-center text-white shadow"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+           
+          </div>
 
-            {/* iOS Shutter Style Core Action Control Panel */}
-            <div className="flex items-center justify-between px-10 pt-2">
-              {/* Media Gallery Pick Button */}
-              <label className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-neutral-900/90 shadow-xl transition-all hover:bg-neutral-800 active:scale-90">
-                <IconImage className="h-5 w-5 text-gray-200" />
-                <input type="file" accept="image/*" multiple onChange={handleGallerySelect} className="hidden" />
-              </label>
+          {/* Scanning Hint */}
+          <div className="absolute top-10 inset-x-0 flex justify-center z-20 px-6">
+            <div className="flex animate-fade-in items-center gap-3 rounded-full bg-black/60 px-5 py-2.5 text-xs font-medium text-white shadow-2xl backdrop-blur-xl border border-white/10">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-500 opacity-75"></span>
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500"></span>
+              </span>
+              <p className="tracking-wide">
+                ပါဆယ်ပေါ်ရှိ <span className="font-bold text-amber-400">Barcode</span> ကို ချိန်ပေးပါ
+              </p>              
+            </div>
+            
+          </div>
+{capturedImages.length > 0 && (
+  <div className="absolute bottom-2 right-5 z-30 flex flex-col items-end gap-3">
+    {/* Enhanced Expand Button */}
+    <button
+      onClick={() => setIsThumbExpanded(!isThumbExpanded)}
+      className="group flex items-center gap-2.5 bg-black/60 backdrop-blur-xl text-white border border-white/20 rounded-full pl-3 pr-3 py-1 text-xs font-semibold shadow-2xl transition-all duration-300 hover:border-white/30 hover:shadow-amber-500/10 active:scale-95"
+    >
+      <span className="relative flex items-center gap-2">
+        {/* Image count badge */}
+        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-500/20 border border-amber-400/30 text-amber-400 text-xs font-bold">
+          {capturedImages.length}
+        </span>
+        
+      </span>
+      
+      {/* Animated chevron icon */}
+      <svg 
+        className={`w-4 h-4 transition-transform duration-300 ${isThumbExpanded ? 'rotate-180' : ''}`} 
+        fill="none" 
+        viewBox="0 0 24 24" 
+        stroke="currentColor"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      </svg>
+    </button>
 
-              {/* Shutter Central Fire Core Control */}
-              {intakeMethod === 'with-barcode' && barcodeStep === 'scanning' ? (
-                <div className="w-20 h-20 bg-orange-500/10 rounded-full flex items-center justify-center border border-orange-500/20">
-                  <div className="w-16 h-16 bg-gradient-to-r from-orange-500 to-amber-500 rounded-full flex items-center justify-center animate-pulse text-xs font-black text-neutral-950 shadow-lg shadow-orange-500/20">
-                    SCAN
-                  </div>
+    {isThumbExpanded && (
+      <div className="max-w-[380px] flex items-start gap-3 p-2 overflow-x-auto scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20 animate-fade-in-up origin-bottom-right">
+        {capturedImages.map((img, idx) => (
+          <div 
+            key={img.id} 
+            className="group/card relative"
+          >
+            {/* Image Card */}
+            <div 
+              onClick={() => { setFlowMode('preview'); setCurrentIdx(idx); stopCamera(); }}
+              className="relative w-30 h-30 rounded-xl overflow-hidden border-2 border-white/15 hover:border-amber-400/50 flex-shrink-0 cursor-pointer active:scale-95 transition-all duration-300 hover:shadow-lg hover:shadow-amber-500/10 group-hover/card:scale-[1.02]"
+            >
+              <img src={img.preview} alt="" className="w-full h-full object-cover" />
+              
+              {/* Gradient overlay */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80 group-hover/card:opacity-90 transition-opacity"></div>
+              
+              {/* Barcode label */}
+              {img.barcode && (
+                <div className="absolute bottom-2 inset-x-2">
+                  <span className="block w-full bg-black/60 backdrop-blur-sm rounded-md px-2 py-0.5 text-amber-400 text-[9px] font-mono font-bold text-center truncate border border-amber-400/20">
+                    {img.barcode}
+                  </span>
                 </div>
-              ) : (
-                <button 
-                  onClick={capturePhoto}
-                  className="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center border border-white/20 active:scale-90 transition-all shadow-2xl"
-                >
-                  <div className="w-15 h-15 bg-white rounded-full border-[5px] border-black" />
-                </button>
               )}
-
-              {/* Final Step Verification Nav Trigger */}
-              {capturedImages.length === 0 ? (
-                <div className="w-12 h-12 opacity-0" />
-              ) : (
-                <button 
-                  onClick={() => { setFlowMode('preview'); stopCamera(); }}
-                  className="relative flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-neutral-900/90 text-orange-400 shadow-xl transition-all active:scale-90"
-                >
-                  <IconArrowRight className="h-5 w-5" />
-                  <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-black bg-gradient-to-r from-orange-500 to-amber-500 text-[10px] font-black text-neutral-950 shadow">{capturedImages.length}</span>
-                </button>
-              )}
+              
+              
             </div>
 
+            {/* Image index indicator */}
+            {/* Delete button */}
+              <button 
+                onClick={(e) => deleteImage(img.id, e)}
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-amber-500 text-black text-[10px] font-bold flex items-center justify-center shadow-md border border-amber-400/50 opacity-100 transition-opacity"
+                title="Delete image"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
           </div>
+        ))}
+      </div>
+    )}
+  </div>
+)}
+
         </div>
+      ) : (
+        /* NATIVE CAMERA VIEW */
+        <>
+          <video 
+            ref={videoRef} 
+            className="w-full h-full object-cover scale-[1.02]" // Scale slightly to hide any video edges
+            playsInline 
+            muted 
+            autoPlay 
+          />
+          <canvas ref={canvasRef} className="hidden" />
+          <div ref={shutterFlashRef} className="absolute inset-0 bg-white z-40 hidden" />
+
+          {/* Scanned Barcode Overlay Pill */}
+          {intakeMethod === 'with-barcode' && currentScannedBarcode && (
+            <div className="absolute top-3 inset-x-5 z-20">
+              <div className="flex animate-fade-in items-center justify-between gap-3 rounded-2xl bg-black/50 p-2 pl-4 shadow-2xl backdrop-blur-xl border border-white/15">
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-400">
+                    <IconScan className="h-4 w-4" />
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[9px] uppercase tracking-wider text-neutral-400 font-bold">Scanned Barcode</span>
+                    <span className="truncate font-mono text-sm text-white font-medium">{currentScannedBarcode}</span>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => { setBarcodeStep('scanning'); setCurrentScannedBarcode(''); }}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20 active:scale-95 transition-all"
+                >
+                  <IconRefresh className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Floating Thumbnail Gallery */}
+{capturedImages.length > 0 && (
+  <div className="absolute bottom-2 right-5 z-30 flex flex-col items-end gap-3">
+    {/* Enhanced Expand Button */}
+    <button
+      onClick={() => setIsThumbExpanded(!isThumbExpanded)}
+      className="group flex items-center gap-2.5 bg-black/60 backdrop-blur-xl text-white border border-white/20 rounded-full pl-3 pr-3 py-1 text-xs font-semibold shadow-2xl transition-all duration-300 hover:border-white/30 hover:shadow-amber-500/10 active:scale-95"
+    >
+      <span className="relative flex items-center gap-2">
+        {/* Image count badge */}
+        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-500/20 border border-amber-400/30 text-amber-400 text-xs font-bold">
+          {capturedImages.length}
+        </span>
+        
+      </span>
+      
+      {/* Animated chevron icon */}
+      <svg 
+        className={`w-4 h-4 transition-transform duration-300 ${isThumbExpanded ? 'rotate-180' : ''}`} 
+        fill="none" 
+        viewBox="0 0 24 24" 
+        stroke="currentColor"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      </svg>
+    </button>
+
+    {isThumbExpanded && (
+      <div className="max-w-[380px] flex items-start gap-3 p-2 overflow-x-auto scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20 animate-fade-in-up origin-bottom-right">
+        {capturedImages.map((img, idx) => (
+          <div 
+            key={img.id} 
+            className="group/card relative"
+          >
+            {/* Image Card */}
+            <div 
+              onClick={() => { setFlowMode('preview'); setCurrentIdx(idx); stopCamera(); }}
+              className="relative w-30 h-30 rounded-xl overflow-hidden border-2 border-white/15 hover:border-amber-400/50 flex-shrink-0 cursor-pointer active:scale-95 transition-all duration-300 hover:shadow-lg hover:shadow-amber-500/10 group-hover/card:scale-[1.02]"
+            >
+              <img src={img.preview} alt="" className="w-full h-full object-cover" />
+              
+              {/* Gradient overlay */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80 group-hover/card:opacity-90 transition-opacity"></div>
+              
+              {/* Barcode label */}
+              {img.barcode && (
+                <div className="absolute bottom-2 inset-x-2">
+                  <span className="block w-full bg-black/60 backdrop-blur-sm rounded-md px-2 py-0.5 text-amber-400 text-[9px] font-mono font-bold text-center truncate border border-amber-400/20">
+                    {img.barcode}
+                  </span>
+                </div>
+              )}
+              
+              
+            </div>
+
+            {/* Image index indicator */}
+            {/* Delete button */}
+              <button 
+                onClick={(e) => deleteImage(img.id, e)}
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-amber-500 text-black text-[10px] font-bold flex items-center justify-center shadow-md border border-amber-400/50 opacity-100 transition-opacity"
+                title="Delete image"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+)}
+        </>
       )}
+    </div>
+
+    {/* 3. BOTTOM CONTROLS (Flex Area) */}
+    <div className="flex-1 w-full flex flex-col items-center justify-center px-10 pb-4 z-40 relative">
+      
+      {/* Mode Text */}
+      <div className="absolute top-4 text-[10px] font-bold tracking-[0.2em] text-amber-500 uppercase">
+        {intakeMethod === 'with-barcode' && barcodeStep === 'scanning' ? 'Scan Mode' : 'Photo Mode'}
+      </div>
+
+      
+
+      <div className="w-full flex items-center justify-between mt-6">
+        
+        {/* LEFT: Gallery */}
+        {!(intakeMethod === 'with-barcode' && barcodeStep === 'scanning') ? (
+          <label className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-full bg-neutral-900 transition-transform hover:bg-neutral-800 active:scale-90">
+            <IconImage className="h-5 w-5 text-white" />
+            <input type="file" accept="image/*" multiple onChange={handleGallerySelect} className="hidden" />
+          </label>
+        ) : (
+          <div className="w-12 h-12" /> 
+        )}
+
+        {/* CENTER: Shutter */}
+        {intakeMethod === 'with-barcode' && barcodeStep === 'scanning' ? (
+          <div className="relative flex h-[76px] w-[76px] items-center justify-center">
+            <div className="absolute inset-0 rounded-full border-[3px] border-amber-500/30 animate-ping"></div>
+            <div className="h-16 w-16 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 shadow-[0_0_20px_rgba(251,191,36,0.4)] flex items-center justify-center">
+              <IconScan className="h-6 w-6 text-black opacity-80" />
+            </div>
+          </div>
+        ) : (
+          <button 
+            onClick={capturePhoto}
+            className="group relative flex h-[76px] w-[76px] items-center justify-center rounded-full border-[3.5px] border-white transition-transform active:scale-[0.97]"
+          >
+            {/* The actual button inside the ring */}
+            <div className="h-[60px] w-[60px] rounded-full bg-white transition-transform group-active:scale-90 group-active:bg-neutral-200" />
+          </button>
+        )}
+
+        {/* RIGHT: Verify/Next Button */}
+        {capturedImages.length === 0 ? (
+          <div className="w-12 h-12" />
+        ) : (
+          <button 
+            onClick={() => { setFlowMode('preview'); stopCamera(); }}
+            className="relative flex h-12 w-12 items-center justify-center rounded-full bg-amber-500 text-black shadow-lg transition-transform active:scale-90"
+          >
+            <IconArrowRight className="h-6 w-6 font-bold" />
+            <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-white border-2 border-black px-1.5 text-[10px] font-black text-black">
+              {capturedImages.length}
+            </span>
+          </button>
+        )}
+      </div>
+      
+    </div>
+  </div>
+)}
 
       {/* PREVIEW & RICH EDITING CONSOLE MODE (UI/UX UPGRADED) */}
       {flowMode === 'preview' && currentImgObj && (
@@ -1441,13 +1746,17 @@ export default function IntakePage() {
   {/* Quality Selector Pill (SD/HD) */}
   <div className="flex rounded-full bg-black/40 p-0.5 border border-white/5">
     <button
-      onClick={() => setCapturedImages(capturedImages.map((img, i) => i === currentIdx ? { ...img, quality: 'SD' } : img))}
+      onClick={() =>
+        setCapturedImages((prev) => prev.map((img, i) => (i === currentIdx ? { ...img, quality: 'SD' } : img)))
+      }
       className={`rounded-full px-3 py-1 text-[10px] font-black tracking-wider transition-all ${currentImgObj.quality === 'SD' ? 'bg-orange-500 text-neutral-950 shadow' : 'text-neutral-400'}`}
     >
       SD
     </button>
     <button
-      onClick={() => setCapturedImages(capturedImages.map((img, i) => i === currentIdx ? { ...img, quality: 'HD' } : img))}
+      onClick={() =>
+        setCapturedImages((prev) => prev.map((img, i) => (i === currentIdx ? { ...img, quality: 'HD' } : img)))
+      }
       className={`rounded-full px-3 py-1 text-[10px] font-black tracking-wider transition-all ${currentImgObj.quality === 'HD' ? 'bg-orange-500 text-neutral-950 shadow' : 'text-neutral-400'}`}
     >
       HD
