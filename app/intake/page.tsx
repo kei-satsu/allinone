@@ -331,31 +331,50 @@ export default function IntakePage() {
     if (storedBranch) setUserBranch(storedBranch);
   }, []);
 
-  // Native ကင်မရာကို စတင်ဖွင့်လှစ်ခြင်း
-  const startCamera = useCallback(async () => {
-    try {
-      if (!navigator.mediaDevices?.getUserMedia) return setCameraSupported(false);
-      const stream = await navigator.mediaDevices.getUserMedia({
-  video: { 
-    facingMode, 
-    aspectRatio: 3 / 4, // 4:3 အချိုးကို ဒေါင်လိုက်တောင်းခြင်း
-    width: { ideal: 1080 }, 
-    height: { ideal: 1440 } ,
-    frameRate: { ideal: 30, max: 60 },
-    advanced: [{ focusMode: 'continuous' } as any]
-  },
-  audio: false,
-});
-      streamRef.current = stream;
-      setCameraActive(true);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.onloadedmetadata = () => videoRef.current?.play().catch(() => {});
-      }
-    } catch (err) {
-      setCameraSupported(false);
+  
+  // Native ကင်မရာကို စတင်ဖွင့်လှစ်ခြင်း (Retry Count ပါဝင်သည်)
+const startCamera = useCallback(async (retryCount = 0) => {
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) return setCameraSupported(false);
+    
+    // ရှိပြီးသား Stream Track တွေကို သေချာရှင်းထုတ်ပစ်ရန်
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
     }
-  }, [facingMode]);
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { 
+        facingMode, 
+        aspectRatio: 3 / 4, 
+        width: { ideal: 1080 }, 
+        height: { ideal: 1440 },
+        frameRate: { ideal: 30, max: 60 },
+        advanced: [{ focusMode: 'continuous' } as any]
+      },
+      audio: false,
+    });
+    
+    streamRef.current = stream;
+    setCameraActive(true);
+    setCameraSupported(true); // Error ဖြစ်ခဲ့ရင်တောင် ပြန်ပွင့်ရင် Reset လုပ်ရန်
+    
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.onloadedmetadata = () => videoRef.current?.play().catch(() => {});
+    }
+  } catch (err) {
+    console.error("Camera connection error:", err);
+    
+    // Hardware လော့ခ်ကျနေပါက 500ms စောင့်ပြီး ၁ ကြိမ် ထပ်မံကြိုးစားကြည့်ရန်
+    if (retryCount < 1) {
+      setTimeout(() => {
+        startCamera(retryCount + 1);
+      }, 500);
+    } else {
+      setCameraSupported(false); // တကယ်ဖွင့်မရမှသာ False ပေးမည်
+    }
+  }
+}, [facingMode]);
 
   // ကင်မရာကို ပိတ်သိမ်းခြင်း
   const stopCamera = useCallback(() => {
@@ -367,18 +386,29 @@ export default function IntakePage() {
     setCameraActive(false);
   }, []);
 
-  // Camera Resource Lifecycle logic
-  useEffect(() => {
-    if (flowMode === 'camera' && intakeMethod !== 'choose') {
-      if (intakeMethod === 'with-barcode' && barcodeStep === 'scanning') {
-        stopCamera(); 
-      } else {
-        startCamera(); 
-      }
+  
+ // Camera Resource Lifecycle logic
+useEffect(() => {
+  let timeoutId: NodeJS.Timeout;
+
+  if (flowMode === 'camera' && intakeMethod !== 'choose') {
+    if (intakeMethod === 'with-barcode' && barcodeStep === 'scanning') {
+      stopCamera(); 
     } else {
-      stopCamera();
+      // Scanner Unmount ဖြစ်ပြီး ကင်မရာ Hardware လွတ်သွားအောင် 350ms ခန့် Delay ပေးပြီးမှ ဖွင့်မည်
+      timeoutId = setTimeout(() => {
+        startCamera();
+      }, 350);
     }
-  }, [flowMode, intakeMethod, barcodeStep, startCamera, stopCamera]);
+  } else {
+    stopCamera();
+  }
+
+  // Cleanup Function
+  return () => {
+    if (timeoutId) clearTimeout(timeoutId);
+  };
+}, [flowMode, intakeMethod, barcodeStep, startCamera, stopCamera]);
 
   useEffect(() => {
     return () => stopCamera();
