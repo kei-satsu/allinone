@@ -3,6 +3,8 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 
 export default function Dashboard() {
   const [allOrders, setAllOrders] = useState<any[]>([])
@@ -14,6 +16,7 @@ const [exportMode, setExportMode] = useState<'all' | 'range'>('all')
 const [startDate, setStartDate] = useState('')
 const [endDate, setEndDate] = useState('')
 const [isExporting, setIsExporting] = useState(false)
+const [exportAllBranches, setExportAllBranches] = useState(true)
 
   useEffect(() => {
     const storedBranch = localStorage.getItem('user_branch')
@@ -55,7 +58,7 @@ const [isExporting, setIsExporting] = useState(false)
 
     const filteredRows = userBranch === 'ALL'
       ? allOrders
-      : allOrders.filter(o => o.branch === userBranch || o.branch_code === userBranch)
+      : allOrders.filter(o => o.branch === userBranch )
 
     return {
       total: filteredRows.length,
@@ -69,52 +72,89 @@ const [isExporting, setIsExporting] = useState(false)
     }
   }, [userBranch, allOrders])
 
-  const handleExportExcel = async () => {
+ const handleExportExcel = async () => {
   setIsExporting(true);
   try {
-    // ၁။ ဒေတာဘေ့စ်ဆီကနေ Data ကို တိုက်ရိုက်အသစ် လှမ်းတောင်းမယ် (Dashboard ရဲ့ ၁၀၀၀ Limit ကို ကျော်ဖို့)
-    let query = supabase.from('orders').select('*');
+    let allFetchedData: any[] = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
 
-    // ၂။ ရက်စွဲ (Date Range) စစ်ထုတ်ခြင်း
+    // ရက်စွဲ Filter သတ်မှတ်ချက် ကြိုတင်ပြင်ဆင်ခြင်း
+    let fromDate = "";
+    let toDate = "";
     if (exportMode === 'range') {
       if (!startDate || !endDate) {
         alert('ကျေးဇူးပြု၍ စတင်မည့်ရက်နှင့် ဆုံးမည့်ရက်ကို ပြည့်စုံစွာ ရွေးချယ်ပေးပါ။');
         setIsExporting(false);
         return;
       }
-      query = query.gte('received_date', startDate).lte('received_date', endDate);
+      fromDate = `${startDate}T00:00:00`;
+      toDate = `${endDate}T23:59:59`;
     }
 
-    // ၃။ ဒေတာအားလုံး အစုံအလင် ပါလာစေဖို့ အမြင့်ဆုံး Limit တစ်ခု သတ်မှတ်ပေးခြင်း
-    query = query.limit(50000); 
+    // 🔄 ဒေတာကုန်သည်အထိ Loop ပတ်ပြီး ဆွဲထုတ်ခြင်း
+    while (hasMore) {
+      let query = supabase
+        .from('orders')
+        .select(`
+          *,
+          pickup_rider:riders!pickup_rider_id(name),
+          deliver_rider:riders!deliver_rider_id(name)
+        `)
+        .range(page * pageSize, (page + 1) * pageSize - 1);
 
-    const { data, error } = await query;
+      if (exportMode === 'range') {
+        query = query.gte('received_date', fromDate).lte('received_date', toDate);
+      }
 
-    if (error) throw error;
-    if (!data || data.length === 0) {
-      alert('ထုတ်ယူရန် အော်ဒါမှတ်တမ်းများ မရှိပါ။');
+      if (!exportAllBranches && userBranch && userBranch !== 'ALL') {
+        query = query.eq('branch', userBranch);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new Error(`Supabase Query Error: ${error.message}`);
+      }
+
+      if (!data || data.length === 0) {
+        hasMore = false;
+      } else {
+        allFetchedData = [...allFetchedData, ...data];
+        if (data.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      }
+    }
+
+    if (allFetchedData.length === 0) {
+      alert('ရွေးချယ်ထားသော သတ်မှတ်ချက်အတိုင်း ထုတ်ယူရန် စာရင်းမရှိပါ။');
       return;
     }
 
-    // ၄။ ရရှိလာတဲ့ ဒေတာတွေကို လက်ရှိ Login ဝင်ထားတဲ့ Branch အလိုက် Local မှာတင် စိတ်ချရအောင် Filter ထပ်လုပ်ပေးခြင်း
-    // 💡 (မှတ်ချက် - တစ်နိုင်ငံလုံးစာ အကုန်ထွက်ချင်ရင် အောက်က line 27 ကနေ 29 အထိ ကုဒ် ၃ ကြောင်းကို ဖြတ်ပစ်လိုက်လို့ ရပါတယ်)
-    let finalData = data;
-    if (userBranch && userBranch !== 'ALL') {
-      finalData = data.filter(o => o.branch === userBranch || o.branch_code === userBranch);
+    // ၂။ Branch Filter
+    let finalData = allFetchedData;
+    if (!exportAllBranches && userBranch && userBranch !== 'ALL') {
+      finalData = allFetchedData.filter(o => o.branch === userBranch);
     }
 
     if (finalData.length === 0) {
-      alert('လက်ရှိ Branch အတွက် ထုတ်ယူရန် စာရင်းမရှိပါ။');
+      alert('ရွေးချယ်ထားသော Branch အတွက် ထုတ်ယူရန် စာရင်းမရှိပါ။');
       return;
     }
 
-    // ၅။ Excel Column Header များကို သပ်ရပ်အောင် ပုံစံပြောင်းခြင်း
+    // ၃။ Excel Headers ပုံစံပြောင်းခြင်း
     const formattedData = finalData.map(order => ({
       'Item ID': order.item_id || order.id || '-',
       'Received Date': order.received_date ? order.received_date.split('T')[0] : '-',
       'Sender Name': order.sender_name || '-',
+      'Sender Phone': order.sender_phone || '-',
       'Sender Location': order.sender_loc || '-',
       'Receiver Name': order.receiver_name || '-',
+      'Receiver Phone': order.receiver_phone || '-',
       'Receiver Address': order.receiver_address || '-',
       'Receiver Location': order.receiver_loc || '-',
       'COD Amount': Number(order.cod_amount) || 0,
@@ -122,27 +162,77 @@ const [isExporting, setIsExporting] = useState(false)
       'Fee Type': order.fee_type || '-',
       'Total Amount': Number(order.total_amount) || 0,
       'Status': order.status || '-',
-      'Branch': order.branch || '-'
+      'Pickup Rider': order.pickup_rider?.name || '-',
+      'Deliver Rider': order.deliver_rider?.name || '-',
+      'Deliver Date' : order.deliver_date ? order.deliver_date.split('T')[0] : '-',
+      'Note': order.note || '-',
+      'Cleared Date': order.cleared_date ? order.cleared_date.split('T')[0] : '-',
     }));
 
-    // ၆။ SheetJS ဖြင့် Excel (.xlsx) ဖိုင် ထုတ်လုပ်ခြင်း
-    const worksheet = XLSX.utils.json_to_sheet(formattedData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders_Report');
+    // 🟢 ၄။ ExcelJS ဖြင့် Official Table Format ဖန်တီးခြင်း
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Orders_Report');
 
+    // Table ရဲ့ Headers များနှင့် Rows ဒေတာများကို ခွဲထုတ်ခြင်း
+    const tableColumns = Object.keys(formattedData[0]).map(key => ({
+      name: key,
+      filterButton: true // Auto-filter Dropdown ပါဝင်စေရန်
+    }));
+    
+    const tableRows = formattedData.map(item => Object.values(item));
+
+    // Native Excel Table ထည့်သွင်းခြင်း (Ctrl + T Format)
+    worksheet.addTable({
+      name: 'OrdersTable',
+      ref: 'A1',
+      headerRow: true,
+      totalsRow: false,
+      style: {
+        theme: 'TableStyleMedium2', // သေသပ်လှပသော Emerald/Blue Style Theme
+        showRowStripes: true,       // စာကြောင်းတစ်ကြောင်းကျော် အရောင်အမှောင်စနစ် (Zebra Stripes)
+      },
+      columns: tableColumns,
+      rows: tableRows,
+    });
+
+   // 🟢 ၅။ Column Width ကို Auto-fit ပုံစံစနစ်တကျ ညှိခြင်း
+    // worksheet.columns ရှိမရှိ သေချာအောင် if structure ဖြင့် အုပ်ပေးထားပါတယ်
+    if (worksheet.columns) {
+      worksheet.columns.forEach(column => {
+        let maxLen = 0;
+        // eachCell function ရှိမရှိ ?. (Optional Chaining) ဖြင့် ထပ်မံစစ်ဆေးပါတယ်
+        column.eachCell?.({ includeEmpty: true }, cell => {
+          const valLen = cell.value ? cell.value.toString().length : 0;
+          if (valLen > maxLen) maxLen = valLen;
+        });
+        column.width = Math.max(maxLen + 3, 5);
+      });
+    }
+
+    // ၆။ ဖိုင်အဖြစ် ထုတ်ယူပြီး ဒေါင်းလုဒ်ချခြင်း
+    const buffer = await workbook.xlsx.writeBuffer();
+    
+    const branchLabel = exportAllBranches ? 'All_Branches' : `Branch_${userBranch}`;
     const fileName = exportMode === 'range' 
-      ? `Orders_${startDate}_to_${endDate}.xlsx` 
-      : `Orders_All_Records.xlsx`;
+      ? `Orders_${startDate}_to_${endDate}_(${branchLabel}).xlsx` 
+      : `Orders_All_Records_(${branchLabel}).xlsx`;
 
-    XLSX.writeFile(workbook, fileName);
-  } catch (err) {
-    console.error('Export error:', err);
-    alert('Excel ထုတ်ယူစဉ် စနစ်ပိုင်းဆိုင်ရာ အမှားအယွင်းတစ်ခု ဖြစ်ပွားခဲ့ပါသည်။');
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    
+    // saveAs က အကြောင်းအမျိုးမျိုးကြောင့် undefined ဖြစ်မနေစေရန် Type Casting (as any) သုံးပြီး လုံခြုံစွာ ခေါ်ယူခြင်း
+    if (typeof saveAs === 'function') {
+      saveAs(blob, fileName);
+    } else {
+      (saveAs as any)(blob, fileName);
+    }
+
+  } catch (err: any) {
+    console.error('Export error details:', err);
+    alert(`Excel Table ထုတ်ယူရာတွင် အမှားအယွင်းရှိခဲ့သည်:\n${err.message || err}`);
   } finally {
     setIsExporting(false);
   }
 };
-
   // iOS Custom Smooth Card Style Macro
   const iosCardClass = "bg-white/80 backdrop-blur-md border border-slate-200/40 rounded-[24px] p-5 shadow-[0_8px_32px_rgba(15,23,42,0.03)] transition-all duration-300"
 
@@ -230,8 +320,7 @@ const [isExporting, setIsExporting] = useState(false)
               </Link>
             </div>
 
-            {/* 📊 Premium Data Export Utility Widget */}
-<div className="bg-white/80 backdrop-blur-md border border-slate-200/50 rounded-[24px] p-6 shadow-[0_8px_32px_rgba(15,23,42,0.02)] space-y-4">
+           <div className="bg-white/80 backdrop-blur-md border border-slate-200/50 rounded-[24px] p-6 shadow-[0_8px_32px_rgba(15,23,42,0.02)] space-y-4">
   <div className="flex items-center gap-2">
     <div className="w-2 h-4 bg-emerald-500 rounded-full" />
     <h4 className="text-[12px] font-extrabold text-slate-700 uppercase tracking-wider">Excel စာရင်းထုတ်ယူခြင်းစနစ် (Data Export)</h4>
@@ -283,13 +372,43 @@ const [isExporting, setIsExporting] = useState(false)
       </div>
     ) : (
       <div className="md:col-span-2 text-slate-400 text-xs font-medium pb-2 italic">
-        * လက်ရှိ {userBranch === 'ALL' ? 'Branch အားလုံး' : `${userBranch} Branch`} ၏ Database တွင်ရှိသမျှ Orders စာရင်းအားလုံးကို ဖိုင်ထုတ်ပေးမည်ဖြစ်သည်။
+        * လက်ရှိ ဒေတာဘေ့စ်တွင် ရှိသမျှ Orders စာရင်းများကို စစ်ထုတ်၍ ဖိုင်ထုတ်ပေးမည်ဖြစ်သည်။
       </div>
     )}
   </div>
 
+  {/* 🟢 ဖြည့်စွက်ထားသော Branch Filter Switch အပိုင်း */}
+  {userBranch && userBranch !== 'ALL' && (
+    <div className="pt-3 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3 animate-in fade-in duration-200">
+      <div className="flex flex-col gap-0.5">
+        <span className="text-xs font-bold text-slate-700">ထုတ်ယူမည့် Branch နယ်ပယ်</span>
+        <span className="text-[11px] text-slate-400 font-medium">
+          {exportAllBranches ? 'တစ်နိုင်ငံလုံးရှိ Branch အားလုံး၏ ဒေတာများကို ရယူပါမည်။' : `လက်ရှိ ${userBranch} Branch ဒေတာတစ်ခုတည်းကိုသာ ရယူပါမည်။`}
+        </span>
+      </div>
+      
+      {/* iOS Styled Segment Switch */}
+      <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/50 self-start md:self-auto">
+        <button
+          type="button"
+          onClick={() => setExportAllBranches(false)}
+          className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${!exportAllBranches ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+        >
+          {userBranch} သီးသန့်
+        </button>
+        <button
+          type="button"
+          onClick={() => setExportAllBranches(true)}
+          className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${exportAllBranches ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+        >
+          Branch အားလုံး
+        </button>
+      </div>
+    </div>
+  )}
+
   {/* Action Submit Button */}
-  <div className="pt-2 border-t border-slate-100 flex justify-end">
+  <div className="pt-3 border-t border-slate-100 flex justify-end">
     <button
       onClick={handleExportExcel}
       disabled={isExporting}
