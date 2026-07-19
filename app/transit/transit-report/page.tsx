@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import EditOrderModal from '@/components/EditOrderModal'
+import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 // ── Column အားလုံးသတ်မှတ်ချက် ──
 const COLUMN_DEFS = [
@@ -284,6 +286,181 @@ const fetchCities = async () => {
       setSubmitting(false)
     }
   }
+
+const exportToExcel = () => {
+  // ── ၁။ Excel Workbook အသစ် တည်ဆောက်ခြင်း ──
+  const workbook = new ExcelJS.Workbook();
+
+  // ==========================================
+  // SHEET 1: Workspace Orders (Blue Theme 💙)
+  // ==========================================
+  const wsMain = workbook.addWorksheet("ရှင်းပြီး Ways များ");
+  
+  const exportKeys = [
+    'item_id', 'received_date', 'sender_name', 'sender_loc', 
+    'receiver_name', 'receiver_phone', 'receiver_address', 'receiver_loc', 
+    'cod_amount', 'deli_fee', 'fee_type', 'total_amount', 'agent_fee', 
+    'status', 'transit_to', 'transit_date'
+  ];
+
+  // COLUMN_DEFS မှ Headers နှင့် Keys များကို အစဉ်လိုက် စစ်ထုတ်ခြင်း
+  const targetCols = COLUMN_DEFS.filter(col => exportKeys.includes(col.key));
+  const mainHeaders = targetCols.map(col => col.label);
+
+  const mainRows = filteredOrders.map(o => {
+    return targetCols.map(col => {
+      if (col.key === 'pickup_rider') return o.pickup_rider?.name || '-';
+      if (col.key === 'deliver_rider') return o.deliver_rider?.name || '-';
+      if (['cod_amount', 'deli_fee', 'total_amount', 'agent_fee'].includes(col.key)) {
+        return o[col.key] != null ? Number(o[col.key]) : 0; // Number သီးသန့်ပြောင်းမှ Format ချရတာ လှမှာပါ
+      }
+      return o[col.key] || '-';
+    });
+  });
+
+  // Excel Native Table ထည့်သွင်းခြင်း
+  wsMain.addTable({
+    name: 'WorkspaceOrdersTable',
+    ref: 'A1',
+    headerRow: true,
+    totalsRow: false,
+    style: {
+      theme: 'TableStyleMedium2', // အပြာရောင် လိုင်းကျား Theme
+      showRowStripes: true,
+    },
+    columns: mainHeaders.map(h => ({ name: h })),
+    rows: mainRows,
+  });
+
+  // ငွေကြေးကော်လံများကို Thousand Separator (#,##0) Format သတ်မှတ်ခြင်း
+  targetCols.forEach((col, idx) => {
+    if (['cod_amount', 'deli_fee', 'total_amount', 'agent_fee'].includes(col.key)) {
+      wsMain.getColumn(idx + 1).numFmt = '#,##0';
+    }
+  });
+
+
+  // ==========================================
+  // SHEET 2: အပ်ငွေ Summary (Green Theme 💚)
+  // ==========================================
+  const wsSummary = workbook.addWorksheet("ရှင်းငွေ Summary");
+  let grandTotal = 0;
+  let grandAgentDeli = 0;
+  let grandOfficeDeli = 0;
+  let grandActualTotal = 0;
+
+  const summaryRows: any[][] = [];
+  cities.forEach(city => {
+    const transitOrders = reportData.filter(o => 
+      o.transit_to === city["C.ID"] && 
+      o.status === 'Delivered' && 
+      o.deliver_date === selectedDate
+    );
+    const total = transitOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
+    const cityDeliFeeSum = transitOrders.reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
+    const cityAgentTotal = transitOrders.reduce((sum, o) => sum + (Number(o.agent_fee) || 0), 0);
+    const netDeliFee = cityDeliFeeSum - cityAgentTotal;
+    const actualTotal = total - cityAgentTotal;
+
+    if (total === 0 && cityDeliFeeSum === 0) return;
+
+    grandTotal += total;
+    grandAgentDeli += cityAgentTotal;
+    grandOfficeDeli += netDeliFee;
+    grandActualTotal += actualTotal;
+
+    summaryRows.push([`👤 ${city.name}`, total, cityAgentTotal, netDeliFee, actualTotal]);
+  });
+
+  if (summaryRows.length > 0) {
+    summaryRows.push(['Total', grandTotal, grandAgentDeli, grandOfficeDeli, grandActualTotal]);
+  }
+
+  wsSummary.addTable({
+    name: 'DepositSummaryTable',
+    ref: 'A1',
+    headerRow: true,
+    style: { theme: 'TableStyleMedium9', showRowStripes: true }, // အစိမ်းရောင် Theme
+    columns: [
+      { name: 'City / Rider' },
+      { name: 'Total Amount' },
+      { name: 'Agent Deli' },
+      { name: 'Office Deli' },
+      { name: 'Actual Total' }
+    ],
+    rows: summaryRows,
+  });
+
+  // Summary မှ ငွေကြေးကော်လံများ Format ချခြင်း
+  for (let i = 2; i <= 5; i++) {
+    wsSummary.getColumn(i).numFmt = '#,##0';
+  }
+
+
+  // ==========================================
+  // SHEET 3: COD ခွဲဝေမှုစာရင်း (Dark Grey/Teal Theme 🖤)
+  // ==========================================
+  const wsCod = workbook.addWorksheet("COD Distribution");
+  const codRows: any[][] = [];
+
+  Object.entries(senderCodByLoc)
+    .map(([loc, senders]) => {
+      const locTotal = Object.values(senders).reduce((a, b) => Number(a) + Number(b), 0);
+      return { loc, senders, locTotal };
+    })
+    .filter(item => item.locTotal > 0)
+    .sort((a, b) => b.locTotal - a.locTotal)
+    .forEach(({ loc, senders }) => {
+      Object.entries(senders)
+        .filter(([_, totalCod]) => Number(totalCod) > 0)
+        .forEach(([senderName, totalCod]) => {
+          codRows.push([loc, senderName, Number(totalCod)]);
+        });
+    });
+
+  wsCod.addTable({
+    name: 'CodDistributionTable',
+    ref: 'A1',
+    headerRow: true,
+    style: { theme: 'TableStyleMedium1', showRowStripes: true }, 
+    columns: [
+      { name: '📍 Region/Location' },
+      { name: '👤 Sender Name' },
+      { name: 'COD Amount (Ks)' }
+    ],
+    rows: codRows,
+  });
+
+  wsCod.getColumn(3).numFmt = '#,##0';
+
+
+  // ==========================================
+  // ── ၅။ Auto-fit Columns Width (စာသားအရှည်အလိုက် ကော်လံအကျယ်ညှိခြင်း) ──
+  // ==========================================
+  workbook.worksheets.forEach(sheet => {
+    sheet.columns.forEach(column => {
+      let maxLen = 0;
+      column.eachCell?.({ includeEmpty: true }, cell => {
+        const valStr = cell.value ? cell.value.toString() : '';
+        if (valStr.length > maxLen) maxLen = valStr.length;
+      });
+      // မြန်မာစာလုံးများအတွက် space အနည်းငယ်ပိုချန်ပြီး အနည်းဆုံးအကျယ်ကို ၁၄ ပေးထားပါတယ်
+      column.width = Math.max(maxLen + 4, 14); 
+    });
+  });
+
+  // ── ၆။ File အဖြစ် ပြောင်းလဲပြီး ဒေါင်းလုဒ်ချပေးခြင်း ──
+  workbook.xlsx.writeBuffer().then((buffer) => {
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `Transit_Report_${userBranch || 'Office'}_${selectedDate}.xlsx`;
+    anchor.click();
+    window.URL.revokeObjectURL(url);
+  });
+};
+
   // agent fee တည်းဖြတ်မှုအတွက်
   const [agentFeeValues, setAgentFeeValues] = useState<Record<string, string>>({});
 
@@ -509,6 +686,29 @@ if (key === 'agent_fee') {
           <button onClick={() => fetchData(userBranch, selectedDate)} className="bg-orange-500 hover:bg-orange-600 text-white font-medium px-3 py-1.5 rounded-md text-xs shadow-sm transition-all">
             Refresh
           </button>
+{/* 🟢 အသစ်ထည့်ရမည့် Export Excel Button */}
+<button 
+  onClick={exportToExcel} 
+  className="bg-green-600 hover:bg-green-700 text-white font-medium px-3 py-1.5 rounded-md text-xs shadow-sm transition-all flex items-center gap-1.5"
+>
+  <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke="currentColor" 
+    strokeWidth="2" 
+    strokeLinecap="round" 
+    strokeLinejoin="round" 
+    className="w-4 h-4"
+  >
+    <path d="M3 3h18v18H3z" />
+    <path d="M21 9H3" />
+    <path d="M21 15H3" />
+    <path d="M12 3v18" />
+  </svg>
+  Export Excel
+</button>
+
         </div>
       </div>
 
@@ -807,44 +1007,69 @@ if (key === 'agent_fee') {
         {/* ========================================================= */}
         
       
+       
         {/* ကတ် (၂) - Sender အလိုက် ပြန်ပေးရမယ့် COD စာရင်း Card */}
-        <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col gap-3 h-full overflow-y-auto">
-          <div className="border-b border-gray-100 pb-2 sticky top-0 bg-white z-10">
-            <h2 className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
-              COD ခွဲဝေမှု စရင်း 
-            </h2>
+<div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col gap-3 h-full">
+  <div className="border-b border-gray-100 pb-2 shrink-0">
+    <h2 className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
+       COD ခွဲဝေမှု စာရင်း
+    </h2>
+  </div>
+
+  {/* Outer Scrollable Area */}
+  <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
+    {(() => {
+      // ၁။ ဒေတာများကို ပမာဏတွက်ချက်ပြီး၊ ၀ ဖြစ်နေလျှင် ဖယ်ထုတ်ကာ၊ အများဆုံးမှ အနည်းဆုံးသို့ စီခြင်း
+      const sortedAndFilteredLocs = Object.entries(senderCodByLoc)
+        .map(([loc, senders]) => {
+          const locTotal = Object.values(senders).reduce((a, b) => Number(a) + Number(b), 0);
+          return { loc, senders, locTotal };
+        })
+        .filter(item => item.locTotal > 0) // စုစုပေါင်းပမာဏ ၀ ပြား ဖြစ်နေသော မြို့များကို ဖျောက်ထားရန်
+        .sort((a, b) => b.locTotal - a.locTotal); // COD အများဆုံးမြို့ကို ထိပ်ဆုံးသို့ တင်ရန်
+
+      // ပြစရာ မြို့စာရင်း လုံးဝမရှိတော့ပါက
+      if (sortedAndFilteredLocs.length === 0) {
+        return (
+          <div className="h-full flex items-center justify-center text-xs text-gray-400 font-medium py-8">
+            ယနေ့အတွက် Delivered ဖြစ်ပြီးသား COD ပေးရန်မရှိသေးပါ။
           </div>
+        );
+      }
 
-          
+      return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {sortedAndFilteredLocs.map(({ loc, senders, locTotal }) => (
+            // 💡 သတ်မှတ်ထားသော အမြင့် h-80 ကို ပုံသေ အသုံးပြုထားပါသည်
+            <div key={loc} className="p-3 border border-orange-100 rounded-lg bg-orange-50/20 flex flex-col gap-2 shadow-sm h-80">
+              
+              {/* မြို့အလိုက် Header အကွက် */}
+              <div className="font-bold text-orange-800 text-xs border-b border-orange-200/60 pb-1 flex items-center justify-between shrink-0">
+                <span>📍 City/LOC: {loc}</span>
+                <span className="text-[10px] bg-orange-100 px-1.5 py-0.5 rounded text-orange-700 font-bold">
+                  {locTotal.toLocaleString()} Ks
+                </span>
+              </div>
 
-          {Object.keys(senderCodByLoc).length === 0 ? (
-            <p className="text-xs text-gray-400 font-medium py-2 text-center my-auto">ယနေ့အတွက် Delivered ဖြစ်ပြီးသား COD ပေးရန်မရှိသေးပါ။</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {Object.entries(senderCodByLoc).map(([loc, senders]) => {
-                const locTotal = Object.values(senders).reduce((a, b) => a + b, 0);
-                return (
-                  <div key={loc} className="p-3 border border-orange-100 rounded-lg bg-orange-50/20 flex flex-col gap-2 shadow-sm">
-                    <div className="font-bold text-orange-800 text-xs border-b border-orange-200/60 pb-1 flex items-center justify-between">
-                      <span>📍 City/LOC: {loc}</span>
-                      <span className="text-[10px] bg-orange-100 px-1.5 py-0.5 rounded text-orange-700 font-bold">
-                        {locTotal.toLocaleString()} Ks
-                      </span>
+              {/* Sender များစာရင်း (မဆန့်ပါက ကတ်ထဲတွင် Scroll ဆွဲနိုင်သည်) */}
+              <div className="text-[11px] space-y-1.5 flex-1 overflow-y-auto pr-1 custom-scrollbar min-h-0">
+                {Object.entries(senders)
+                  .filter(([_, totalCod]) => Number(totalCod) > 0) // Sender တစ်ဦးချင်းစီတွင် ၀ ဖြစ်နေပါက ဖျောက်ထားရန်
+                  .map(([senderName, totalCod]) => (
+                    <div key={senderName} className="flex justify-between items-center bg-white p-1.5 rounded border border-gray-100 shadow-xs">
+                      <span className="font-medium text-gray-700 truncate max-w-[110px]" title={senderName}>👤 {senderName}</span>
+                      <span className="font-bold text-gray-900">{Number(totalCod).toLocaleString()} Ks</span>
                     </div>
-                    <div className="text-[11px] space-y-1.5 max-h-32 overflow-y-auto pr-1">
-                      {Object.entries(senders).map(([senderName, totalCod]) => (
-                        <div key={senderName} className="flex justify-between items-center bg-white p-1.5 rounded border border-gray-100 shadow-xs">
-                          <span className="font-medium text-gray-700 truncate max-w-[100px]" title={senderName}>👤 {senderName}</span>
-                          <span className="font-bold text-gray-900">{totalCod.toLocaleString()} Ks</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
+                  ))}
+              </div>
+
             </div>
-          )}
+          ))} {/* 💡 အပိတ် Error ကို ဒီနေရာမှာ သေချာပြင်ဆင်ထားပါတယ်ဗျာ */}
         </div>
+      );
+    })()}
+  </div>
+</div>
 
       </div>
 
