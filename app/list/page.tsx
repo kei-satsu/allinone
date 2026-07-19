@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import * as XLSX from 'xlsx'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import EditOrderModal from '@/components/EditOrderModal' // သင့် Component တည်နေရာလမ်းကြောင်းအတိုင်း ချိန်ပေးပါ
@@ -137,6 +138,17 @@ export default function OrderList() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false); // Header checkbox အတွက်
   const [isDraggingSelection, setIsDraggingSelection] = useState(false);
+
+// Excel Export အတွက် State များ
+const [showExcelModal, setShowExcelModal] = useState(false);
+const [excelCols, setExcelCols] = useState<Record<string, boolean>>(() => {
+  const initialState: Record<string, boolean> = {};
+  COLUMN_DEFS.forEach(col => { 
+    initialState[col.key] = col.defaultVisible; // အစပိုင်းမှာ လက်ရှိ visible ဖြစ်နေတဲ့ column တွေကို pre-select လုပ်ထားပေးမယ်
+  });
+  return initialState;
+});
+
 
   // Toggle order တစ်ခုချင်း select / deselect
 const toggleOrderSelection = (orderId: string) => {
@@ -351,6 +363,55 @@ useEffect(() => {
     window.addEventListener('click', handleCloseMenu)
     return () => window.removeEventListener('click', handleCloseMenu)
   }, [])
+
+  const handleExportExcel = () => {
+  // အကယ်၍ row တွေ checkbox နဲ့ ရွေးထားရင် ရွေးထားတဲ့ data ကိုယူမယ်၊ မရွေးထားရင် လက်ရှိ filter ဖြစ်နေတဲ့ orders အားလုံးကို ယူမယ်
+  const dataToExport = selectedOrders.size > 0 
+    ? orders.filter(o => selectedOrders.has(o.id)) 
+    : filteredOrders;
+
+  if (dataToExport.length === 0) {
+    alert("Export ထုတ်ရန် မှတ်တမ်းမရှိပါ။");
+    return;
+  }
+
+  // ရွေးချယ်ထားတဲ့ Column Header တွေအတိုင်း Data ပုံစံပြောင်းလဲခြင်း
+  const excelRows = dataToExport.map(order => {
+    const rowData: Record<string, any> = {};
+    
+    COLUMN_DEFS.forEach(col => {
+      if (excelCols[col.key]) {
+        // သတ်မှတ်ထားတဲ့ column သာ ယူမယ် (အထူးသဖြင့် Object data တွေကို စာသားပြောင်းပေးမယ်)
+        if (col.key === 'pickup_rider') {
+          rowData[col.label] = order.pickup_rider?.name || '-';
+        } else if (col.key === 'deliver_rider') {
+          rowData[col.label] = order.deliver_rider?.name || '-';
+        } else if (col.key === 'created_at') {
+          rowData[col.label] = order.created_at ? new Date(order.created_at).toLocaleDateString() : '-';
+        } else if (col.key === 'image_url') {
+          rowData[col.label] = order.image_url ? 'Has Photo' : '-';
+        } else if (col.key === 'branch') {
+          rowData[col.label] = order.branch === 'MDY' ? 'MANDALAY' : order.branch === 'YGN' ? 'YANGON' : order.branch;
+        } else {
+          rowData[col.label] = order[col.key] ?? '-';
+        }
+      }
+    });
+    return rowData;
+  });
+
+  // SheetJS အသုံးပြုပြီး Excel Workbook ဖန်တီးခြင်း
+  const worksheet = XLSX.utils.json_to_sheet(excelRows);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Orders_Report");
+
+  // ဖိုင်အမည်ကို ယနေ့ရက်စွဲဖြင့် ထုတ်ပေးခြင်း
+  const todayStr = new Date().toISOString().split('T')[0];
+  XLSX.writeFile(workbook, `Deli_Orders_${todayStr}.xlsx`);
+  
+  // Modal ပိတ်လိုက်ခြင်း
+  setShowExcelModal(false);
+};
 
   const filteredOrders = orders;
 
@@ -616,7 +677,21 @@ useEffect(() => {
             </div>
           </div>
 
-
+<button 
+  onClick={() => {
+    // Modal ဖွင့်ခါနီး လက်ရှိ screen ရဲ့ visible ဖြစ်နေတဲ့ columns တွေအတိုင်း update ဖြစ်အောင်လုပ်ပေးခြင်း
+    const currentVisible: Record<string, boolean> = {};
+    COLUMN_DEFS.forEach(col => { currentVisible[col.key] = visibleCols[col.key]; });
+    setExcelCols(currentVisible);
+    setShowExcelModal(true);
+  }} 
+  className="bg-green-600 hover:bg-green-700 text-white font-medium px-3 py-1.5 rounded-md transition-all text-xs flex items-center gap-1.5 shadow-sm"
+>
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+  </svg>
+  Excel Export
+</button>
 
           <button onClick={() => fetchData()} className="bg-white border border-gray-300 hover:border-gray-400 text-gray-700 font-medium px-3 py-1.5 rounded-md transition-all text-xs flex items-center gap-1.5 shadow-sm">
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
@@ -1415,6 +1490,108 @@ useEffect(() => {
           className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-100 transition-colors text-sm"
         >
           Close
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
+
+{/* ── 🟢 EXCEL COLUMN SELECTOR MODAL ── */}
+{showExcelModal && (
+  <div 
+    className="fixed inset-0 bg-gray-900/60 backdrop-blur-[3px] flex items-end sm:items-center justify-center z-50 p-0 sm:p-4 animate-in fade-in duration-200"
+    onClick={() => setShowExcelModal(false)}
+  >
+    <div className="absolute inset-0" />
+    
+    <div 
+      className="relative bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-xl max-h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-200 border border-gray-100"
+      onClick={e => e.stopPropagation()}
+    >
+      {/* Modal Header */}
+      <div className="px-5 py-4 bg-green-50 border-b border-green-100 flex justify-between items-center shrink-0">
+        <div>
+          <h3 className="text-sm font-extrabold text-green-900 uppercase tracking-wider flex items-center gap-1.5">
+            📊 Export to Excel (.xlsx)
+          </h3>
+          <p className="text-[11px] text-green-700 font-medium mt-0.5">
+            {selectedOrders.size > 0 
+              ? `ရွေးချယ်ထားသော အော်ဒါ (${selectedOrders.size}) စောင်ကို ထုတ်ယူပါမည်။` 
+              : `လက်ရှိစစ်ထုတ်ထားသော အော်ဒါ (${filteredOrders.length}) စောင်လုံးကို ထုတ်ယူပါမည်။`}
+          </p>
+        </div>
+        <button 
+          onClick={() => setShowExcelModal(false)}
+          className="text-gray-400 hover:text-gray-700 bg-gray-200/60 hover:bg-gray-200 w-7 h-7 flex items-center justify-center rounded-full transition-colors shrink-0"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+      </div>
+
+      {/* Modal Body (Columns Checkbox Grid) */}
+      <div className="p-5 overflow-y-auto flex-1 bg-slate-50/50">
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Excel တွင် ပါဝင်မည့် Column များ ရွေးရန်</span>
+          <div className="flex gap-2">
+            <button 
+              type="button" 
+              onClick={() => {
+                const allTrue: Record<string, boolean> = {};
+                COLUMN_DEFS.forEach(c => allTrue[c.key] = true);
+                setExcelCols(allTrue);
+              }}
+              className="text-[10px] font-bold text-green-600 hover:underline"
+            >
+              Select All
+            </button>
+            <span className="text-gray-300 text-[10px]">|</span>
+            <button 
+              type="button" 
+              onClick={() => {
+                const allFalse: Record<string, boolean> = {};
+                COLUMN_DEFS.forEach(c => allFalse[c.key] = c.key === 'item_id'); // ID ကတော့ အနည်းဆုံး ကျန်ခဲ့ရမယ်
+                setExcelCols(allFalse);
+              }}
+              className="text-[10px] font-bold text-red-500 hover:underline"
+            >
+              Clear All
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          {COLUMN_DEFS.map(col => (
+            <label 
+              key={`excel-${col.key}`} 
+              className="flex items-center p-2 hover:bg-slate-50 active:bg-slate-100 cursor-pointer text-xs text-gray-700 font-medium rounded-lg transition-colors border border-transparent hover:border-slate-100"
+            >
+              <input 
+                type="checkbox" 
+                className="mr-2.5 w-4 h-4 text-green-600 rounded border-gray-300 accent-green-600 focus:ring-green-500"
+                checked={excelCols[col.key] || false}  
+                onChange={() => setExcelCols(prev => ({ ...prev, [col.key]: !prev[col.key] }))}
+                disabled={col.key === 'item_id'} // Item ID ကို disable လုပ်ပြီး အမြဲတမ်း ပါဝင်နေစေခြင်း
+              />
+              <span className="truncate">{col.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Modal Footer */}
+      <div className="p-4 bg-gray-50 border-t border-gray-200 flex items-center gap-3 shrink-0">
+        <button 
+          onClick={handleExportExcel}
+          className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 rounded-xl text-center shadow-md transition-colors text-xs flex items-center justify-center gap-2"
+        >
+          📂 Excel ဖိုင်ထုတ်မည် (Confirm)
+        </button>
+        <button 
+          onClick={() => setShowExcelModal(false)}
+          className="px-5 py-2.5 bg-white border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-100 transition-colors text-xs"
+        >
+          မလုပ်တော့ပါ
         </button>
       </div>
 

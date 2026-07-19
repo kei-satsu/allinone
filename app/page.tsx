@@ -2,11 +2,18 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import * as XLSX from 'xlsx'
 
 export default function Dashboard() {
   const [allOrders, setAllOrders] = useState<any[]>([])
   const [userBranch, setUserBranch] = useState('')
   const [loading, setLoading] = useState(true)
+
+  // Excel Export စနစ်အတွက် သတ်မှတ်ချက်များ
+const [exportMode, setExportMode] = useState<'all' | 'range'>('all')
+const [startDate, setStartDate] = useState('')
+const [endDate, setEndDate] = useState('')
+const [isExporting, setIsExporting] = useState(false)
 
   useEffect(() => {
     const storedBranch = localStorage.getItem('user_branch')
@@ -61,6 +68,80 @@ export default function Dashboard() {
   .reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0)
     }
   }, [userBranch, allOrders])
+
+  const handleExportExcel = async () => {
+  setIsExporting(true);
+  try {
+    // ၁။ ဒေတာဘေ့စ်ဆီကနေ Data ကို တိုက်ရိုက်အသစ် လှမ်းတောင်းမယ် (Dashboard ရဲ့ ၁၀၀၀ Limit ကို ကျော်ဖို့)
+    let query = supabase.from('orders').select('*');
+
+    // ၂။ ရက်စွဲ (Date Range) စစ်ထုတ်ခြင်း
+    if (exportMode === 'range') {
+      if (!startDate || !endDate) {
+        alert('ကျေးဇူးပြု၍ စတင်မည့်ရက်နှင့် ဆုံးမည့်ရက်ကို ပြည့်စုံစွာ ရွေးချယ်ပေးပါ။');
+        setIsExporting(false);
+        return;
+      }
+      query = query.gte('received_date', startDate).lte('received_date', endDate);
+    }
+
+    // ၃။ ဒေတာအားလုံး အစုံအလင် ပါလာစေဖို့ အမြင့်ဆုံး Limit တစ်ခု သတ်မှတ်ပေးခြင်း
+    query = query.limit(50000); 
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      alert('ထုတ်ယူရန် အော်ဒါမှတ်တမ်းများ မရှိပါ။');
+      return;
+    }
+
+    // ၄။ ရရှိလာတဲ့ ဒေတာတွေကို လက်ရှိ Login ဝင်ထားတဲ့ Branch အလိုက် Local မှာတင် စိတ်ချရအောင် Filter ထပ်လုပ်ပေးခြင်း
+    // 💡 (မှတ်ချက် - တစ်နိုင်ငံလုံးစာ အကုန်ထွက်ချင်ရင် အောက်က line 27 ကနေ 29 အထိ ကုဒ် ၃ ကြောင်းကို ဖြတ်ပစ်လိုက်လို့ ရပါတယ်)
+    let finalData = data;
+    if (userBranch && userBranch !== 'ALL') {
+      finalData = data.filter(o => o.branch === userBranch || o.branch_code === userBranch);
+    }
+
+    if (finalData.length === 0) {
+      alert('လက်ရှိ Branch အတွက် ထုတ်ယူရန် စာရင်းမရှိပါ။');
+      return;
+    }
+
+    // ၅။ Excel Column Header များကို သပ်ရပ်အောင် ပုံစံပြောင်းခြင်း
+    const formattedData = finalData.map(order => ({
+      'Item ID': order.item_id || order.id || '-',
+      'Received Date': order.received_date ? order.received_date.split('T')[0] : '-',
+      'Sender Name': order.sender_name || '-',
+      'Sender Location': order.sender_loc || '-',
+      'Receiver Name': order.receiver_name || '-',
+      'Receiver Address': order.receiver_address || '-',
+      'Receiver Location': order.receiver_loc || '-',
+      'COD Amount': Number(order.cod_amount) || 0,
+      'Deli Fee': Number(order.deli_fee) || 0,
+      'Fee Type': order.fee_type || '-',
+      'Total Amount': Number(order.total_amount) || 0,
+      'Status': order.status || '-',
+      'Branch': order.branch || '-'
+    }));
+
+    // ၆။ SheetJS ဖြင့် Excel (.xlsx) ဖိုင် ထုတ်လုပ်ခြင်း
+    const worksheet = XLSX.utils.json_to_sheet(formattedData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders_Report');
+
+    const fileName = exportMode === 'range' 
+      ? `Orders_${startDate}_to_${endDate}.xlsx` 
+      : `Orders_All_Records.xlsx`;
+
+    XLSX.writeFile(workbook, fileName);
+  } catch (err) {
+    console.error('Export error:', err);
+    alert('Excel ထုတ်ယူစဉ် စနစ်ပိုင်းဆိုင်ရာ အမှားအယွင်းတစ်ခု ဖြစ်ပွားခဲ့ပါသည်။');
+  } finally {
+    setIsExporting(false);
+  }
+};
 
   // iOS Custom Smooth Card Style Macro
   const iosCardClass = "bg-white/80 backdrop-blur-md border border-slate-200/40 rounded-[24px] p-5 shadow-[0_8px_32px_rgba(15,23,42,0.03)] transition-all duration-300"
@@ -148,6 +229,95 @@ export default function Dashboard() {
                 </div>
               </Link>
             </div>
+
+            {/* 📊 Premium Data Export Utility Widget */}
+<div className="bg-white/80 backdrop-blur-md border border-slate-200/50 rounded-[24px] p-6 shadow-[0_8px_32px_rgba(15,23,42,0.02)] space-y-4">
+  <div className="flex items-center gap-2">
+    <div className="w-2 h-4 bg-emerald-500 rounded-full" />
+    <h4 className="text-[12px] font-extrabold text-slate-700 uppercase tracking-wider">Excel စာရင်းထုတ်ယူခြင်းစနစ် (Data Export)</h4>
+  </div>
+
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+    {/* Mode Selector */}
+    <div className="flex flex-col gap-1.5">
+      <label className="text-[11px] font-bold text-slate-400 uppercase">Export ပုံစံ</label>
+      <div className="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-xl">
+        <button
+          type="button"
+          onClick={() => setExportMode('all')}
+          className={`py-1.5 text-xs font-bold rounded-lg transition-all ${exportMode === 'all' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+        >
+          စာရင်းအားလုံး
+        </button>
+        <button
+          type="button"
+          onClick={() => setExportMode('range')}
+          className={`py-1.5 text-xs font-bold rounded-lg transition-all ${exportMode === 'range' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+        >
+          ရက်စွဲအလိုက်
+        </button>
+      </div>
+    </div>
+
+    {/* Date Picker Range inputs */}
+    {exportMode === 'range' ? (
+      <div className="md:col-span-2 grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-left-2 duration-200">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[11px] font-bold text-slate-400 uppercase">မှ (From Date)</label>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-emerald-500 transition-colors w-full"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[11px] font-bold text-slate-400 uppercase">ထိ (To Date)</label>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-emerald-500 transition-colors w-full"
+          />
+        </div>
+      </div>
+    ) : (
+      <div className="md:col-span-2 text-slate-400 text-xs font-medium pb-2 italic">
+        * လက်ရှိ {userBranch === 'ALL' ? 'Branch အားလုံး' : `${userBranch} Branch`} ၏ Database တွင်ရှိသမျှ Orders စာရင်းအားလုံးကို ဖိုင်ထုတ်ပေးမည်ဖြစ်သည်။
+      </div>
+    )}
+  </div>
+
+  {/* Action Submit Button */}
+  <div className="pt-2 border-t border-slate-100 flex justify-end">
+    <button
+      onClick={handleExportExcel}
+      disabled={isExporting}
+      className={`w-full md:w-auto px-6 py-2.5 rounded-xl font-bold text-xs text-white transition-all shadow-sm flex items-center justify-center gap-2 ${
+        isExporting 
+          ? 'bg-slate-400 cursor-not-allowed' 
+          : 'bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98]'
+      }`}
+    >
+      {isExporting ? (
+        <>
+          <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          ဖိုင်ထုတ်နေသည်...
+        </>
+      ) : (
+        <>
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.3}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          Excel (.xlsx) ထုတ်ယူမည်
+        </>
+      )}
+    </button>
+  </div>
+</div>
 
             {/* 📈 iOS Styled Section Title */}
             <div className="flex items-center gap-3 pt-2">
