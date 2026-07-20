@@ -1822,19 +1822,22 @@ const capturePhoto = useCallback(async () => {
     />
   </div>
 
-    <div className=" flex items-center px-1">
-  <label className="flex items-center gap-2.5 cursor-pointer select-none text-[11px] font-bold tracking-wide text-neutral-400 hover:text-neutral-200 transition-colors">
-    <input
-      type="checkbox"
-      checked={isTransitYGN}
-      onChange={(e) => setIsTransitYGN(e.target.checked)}
-      className="w-4 h-4 rounded-md border-white/15 bg-neutral-950 text-orange-500 focus:ring-0 focus:ring-offset-0 accent-orange-500 cursor-pointer"
-    />
-    <span className={isTransitYGN ? "text-orange-400 shadow-sm" : ""}>
-      Transit to YGN 
-    </span>
-  </label>
-</div>
+   {/* Branch က 'MDY' ဖြစ်မှသာ Checkbox ပေါ်မည် */}
+{(userBranch === 'MDY') && (
+  <div className="flex items-center px-1 animate-in fade-in duration-150">
+    <label className="flex items-center gap-2.5 cursor-pointer select-none text-[11px] font-bold tracking-wide text-neutral-400 hover:text-neutral-200 transition-colors">
+      <input
+        type="checkbox"
+        checked={isTransitYGN}
+        onChange={(e) => setIsTransitYGN(e.target.checked)}
+        className="w-4 h-4 rounded-md border-white/15 bg-neutral-950 text-orange-500 focus:ring-0 focus:ring-offset-0 accent-orange-500 cursor-pointer"
+      />
+      <span className={isTransitYGN ? "text-orange-400 shadow-sm" : ""}>
+        Transit to YGN
+      </span>
+    </label>
+  </div>
+)}
 
 </div>
 
