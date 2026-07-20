@@ -929,7 +929,7 @@ async function handleQuickAtOffice(order: any) {
 
     {/* ── 🌟 Full Detail View Modal ── */}
 {viewingDetailOrder && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-[3px] flex items-end sm:items-center justify-center p-0 sm:p-4 z-70 animate-in fade-in duration-200">
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-[3px] flex items-end sm:items-center justify-center p-0 sm:p-4 z-51 animate-in fade-in duration-200">
     {/* Backdrop */}
     <div className="absolute inset-0" onClick={() => setViewingDetailOrder(null)} />
     
