@@ -536,13 +536,26 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                   <input type="date" value={formData.deliver_date} onChange={e => setFormData({...formData, deliver_date: e.target.value})} className={`${winInput} font-mono`} />
                 </div>
               </div>
-              <div>
-                <label className={labelStyle}>Delivery Rider</label>
-                <select value={formData.deliver_rider_id} onChange={e => setFormData({...formData, deliver_rider_id: e.target.value})} className={winSelect}>
-                  <option value="">Select delivery rider...</option>
-                  {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                </select>
-              </div>
+             <div>
+  <label className={labelStyle}>Delivery Rider</label>
+  <select 
+    value={formData.deliver_rider_id} 
+    onChange={e => setFormData({...formData, deliver_rider_id: e.target.value})} 
+    className={winSelect}
+  >
+    <option value="">Select delivery rider...</option>
+    
+    {/* 💡 Branch တူသည့် Rider များကိုသာ စစ်ထုတ်ပြီးပြသခြင်း */}
+    {riders
+      .filter(r => !formData.branch || r.branch === formData.branch)
+      .map(r => (
+        <option key={r.id} value={r.id}>
+          {r.name}
+        </option>
+      ))
+    }
+  </select>
+</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={labelStyle}>Return Utility</label>

@@ -92,7 +92,7 @@ export default function BulkUpdatePage() {
     setSearchLoading(false)
   }
 
-  async function performSearch(query: string) {
+async function performSearch(query: string) {
     if (!userBranch) return
     if (!query.trim()) {
       fetchRecentOrders(userBranch)
@@ -102,7 +102,8 @@ export default function BulkUpdatePage() {
     const { data, error } = await supabase
       .from('orders')
       .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
-      .eq('branch', userBranch)
+      // 💡 Branch/Transit စစ်ဆေးချက် AND Search Term စစ်ဆေးချက်
+      .or(`branch.eq.${userBranch},transit_to.eq.${userBranch}`)
       .or(`item_id.ilike.%${query}%,barcode.ilike.%${query}%,sender_name.ilike.%${query}%,receiver_name.ilike.%${query}%,receiver_phone.ilike.%${query}%`)
       .order('created_at', { ascending: false })
 
@@ -136,7 +137,8 @@ export default function BulkUpdatePage() {
       const { data, error } = await supabase
         .from('orders')
         .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
-        .eq('branch', userBranch)
+        // 💡 .or() နှစ်ခု ဆက်ရေးလိုက်ပါက Supabase မှ AND ပုံစံဖြင့် ချိတ်ဆက်စစ်ဆေးပေးပါသည်
+        .or(`branch.eq.${userBranch},transit_to.eq.${userBranch}`)
         .or(`item_id.eq.${value},barcode.eq.${value}`)
         .maybeSingle()
 
@@ -148,10 +150,9 @@ export default function BulkUpdatePage() {
           return [data, ...prev]
         })
         setSelectedIds(prev => prev.includes(data.id) ? prev : [...prev, data.id])
-        // 🌟 ID အပြင် Full Object ပါ သိမ်းဆည်းပေးခြင်း
         setSelectedOrders(prev => prev.some(o => o.id === data.id) ? prev : [...prev, data])
       } else {
-        alert(`Item ID: ${value} အား ရှာမတွေ့ပါ။ สာလုံးပေါင်း သေ尋ာပါသလား?`)
+        alert(`Item ID: ${value} အား ရှာမတွေ့ပါ။ စာလုံးပေါင်း သေချာပါသလား?`)
       }
       setQrInput('') 
       qrInputRef.current?.focus()
@@ -169,7 +170,7 @@ export default function BulkUpdatePage() {
     const { data, error } = await supabase
       .from('orders')
       .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
-      .eq('branch', userBranch)
+      .or(`branch.eq.${userBranch},transit_to.eq.${userBranch}`)
       .or(`item_id.eq.${value},barcode.eq.${value}`)
       .maybeSingle()
 
@@ -508,6 +509,7 @@ export default function BulkUpdatePage() {
                   setBulkStatus(e.target.value);
                   setBulkRiderId(''); 
                 }} className={winSelect}>
+                  <option value="At Office">📍 At Office</option>
                   <option value="On Way">🚵 On Way</option>
                   <option value="Delivered">✅ Delivered</option>
                   <option value="In-Transit">🚚 In-Transit</option>

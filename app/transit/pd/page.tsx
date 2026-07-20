@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import EditOrderModal from '@/components/EditOrderModal' // သင့် Component တည်နေရာလမ်းကြောင်းအတိုင်း ချိန်ပေးပါ
-import { printVoucher } from "@/utils/print"
+import BarcodeScannerModal from '@/components/BarcodeScannerModal'
 
 const COLUMN_DEFS = [
   { key: 'image_url', label: 'Photo', defaultVisible: true }, 
@@ -36,6 +36,8 @@ const COLUMN_DEFS = [
 ]
 
 
+
+
 export default function OrderList() {
   const router = useRouter()
   const [orders, setOrders] = useState<any[]>([])
@@ -56,6 +58,56 @@ export default function OrderList() {
   const [showMobileFilters, setShowMobileFilters] = useState(false)
   const [expandedMobileCards, setExpandedMobileCards] = useState<Record<string, boolean>>({})
 
+  // 🟢 Confirm နှိပ်ပါက Status ကို 'At Office' သို့ ပြောင်းပေးမည့် Function
+  const handleConfirmStatus = async (order: any) => {
+    if (!order) return
+
+    try {
+      // 1. Supabase Table ထဲတွင် Status ကို 'At Office' သို့ Update ပြုလုပ်ခြင်း
+      const { error } = await supabase
+        .from('orders') // ✨ သင့် Supabase Table အမည်အတိအကျ (ဥပမာ orders) ဖြစ်ရပါမည်
+        .update({ status: 'At Office' })
+        .eq('id', order.id) // သို့မဟုတ် 'item_id' သုံးထားပါက .eq('item_id', order.item_id) ဟု ပြောင်းပါ
+
+      if (error) throw error
+
+      // 2. UI တွင် ချက်ချင်း update ဖြစ်စေရန် Local State (orders array) ကို ပြင်ဆင်ခြင်း
+      setOrders(prevOrders =>
+        prevOrders.map(o => (o.id === order.id ? { ...o, status: 'At Office' } : o))
+      )
+
+      // 3. Detail Modal ကို ပိတ်လိုက်ခြင်း
+      setViewingDetailOrder(null)
+
+    } catch (error: any) {
+      console.error('Error updating status:', error)
+      alert('Status ပြောင်းလဲရာတွင် အမှားအယွင်းရှိပါသည်: ' + error.message)
+    }
+  }
+
+  // 📷 1. Barcode Scanner State ထည့်ရန်
+  const [isScannerOpen, setIsScannerOpen] = useState(false)
+
+  // -------------------------------------------------------------
+  // ⚡ 2. ဒီနေရာမှာ handleScanSuccess Function ကို ထည့်ပေးပါ
+  // -------------------------------------------------------------
+const handleScanSuccess = (scannedCode: string) => {
+    const trimmedCode = scannedCode.trim()
+
+    // ၁။ Table ရဲ့ column filter ထဲမှ 'barcode' filter သို့ တိုက်ရိုက် ထည့်ပေးခြင်း
+    setColFilters(prev => ({ ...prev, barcode: trimmedCode }))
+
+    // ၂။ Orders စာရင်းထဲတွင် barcode column နှင့် သီးသန့် တိုက်စစ်၍ Detail Modal ဖွင့်ပေးခြင်း
+    const foundOrder = orders.find(
+      o => String(o.barcode || '').toLowerCase().trim() === trimmedCode.toLowerCase()
+    )
+
+    if (foundOrder) {
+      setViewingDetailOrder(foundOrder)
+    } else {
+      alert(`Barcode: "${trimmedCode}" ဖြင့် စာရင်းထဲတွင် ပစ္စည်း မတွေ့ရှိပါ။`)
+    }
+  }
   // ၁။ Print ထုတ်မည့် Data ကို ယာယီသိမ်းထားမည့် State
   const [activePrintOrder, setActivePrintOrder] = useState<any | null>(null);
 
@@ -332,6 +384,16 @@ async function handleQuickAtOffice(order: any) {
         </div>
         
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+          {/* 📷 Scan Barcode Button အသစ် */}
+  <button 
+    onClick={() => setIsScannerOpen(true)}
+    className="bg-zinc-800 hover:bg-black text-white font-medium px-3 py-1.5 rounded-md transition-all text-xs flex items-center gap-1.5 shadow-sm active:scale-95"
+  >
+    <svg className="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+    </svg>
+    Scan Barcode
+  </button>
           {/* ── Columns Show/Hide Dropdown ── */}
           <div className="relative">
             <button 
@@ -867,7 +929,7 @@ async function handleQuickAtOffice(order: any) {
 
     {/* ── 🌟 Full Detail View Modal ── */}
 {viewingDetailOrder && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-[3px] flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-in fade-in duration-200">
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-[3px] flex items-end sm:items-center justify-center p-0 sm:p-4 z-70 animate-in fade-in duration-200">
     {/* Backdrop */}
     <div className="absolute inset-0" onClick={() => setViewingDetailOrder(null)} />
     
@@ -1067,7 +1129,7 @@ async function handleQuickAtOffice(order: any) {
 
       </div>
       
-      {/* Modal Footer Actions */}
+      {/* ── Modal Footer Actions ── */}
       <div className="p-4 bg-gray-50 border-t border-gray-200 flex items-center gap-3 shrink-0">
         <button 
           onClick={() => { setEditingOrder(viewingDetailOrder); setViewingDetailOrder(null); }}
@@ -1075,17 +1137,29 @@ async function handleQuickAtOffice(order: any) {
         >
           Edit Order
         </button>
+
+        {/* 🟢 Close အစား အသစ်ထည့်သွင်းထားသော Confirm Button */}
         <button 
-          onClick={() => setViewingDetailOrder(null)}
-          className="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-100 transition-colors text-sm"
+          onClick={() => handleConfirmStatus(viewingDetailOrder)}
+          className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition-all active:scale-95 text-sm shadow-md flex items-center justify-center gap-1.5"
         >
-          Close
+          <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+          Confirm
         </button>
       </div>
 
     </div>
   </div>
 )}
+
+{/* ── 📷 Camera Barcode Scanner Modal ── */}
+      <BarcodeScannerModal 
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScanSuccess={handleScanSuccess}
+      />
 
     </div>
   )

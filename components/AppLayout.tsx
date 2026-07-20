@@ -752,20 +752,20 @@ if (item.path === "/trash" && realBranch !== "ADMIN") {
           </svg>
         </Link>
 
-        {/* 📝 New Entry Button */}
+        {/* 📝 Status Update Button */}
         <Link
-          href="/entry"
+          href="/bulk-update"
           className={`flex flex-col items-center justify-center gap-1.5 flex-1 py-1 rounded-xl transition-all active:scale-95 duration-200 ${
-            pathname === "/entry" 
+            pathname === "/bulk-update" 
               ? "text-orange-500 font-bold" 
               : "text-slate-400 hover:text-slate-600"
           }`}
-          title="New Entry"
+          title="Status Update"
         >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={pathname === "/entry" ? 2.4 : 2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.852l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
-          </svg>
-          <span className="text-[9px] font-extrabold tracking-tight whitespace-nowrap">New Entry</span>
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+</svg>
+          <span className="text-[9px] font-extrabold tracking-tight whitespace-nowrap">Status Updater</span>
         </Link>
 
         {/* 🍔 Menu Button */}

@@ -226,6 +226,71 @@ const IconUpload = ({ className }: IconProps) => (
   </svg>
 );
 
+// ─── SMART CLIENT-SIDE IMAGE COMPRESSION ENGINE ───
+const compressImage = (file: File, quality: number, maxDimension: number): Promise<File> => {
+  return new Promise((resolve, reject) => {
+    
+    // 💡 [Size Guard] ဖိုင်ဆိုဒ်က ၁၃၀ KB ဝန်းကျင်နဲ့ အောက်ပဲရှိရင် ထပ်မချုံ့တော့ဘဲ မူရင်းအတိုင်း လွှတ်ပေးရန်
+    const sizeInKB = file.size / 1024;
+    if (sizeInKB <= 130) {
+      console.log(`Skipping compression for ${file.name} - Already small enough (${Math.round(sizeInKB)} KB)`);
+      return resolve(file);
+    }
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        // Aspect Ratio မပျက်စေဘဲ သတ်မှတ်ထားသည့် Max Dimension သို့ ချုံ့ခြင်း
+        if (width > height) {
+          if (width > maxDimension) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          }
+        } else {
+          if (height > maxDimension) {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(file);
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const compressedFile = new File([blob], file.name, {
+                type: 'image/jpeg',
+                lastModified: Date.now(),
+              });
+              resolve(compressedFile);
+            } else {
+              resolve(file);
+            }
+          },
+          'image/jpeg',
+          quality
+        );
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
+  });
+};
+
 export default function IntakePage() {
   const router = useRouter();
   const [isThumbExpanded, setIsThumbExpanded] = useState(true);
@@ -608,7 +673,7 @@ const capturePhoto = useCallback(async () => {
         setCurrentScannedBarcode('');
       }
     }
-  }, 'image/jpeg', 0.95);
+  }, 'image/jpeg', 0.8);
 }, [intakeMethod, currentScannedBarcode]);
 
   const switchFacingMode = () => setFacingMode(prev => prev === 'environment' ? 'user' : 'environment');
@@ -883,14 +948,36 @@ const capturePhoto = useCallback(async () => {
     }
   };
 
-  // 🌟 ဒေတာနှင့် ပုံကို ခွဲမထွက်စေဘဲ Local Queue ထဲ အရင်သိမ်းဆည်းမည့် စနစ်
+ // 🌟 ဒေတာနှင့် ပုံကို ခွဲမထွက်စေဘဲ Local Queue ထဲ အရင်သိမ်းဆည်းမည့် စနစ်
   const handleFinalSubmit = async () => {
     if (capturedImages.length === 0) return alert('ဓာတ်ပုံ အနည်းဆုံး ၁ ပုံ ရိုက်ပေးပါဗျာ');
     
-    // တစ်ပုံချင်းစီကို တစ်ခုချင်းစီစီမံနိုင်အောင် ခွဲထုတ်ပြီး Queue Item ပြုလုပ်ခြင်း
     for (const img of capturedImages) {
       const queueItemId = `queue_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      const base64Data = await fileToBase64(img.file);
+      
+      const targetQuality = img.quality === 'HD' ? 0.8 : 0.6;
+      const maxDimension = img.quality === 'HD' ? 1920 : 1280;
+
+      // 🔍 ၁။ မူရင်း File Size ကို KB ဖြင့် တွက်ထုတ်ခြင်း
+      const originalKB = (img.file.size / 1024).toFixed(2);
+
+      // Compress ပြုလုပ်ခြင်း
+      const compressedFile = await compressImage(img.file, targetQuality, maxDimension);
+
+      // 🔍 ၂။ Compress လုပ်ပြီးသား File Size ကို KB ဖြင့် တွက်ထုတ်ခြင်း
+      const compressedKB = (compressedFile.size / 1024).toFixed(2);
+      
+      // 🔍 ၃။ ရာခိုင်နှုန်းမည်မျှ လျော့သွားသည်ကို တွက်ထုတ်ခြင်း
+      const reductionPercent = ((1 - compressedFile.size / img.file.size) * 100).toFixed(1);
+
+      // Console မှာ ပုံအသေးစိတ် လော့ဂ်ထုတ်ကြည့်ခြင်း
+      console.log(`📸 File Name: ${img.file.name} (${img.quality || 'SD'})`);
+      console.log(`- Original Size: ${originalKB} KB`);
+      console.log(`- Compressed Size: ${compressedKB} KB`);
+      console.log(`- Size Reduced by: ${reductionPercent}%`);
+
+      // 💡 ၃။ Compress လုပ်ပြီးသား File ကိုမှ Base64 သို့ ပြောင်းပါမည်
+      const base64Data = await fileToBase64(compressedFile);
       
       const offlineItem = {
         id: queueItemId,

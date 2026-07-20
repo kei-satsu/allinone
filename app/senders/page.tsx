@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase"; 
 import SenderModal from "@/components/SenderModal"; 
+import ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
 
 export default function SendersDashboard() {
   // ─── States ───
@@ -13,6 +15,10 @@ export default function SendersDashboard() {
   const [realBranch, setRealBranch] = useState<string | null>(null);
 
   const [orderSearchTerm, setOrderSearchTerm] = useState("");
+  const [filterFeeType, setFilterFeeType] = useState("All");
+const [filterLoc, setFilterLoc] = useState("All");
+const [startDate, setStartDate] = useState("");
+const [endDate, setEndDate] = useState("");
   const [loadingSenders, setLoadingSenders] = useState(true);
   const [loadingOrders, setLoadingOrders] = useState(false);
   
@@ -132,6 +138,11 @@ export default function SendersDashboard() {
     setSelectedOrderIds([]); 
     setOrderSearchTerm("");
 
+    setFilterFeeType("All");
+  setFilterLoc("All");
+  setStartDate("");
+  setEndDate("");
+
     const { data, error } = await supabase
       .from("orders")
       .select("*")
@@ -147,19 +158,32 @@ export default function SendersDashboard() {
   };
 
   // 💡 ရှာဖွေမှုစာသားအလိုက် Way ID နှင့် Receiver အချက်အလက်များကို စစ်ထုတ်ခြင်း Logic
-  const filteredOrders = orders.filter((order) => {
-    if (!orderSearchTerm.trim()) return true; // ရှာဖွေစာသားမရှိရင် အကုန်ပြမည်
-    
-    const searchLower = orderSearchTerm.toLowerCase();
-    
-    return (
-      (order.item_id || "").toLowerCase().includes(searchLower) ||
-      (order.id || "").toLowerCase().includes(searchLower) ||
-      (order.receiver_name || "").toLowerCase().includes(searchLower) ||
-      (order.receiver_phone || "").toLowerCase().includes(searchLower) ||
-      (order.receiver_loc || "").toLowerCase().includes(searchLower)
-    );
-  });
+ // 💡 ရှာဖွေမှုစာသား နှင့် Filter Criteria အားလုံးပေါင်းစပ်၍ စစ်ထုတ်ခြင်း Logic
+const filteredOrders = orders.filter((order) => {
+  // ၁။ Text Search (Way ID, အမည်, ဖုန်း စသည်ဖြင့် ရှာဖွေခြင်း)
+  const searchLower = orderSearchTerm.toLowerCase();
+  const matchesSearch = !orderSearchTerm.trim() || 
+    (order.item_id || "").toLowerCase().includes(searchLower) ||
+    (order.id || "").toLowerCase().includes(searchLower) ||
+    (order.receiver_name || "").toLowerCase().includes(searchLower) ||
+    (order.receiver_phone || "").toLowerCase().includes(searchLower) ||
+    (order.receiver_loc || "").toLowerCase().includes(searchLower);
+
+  // ၂။ Fee Type Filter (ဥပမာ- "All" မဟုတ်ရင် ရွေးထားတာနဲ့ တူမှပြမည်)
+  const matchesFeeType = filterFeeType === "All" || order.fee_type === filterFeeType;
+
+  // ၃။ Location Filter
+  const matchesLoc = filterLoc === "All" || order.receiver_loc === filterLoc;
+
+  // ၄။ Date Range Filter (ရက်စွဲအပိုင်းအခြား စစ်ဆေးခြင်း)
+  // order ထဲက target date ကို format ညှိယူပါ (ဥပမာ- YYYY-MM-DD)
+  const orderDate = order.deliver_date || (order.created_at ? order.created_at.split("T")[0] : "");
+  const matchesStartDate = !startDate || orderDate >= startDate;
+  const matchesEndDate = !endDate || orderDate <= endDate;
+
+  // အခြေအနေ အားလုံး True ဖြစ်မှ Order ကို ချန်ထားမည်
+  return matchesSearch && matchesFeeType && matchesLoc && matchesStartDate && matchesEndDate;
+});
 
   // Tab အလိုက် ခွဲထုတ်ရာတွင် filteredOrders ကို အခြေခံ၍ စစ်ထုတ်မည်
   const unclearedOrders = filteredOrders.filter(
@@ -411,19 +435,77 @@ export default function SendersDashboard() {
                     </button>
                   </div>
 
-                  {/* Right Side: Way Search Box */}
-                  <div className="relative w-full sm:w-72 my-1.5">
-                    <input
-                      type="text"
-                      placeholder="Way ID၊ အမည်၊ ဖုန်း၊ မြို့နယ် ဖြင့် ရှာရန်..."
-                      value={orderSearchTerm}
-                      onChange={(e) => setOrderSearchTerm(e.target.value)}
-                      className="w-full pl-8 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-slate-800 font-medium"
-                    />
-                    <svg className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </div>
+                 {/* Right Side: Search & Multi-Filters Box */}
+<div className="flex flex-wrap items-center gap-2 my-2 w-full sm:w-auto">
+  
+  {/* ၁။ Text Search Input (ရှိပြီးသားကို ပြင်ဆင်ထားခြင်း) */}
+  <div className="relative w-full sm:w-48">
+    <input
+      type="text"
+      placeholder="Way ID၊ အမည်၊ ဖုန်း..."
+      value={orderSearchTerm}
+      onChange={(e) => setOrderSearchTerm(e.target.value)}
+      className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-slate-800 font-medium"
+    />
+    <svg className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+    </svg>
+  </div>
+
+  {/* ၂။ Fee Type Dropdown */}
+  <select
+    value={filterFeeType}
+    onChange={(e) => setFilterFeeType(e.target.value)}
+    className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+  >
+    <option value="All">Fee Type: All</option>
+    <option value="Deli">Deli </option>
+    <option value="Kpay">Kpay</option>
+    <option value="Cash">Cash</option>
+    <option value="Bill">Bill</option>
+  </select>
+
+  {/* ၃။ Location Dropdown (လက်ရှိ ပါဆယ်တွေထဲမှာ ပါတဲ့ မြို့နယ်အလိုက် Automatic unique လုပ်ပေးထားခြင်း) */}
+  <select
+    value={filterLoc}
+    onChange={(e) => setFilterLoc(e.target.value)}
+    className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+  >
+    <option value="All">Location: All</option>
+    {Array.from(new Set(orders.map((o) => o.receiver_loc).filter(Boolean))).map((loc) => (
+      <option key={loc} value={loc}>{loc}</option>
+    ))}
+  </select>
+
+  {/* ၄။ Date Range Picker (မှ - ထိ) */}
+  <div className="flex items-center gap-1 text-[11px] text-slate-500 bg-slate-50 px-2 py-1 border border-slate-200 rounded-xl">
+    <input
+      type="date"
+      value={startDate}
+      onChange={(e) => setStartDate(e.target.value)}
+      className="bg-transparent focus:outline-none text-slate-700 w-24"
+      title="Start Date"
+    />
+    <span>to</span>
+    <input
+      type="date"
+      value={endDate}
+      onChange={(e) => setEndDate(e.target.value)}
+      className="bg-transparent focus:outline-none text-slate-700 w-24"
+      title="End Date"
+    />
+    {(startDate || endDate) && (
+      <button 
+        onClick={() => { setStartDate(""); setEndDate(""); }}
+        className="ml-1 text-rose-500 font-bold hover:text-rose-700"
+        title="Clear Date"
+      >
+        ✕
+      </button>
+    )}
+  </div>
+
+</div>
 
                 </div>
 
