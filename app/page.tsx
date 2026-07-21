@@ -2,14 +2,38 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
-import * as XLSX from 'xlsx'
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
+import BarcodeScannerModal from '@/components/BarcodeScannerModal' 
+import { printVoucher } from '@/utils/print' 
 
 export default function Dashboard() {
   const [allOrders, setAllOrders] = useState<any[]>([])
   const [userBranch, setUserBranch] = useState('')
   const [loading, setLoading] = useState(true)
+
+  const [isScannerOpen, setIsScannerOpen] = useState(false)
+
+  // 🟢 Barcode Scan ဖတ်ပြီးပါက Voucher ရှာ၍ Print ထုတ်ပေးမည့် Function
+const handleScanCode = (scannedCode: string) => {
+  setIsScannerOpen(false) // Scanner Modal ကို ပိတ်မည်
+
+  if (!scannedCode) return;
+
+  // 1. Scanned Barcode သို့မဟုတ် Item ID နာမည်ဖြင့် Order ကို ရှာခြင်း
+  const matchedOrder = allOrders.find(
+    (o) =>
+      String(o.item_id).trim() === String(scannedCode).trim() ||
+      String(o.barcode).trim() === String(scannedCode).trim()
+  )
+
+  if (matchedOrder) {
+    // 2. Object တစ်ခုလုံး မပို့ဘဲ ID သို့မဟုတ် Item ID သက်သက်ကိုသာ ပို့ပေးမည်
+    printVoucher(matchedOrder.id || matchedOrder.item_id)
+  } else {
+    alert(`Barcode "${scannedCode}" ဖြင့် ကိုက်ညီသော Order/Voucher မတွေ့ရှိပါ။`)
+  }
+}
 
   // Excel Export စနစ်အတွက် သတ်မှတ်ချက်များ
 const [exportMode, setExportMode] = useState<'all' | 'range'>('all')
@@ -27,22 +51,46 @@ const [exportAllBranches, setExportAllBranches] = useState(true)
     }
   }, [])
 
-  useEffect(() => {
-    async function fetchStats() {
-      setLoading(true)
-      try {
-        const { data, error } = await supabase.from('orders').select('*')
-        if (data) {
-          setAllOrders(data)
+ useEffect(() => {
+  async function fetchStats() {
+    setLoading(true)
+    try {
+      let fetchedOrders: any[] = []
+      let page = 0
+      const pageSize = 1000
+      let hasMore = true
+
+      // ဒေတာ ၁,၀၀၀ မကရှိပါက အကုန်ရအောင် Loop ပတ်ဆွဲထုတ်ခြင်း
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*')
+          .range(page * pageSize, (page + 1) * pageSize - 1)
+
+        if (error) throw error
+
+        if (data && data.length > 0) {
+          fetchedOrders = [...fetchedOrders, ...data]
+          if (data.length < pageSize) {
+            hasMore = false
+          } else {
+            page++
+          }
+        } else {
+          hasMore = false
         }
-      } catch (err) {
-        console.error("Error fetching orders:", err)
-      } finally {
-        setLoading(false)
       }
+
+      setAllOrders(fetchedOrders)
+    } catch (err) {
+      console.error("Error fetching orders:", err)
+    } finally {
+      setLoading(false)
     }
-    fetchStats()
-  }, [])
+  }
+
+  fetchStats()
+}, [])
 
   const stats = useMemo(() => {
     if (!userBranch || allOrders.length === 0) {
@@ -278,6 +326,22 @@ const [exportAllBranches, setExportAllBranches] = useState(true)
           <>
             {/* 📱💻 iOS App Shortcuts Layout (Quick Links) */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+              {/* 🟢 အသစ်ထည့်သွင်းသော Scan & Print Button */}
+  <button
+    onClick={() => setIsScannerOpen(true)}
+    className="bg-white border border-slate-200/50 rounded-[20px] p-4 hover:border-emerald-500/40 hover:shadow-[0_12px_30px_rgba(16,185,129,0.08)] transition-all duration-300 flex items-center gap-3.5 group cursor-pointer active:scale-[0.98] text-left"
+  >
+    <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-all duration-300 shadow-sm">
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM14.625 3.75c-.621 0-1.125.504-1.125 1.125v4.5c0 .621.504 1.125 1.125 1.125h4.5c.621 0 1.125-.504 1.125-1.125v-4.5c0-.621-.504-1.125-1.125-1.125h-4.5zM14.625 14.625c-.621 0-1.125.504-1.125 1.125v4.5c0 .621.504 1.125 1.125 1.125h4.5c.621 0 1.125-.504 1.125-1.125v-4.5c0-.621-.504-1.125-1.125-1.125h-4.5z" />
+      </svg>
+    </div>
+    <div>
+      <h3 className="text-xs font-bold text-slate-800 tracking-tight transition-colors group-hover:text-emerald-600">Scan & Print</h3>
+      <p className="text-[11px] text-slate-400 font-medium mt-0.5">ဘောက်ချာ Scan ဖတ်၍ Print ရန်</p>
+    </div>
+  </button>
               
               {/* Shortcut: New Entry */}
               <Link href="/entry" className="bg-white border border-slate-200/50 rounded-[20px] p-4 hover:border-orange-500/40 hover:shadow-[0_12px_30px_rgba(249,115,22,0.08)] transition-all duration-300 flex items-center gap-3.5 group cursor-pointer active:scale-[0.98]">
@@ -514,6 +578,15 @@ const [exportAllBranches, setExportAllBranches] = useState(true)
               </p>
             </div>
           </>
+        )}
+
+        {/* 🟢 Barcode Scanner Modal Component */}
+        {isScannerOpen && (
+          <BarcodeScannerModal
+            isOpen={isScannerOpen}
+            onClose={() => setIsScannerOpen(false)}
+            onScanSuccess={handleScanCode}
+          />
         )}
 
         {/* 🏷️ iOS Style Footer */}
