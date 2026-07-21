@@ -917,35 +917,49 @@ if (key === 'agent_fee') {
                 let grandActualTotal = 0;
 
                 // 1. Rider တစ်ယောက်ချင်းစီရဲ့ Data တွက်ချက်ခြင်းအပိုင်း
-                const rows = cities.map(city => {
+
+// 🌟 POL1 နှင့် POL2 အတွက် Custom City စာရင်း သတ်မှတ်ခြင်း
+const customCities = [
+  { "C.ID": "POL1", name: "Pyin Oo Lwin (SPY)" },
+  { "C.ID": "POL2", name: "Pyin Oo Lwin (စိုပြေ)" },
+];
+
+// 🌟 Database မှ Cities စာရင်းနှင့် Custom Cities ကို ပေါင်းစပ်ခြင်း (ထပ်နေပါက DB အတိုင်းယူမည်)
+const allCities = [
+  ...cities,
+  ...customCities.filter(custom => !cities.some(c => c["C.ID"] === custom["C.ID"]))
+];
+
+const rows = allCities.map(city => {
   const transitOrders = reportData.filter(o => 
     o.transit_to === city["C.ID"] && 
     o.status === 'Delivered' && 
     o.deliver_date === selectedDate
   );
-                  const total = transitOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
-                  const cityDeliFeeSum = transitOrders.reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
-                  const cityAgentTotal = transitOrders.reduce((sum, o) => sum + (Number(o.agent_fee) || 0), 0);
-                  const netDeliFee = cityDeliFeeSum - cityAgentTotal;
-                  const actualTotal = total - cityAgentTotal
 
-                  if (total === 0 && cityDeliFeeSum === 0) return null;
+  const total = transitOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
+  const cityDeliFeeSum = transitOrders.reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
+  const cityAgentTotal = transitOrders.reduce((sum, o) => sum + (Number(o.agent_fee) || 0), 0);
+  const netDeliFee = cityDeliFeeSum - cityAgentTotal;
+  const actualTotal = total - cityAgentTotal;
 
-                  grandTotal += total;
-                  grandAgentDeli += cityAgentTotal;
-                  grandOfficeDeli += netDeliFee;
-                  grandActualTotal += actualTotal;
+  if (total === 0 && cityDeliFeeSum === 0) return null;
 
-                  return (
-                    <tr key={city["C.ID"]} className="hover:bg-blue-50/30 transition-colors">
-                      <td className="px-2 py-1.5 font-semibold text-gray-900 truncate" title={city.name}>👤 {city.name}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-gray-900">{total.toLocaleString()}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-blue-600">{cityAgentTotal.toLocaleString()}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-purple-600">{netDeliFee.toLocaleString()}</td>
-                      <td className={`px-2 py-1.5 text-right font-mono`}> {actualTotal.toLocaleString()} </td>
-                    </tr>
-                  );
-                }).filter(Boolean);
+  grandTotal += total;
+  grandAgentDeli += cityAgentTotal;
+  grandOfficeDeli += netDeliFee;
+  grandActualTotal += actualTotal;
+
+  return (
+    <tr key={city["C.ID"]} className="hover:bg-blue-50/30 transition-colors">
+      <td className="px-2 py-1.5 font-semibold text-gray-900 truncate" title={city.name}>👤 {city.name}</td>
+      <td className="px-2 py-1.5 text-right font-mono text-gray-900">{total.toLocaleString()}</td>
+      <td className="px-2 py-1.5 text-right font-mono text-blue-600">{cityAgentTotal.toLocaleString()}</td>
+      <td className="px-2 py-1.5 text-right font-mono text-purple-600">{netDeliFee.toLocaleString()}</td>
+      <td className="px-2 py-1.5 text-right font-mono">{actualTotal.toLocaleString()}</td>
+    </tr>
+  );
+}).filter(Boolean);
 
                
 

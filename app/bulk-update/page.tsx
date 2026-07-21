@@ -5,6 +5,18 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Scanner } from '@yudiel/react-qr-scanner' // 📸 Camera Scanner Package
 
+// 🌟 Manual ထည့်သွင်းထားသော မြို့များ စာရင်း
+const MANUAL_CITIES = [
+  { id: 'YGN', name: 'ရန်ကုန် (Yangon)' },
+  { id: 'MDY', name: 'မန္တလေး (Mandalay)' },
+  { id: 'NPT', name: 'နေပြည်တော် (Naypyidaw)' },
+  { id: 'TGI', name: 'တောင်ကြီး (Taunggyi)' },
+  { id: 'BGO', name: 'ပဲခူး (Bago)' },
+  { id: 'PYAy', name: 'ပြည် (Pyay)' },
+  { id: 'POL', name: 'ပြင်ဦးလွင် (Pyin Oo Lwin)' },
+  // ➕ မိမိထည့်ချင်သော မြို့များကို ဒီထဲမှာ ဆက်ထည့်နိုင်ပါတယ်
+]
+
 export default function BulkUpdatePage() {
   const router = useRouter()
   const qrInputRef = useRef<HTMLInputElement>(null)
@@ -525,17 +537,19 @@ async function performSearch(query: string) {
               </label>
               <div className="relative">
                 <select value={bulkRiderId} onChange={e => setBulkRiderId(e.target.value)} className={winSelect}>
-                  {bulkStatus === 'In-Transit' ? (
-                    <>
-                      <option value="">City မရွေးချယ်ရသေးပါ...</option>
-                      {cities.map(c => <option key={c["C.ID"]} value={c["C.ID"]}>🌆 {c.name}</option>)}
-                    </>
-                  ) : (
-                    <>
-                      <option value="">Rider မရွေးချယ်ရသေးပါ...</option>
-                      {riders.map(r => <option key={r.id} value={r.id}>🛵 {r.name}</option>)}
-                    </>
-                  )}
+                 {bulkStatus === 'In-Transit' ? (
+  <>
+    <option value="">City မရွေးချယ်ရသေးပါ...</option>
+    {MANUAL_CITIES.map(c => (
+      <option key={c.id} value={c.name}>🌆 {c.name}</option>
+    ))}
+  </>
+) : (
+  <>
+    <option value="">Rider မရွေးချယ်ရသေးပါ...</option>
+    {riders.map(r => <option key={r.id} value={r.id}>🛵 {r.name}</option>)}
+  </>
+)}
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">▼</div>
               </div>
