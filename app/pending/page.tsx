@@ -222,6 +222,7 @@ useEffect(() => {
     .from('orders')
     .select('*')
     .eq('branch', branch)
+    .eq('is_deleted', false)
     // 💡 receiver_name က null ဖြစ်နေတာ သို့မဟုတ် စာလုံးအလွတ် "" ဖြစ်နေတာတွေကိုပဲ ရှာခိုင်းလိုက်တာပါ
     .or('receiver_name.is.null,receiver_name.eq.""') 
     .order('created_at', { ascending: true })

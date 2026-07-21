@@ -226,13 +226,12 @@ const IconUpload = ({ className }: IconProps) => (
   </svg>
 );
 
-// ─── SMART CLIENT-SIDE IMAGE COMPRESSION ENGINE ───
-const compressImage = (file: File, quality: number, maxDimension: number): Promise<File> => {
+const compressImage = (file: File, quality: number = 0.88, maxDimension: number = 1920): Promise<File> => {
   return new Promise((resolve, reject) => {
     
-    // 💡 [Size Guard] ဖိုင်ဆိုဒ်က ၁၃၀ KB ဝန်းကျင်နဲ့ အောက်ပဲရှိရင် ထပ်မချုံ့တော့ဘဲ မူရင်းအတိုင်း လွှတ်ပေးရန်
+    // 💡 [Size Guard] ဖိုင်ဆိုဒ်က ၁၅၀ KB အောက်ပဲရှိရင် မဝါးစေရန် ထပ်မချုံ့တော့ဘဲ မူရင်းအတိုင်း လွှတ်ပေးမည်
     const sizeInKB = file.size / 1024;
-    if (sizeInKB <= 130) {
+    if (sizeInKB <= 150) {
       console.log(`Skipping compression for ${file.name} - Already small enough (${Math.round(sizeInKB)} KB)`);
       return resolve(file);
     }
@@ -247,7 +246,7 @@ const compressImage = (file: File, quality: number, maxDimension: number): Promi
         let width = img.width;
         let height = img.height;
 
-        // Aspect Ratio မပျက်စေဘဲ သတ်မှတ်ထားသည့် Max Dimension သို့ ချုံ့ခြင်း
+        // Aspect Ratio မပျက်စေဘဲ သတ်မှတ်ထားသည့် Max Dimension သို့ ညှိခြင်း
         if (width > height) {
           if (width > maxDimension) {
             height = Math.round((height * maxDimension) / width);
@@ -265,10 +264,14 @@ const compressImage = (file: File, quality: number, maxDimension: number): Promi
         const ctx = canvas.getContext('2d');
         if (!ctx) return resolve(file);
 
+        // 🎨 Image Downscaling ရင်းရှာပ်မှု ပိုမိုကောင်းမွန်စေရန် Smoothing ချိန်ညှိခြင်း
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, width, height);
         
+        // Quality တန်ဖိုးကို အနည်းဆုံး 0.82 အောက် မလျော့စေရန် Safety Floor ထားခြင်း
+        const safeQuality = Math.max(quality, 0.82);
+
         canvas.toBlob(
           (blob) => {
             if (blob) {
@@ -282,7 +285,7 @@ const compressImage = (file: File, quality: number, maxDimension: number): Promi
             }
           },
           'image/jpeg',
-          quality
+          safeQuality
         );
       };
       img.onerror = (err) => reject(err);
@@ -290,6 +293,7 @@ const compressImage = (file: File, quality: number, maxDimension: number): Promi
     reader.onerror = (err) => reject(err);
   });
 };
+
 
 export default function IntakePage() {
   const router = useRouter();
@@ -673,7 +677,7 @@ const capturePhoto = useCallback(async () => {
         setCurrentScannedBarcode('');
       }
     }
-  }, 'image/jpeg', 0.8);
+  }, 'image/jpeg', 1.0);
 }, [intakeMethod, currentScannedBarcode]);
 
   const switchFacingMode = () => setFacingMode(prev => prev === 'environment' ? 'user' : 'environment');
@@ -948,14 +952,19 @@ const capturePhoto = useCallback(async () => {
     }
   };
 
- // 🌟 ဒေတာနှင့် ပုံကို ခွဲမထွက်စေဘဲ Local Queue ထဲ အရင်သိမ်းဆည်းမည့် စနစ်
-  const handleFinalSubmit = async () => {
+const handleFinalSubmit = async () => {
     if (capturedImages.length === 0) return alert('ဓာတ်ပုံ အနည်းဆုံး ၁ ပုံ ရိုက်ပေးပါဗျာ');
     
+    // 🟢 ၁။ အတည်ပြုချက် (Confirmation) တောင်းခံသည့် အပိုင်း ထည့်သွင်းထားပါသည်
+    const isConfirmed = window.confirm('ပါဆယ်မှတ်တမ်းများကို Queue ထဲသို့ သိမ်းဆည်းပြီး တင်ပို့ရန် သေချာပါသလားဗျာ။');
+    
+    // User က Cancel နှိပ်လိုက်ပါက ရှေ့ဆက်မလုပ်ဘဲ ရပ်တန့်မည်
+    if (!isConfirmed) return;
+
     for (const img of capturedImages) {
       const queueItemId = `queue_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       
-      const targetQuality = img.quality === 'HD' ? 0.8 : 0.6;
+      const targetQuality = img.quality === 'HD' ? 0.92 : 0.85;
       const maxDimension = img.quality === 'HD' ? 1920 : 1280;
 
       // 🔍 ၁။ မူရင်း File Size ကို KB ဖြင့် တွက်ထုတ်ခြင်း

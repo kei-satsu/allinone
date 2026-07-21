@@ -436,10 +436,7 @@ async function handleQuickAtOffice(order: any) {
             Refresh
           </button>
 
-          <Link href="/entry" className="bg-orange-500 hover:bg-orange-600 text-white font-medium px-4 py-1.5 rounded-md shadow-sm transition-all flex items-center gap-1.5 text-xs">
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-            New Entry
-          </Link>
+          
         </div>
       </div>
 
@@ -978,14 +975,14 @@ async function handleQuickAtOffice(order: any) {
             <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">📍 Route Information</h4>
             
             <div className="space-y-1">
-              <span className="text-gray-400 text-xs block">Sender (ပို့သူ)</span>
+              <span className="text-gray-400 text-xs block">Sender</span>
               <div className="text-gray-900 font-semibold text-sm break-words">
                 {viewingDetailOrder.sender_name || '-'} <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded ml-1">({viewingDetailOrder.sender_loc || '-'})</span>
               </div>
             </div>
             
             <div className="space-y-1 pt-1">
-              <span className="text-gray-400 text-xs block">Receiver (ယူသူ)</span>
+              <span className="text-gray-400 text-xs block">Receiver</span>
               <div className="text-gray-900 font-semibold text-sm break-words">
                 {viewingDetailOrder.receiver_name || '-'} <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded ml-1">({viewingDetailOrder.receiver_loc || '-'})</span>
               </div>
@@ -1015,7 +1012,7 @@ async function handleQuickAtOffice(order: any) {
               <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200/60 mt-1">
                 <div>
                   <span className="text-gray-400 text-xs block">Transit To</span>
-                  <span className="font-semibold text-gray-800 break-words">{viewingDetailOrder.transit_to || '-'}</span>
+                  <span className="font-semibold text-gray-800 break-words">{viewingDetailOrder.transit_to === "YGN" ? "Yangon" : viewingDetailOrder.transit_to }</span>
                 </div>
                 <div>
                   <span className="text-gray-400 text-xs block">Transit Date</span>
