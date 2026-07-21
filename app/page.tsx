@@ -5,7 +5,7 @@ import Link from 'next/link'
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import BarcodeScannerModal from '@/components/BarcodeScannerModal' 
-import { printVoucher } from '@/utils/print' 
+import { ParcelDetailModal, ParcelOrder } from '@/components/ParcelDetailModal'
 
 export default function Dashboard() {
   const [allOrders, setAllOrders] = useState<any[]>([])
@@ -13,34 +13,30 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
 
   const [isScannerOpen, setIsScannerOpen] = useState(false)
+  const [selectedOrder, setSelectedOrder] = useState<ParcelOrder | null>(null)
 
   // 🟢 Barcode Scan ဖတ်ပြီးပါက Voucher ရှာ၍ Print ထုတ်ပေးမည့် Function
-const handleScanCode = (scannedCode: string) => {
-  setIsScannerOpen(false) // Scanner Modal ကို ပိတ်မည်
-
-  if (!scannedCode) return;
-
-  // 1. Scanned Barcode သို့မဟုတ် Item ID နာမည်ဖြင့် Order ကို ရှာခြင်း
-  const matchedOrder = allOrders.find(
-    (o) =>
-      String(o.item_id).trim() === String(scannedCode).trim() ||
-      String(o.barcode).trim() === String(scannedCode).trim()
-  )
-
-  if (matchedOrder) {
-    // 2. Object တစ်ခုလုံး မပို့ဘဲ ID သို့မဟုတ် Item ID သက်သက်ကိုသာ ပို့ပေးမည်
-    printVoucher(matchedOrder.id || matchedOrder.item_id)
-  } else {
-    alert(`Barcode "${scannedCode}" ဖြင့် ကိုက်ညီသော Order/Voucher မတွေ့ရှိပါ။`)
+  const handleScanCode = (scannedCode: string) => {
+    setIsScannerOpen(false)
+    if (!scannedCode) return;
+    const matchedOrder = allOrders.find(
+      (o) =>
+        String(o.item_id).trim() === String(scannedCode).trim() ||
+        String(o.barcode).trim() === String(scannedCode).trim()
+    )
+    if (matchedOrder) {
+      setSelectedOrder(matchedOrder)
+    } else {
+      alert(`Barcode "${scannedCode}" ဖြင့် ကိုက်ညီသော Order/Voucher မတွေ့ရှိပါ။`)
+    }
   }
-}
 
   // Excel Export စနစ်အတွက် သတ်မှတ်ချက်များ
-const [exportMode, setExportMode] = useState<'all' | 'range'>('all')
-const [startDate, setStartDate] = useState('')
-const [endDate, setEndDate] = useState('')
-const [isExporting, setIsExporting] = useState(false)
-const [exportAllBranches, setExportAllBranches] = useState(true)
+  const [exportMode, setExportMode] = useState<'all' | 'range'>('all')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [isExporting, setIsExporting] = useState(false)
+  const [exportAllBranches, setExportAllBranches] = useState(true)
 
   useEffect(() => {
     const storedBranch = localStorage.getItem('user_branch')
@@ -51,46 +47,45 @@ const [exportAllBranches, setExportAllBranches] = useState(true)
     }
   }, [])
 
- useEffect(() => {
-  async function fetchStats() {
-    setLoading(true)
-    try {
-      let fetchedOrders: any[] = []
-      let page = 0
-      const pageSize = 1000
-      let hasMore = true
+  useEffect(() => {
+    async function fetchStats() {
+      setLoading(true)
+      try {
+        let fetchedOrders: any[] = []
+        let page = 0
+        const pageSize = 1000
+        let hasMore = true
 
-      // ဒေတာ ၁,၀၀၀ မကရှိပါက အကုန်ရအောင် Loop ပတ်ဆွဲထုတ်ခြင်း
-      while (hasMore) {
-        const { data, error } = await supabase
-          .from('orders')
-          .select('*')
-          .range(page * pageSize, (page + 1) * pageSize - 1)
+        while (hasMore) {
+          const { data, error } = await supabase
+            .from('orders')
+            .select('*')
+            .range(page * pageSize, (page + 1) * pageSize - 1)
 
-        if (error) throw error
+          if (error) throw error
 
-        if (data && data.length > 0) {
-          fetchedOrders = [...fetchedOrders, ...data]
-          if (data.length < pageSize) {
-            hasMore = false
+          if (data && data.length > 0) {
+            fetchedOrders = [...fetchedOrders, ...data]
+            if (data.length < pageSize) {
+              hasMore = false
+            } else {
+              page++
+            }
           } else {
-            page++
+            hasMore = false
           }
-        } else {
-          hasMore = false
         }
+
+        setAllOrders(fetchedOrders)
+      } catch (err) {
+        console.error("Error fetching orders:", err)
+      } finally {
+        setLoading(false)
       }
-
-      setAllOrders(fetchedOrders)
-    } catch (err) {
-      console.error("Error fetching orders:", err)
-    } finally {
-      setLoading(false)
     }
-  }
 
-  fetchStats()
-}, [])
+    fetchStats()
+  }, [])
 
   const stats = useMemo(() => {
     if (!userBranch || allOrders.length === 0) {
@@ -106,481 +101,552 @@ const [exportAllBranches, setExportAllBranches] = useState(true)
 
     const filteredRows = userBranch === 'ALL'
       ? allOrders
-      : allOrders.filter(o => o.branch === userBranch )
+      : allOrders.filter(o => o.branch === userBranch)
+
+    const deliveredCount = filteredRows.filter(o => o.status === 'Delivered').length
+    const atOfficeCount = filteredRows.filter(o => o.status === 'At Office').length
+    const pendingCount = filteredRows.filter(o => o.status === 'Pending').length
+    const totalCount = filteredRows.length
 
     return {
-      total: filteredRows.length,
-      atOffice: filteredRows.filter(o => o.status === 'At Office').length,
-      pending: filteredRows.filter(o => o.status === 'Pending').length,
-      delivered: filteredRows.filter(o => o.status === 'Delivered').length,
+      total: totalCount,
+      atOffice: atOfficeCount,
+      pending: pendingCount,
+      delivered: deliveredCount,
+      deliveryRate: totalCount > 0 ? Math.round((deliveredCount / totalCount) * 100) : 0,
       totalCod: filteredRows.reduce((sum, o) => sum + (o.cod_amount || 0), 0),
       unpaidCod: filteredRows
-  .filter(o => o.status !== 'Delivered')
-  .reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0)
+        .filter(o => o.status !== 'Delivered')
+        .reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0)
     }
   }, [userBranch, allOrders])
 
- const handleExportExcel = async () => {
-  setIsExporting(true);
-  try {
-    let allFetchedData: any[] = [];
-    let page = 0;
-    const pageSize = 1000;
-    let hasMore = true;
+  const handleExportExcel = async () => {
+    setIsExporting(true);
+    try {
+      let allFetchedData: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
 
-    // ရက်စွဲ Filter သတ်မှတ်ချက် ကြိုတင်ပြင်ဆင်ခြင်း
-    let fromDate = "";
-    let toDate = "";
-    if (exportMode === 'range') {
-      if (!startDate || !endDate) {
-        alert('ကျေးဇူးပြု၍ စတင်မည့်ရက်နှင့် ဆုံးမည့်ရက်ကို ပြည့်စုံစွာ ရွေးချယ်ပေးပါ။');
-        setIsExporting(false);
-        return;
-      }
-      fromDate = `${startDate}T00:00:00`;
-      toDate = `${endDate}T23:59:59`;
-    }
-
-    // 🔄 ဒေတာကုန်သည်အထိ Loop ပတ်ပြီး ဆွဲထုတ်ခြင်း
-    while (hasMore) {
-      let query = supabase
-        .from('orders')
-        .select(`
-          *,
-          pickup_rider:riders!pickup_rider_id(name),
-          deliver_rider:riders!deliver_rider_id(name)
-        `)
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
+      let fromDate = "";
+      let toDate = "";
       if (exportMode === 'range') {
-        query = query.gte('received_date', fromDate).lte('received_date', toDate);
+        if (!startDate || !endDate) {
+          alert('ကျေးဇူးပြု၍ စတင်မည့်ရက်နှင့် ဆုံးမည့်ရက်ကို ပြည့်စုံစွာ ရွေးချယ်ပေးပါ။');
+          setIsExporting(false);
+          return;
+        }
+        fromDate = `${startDate}T00:00:00`;
+        toDate = `${endDate}T23:59:59`;
       }
 
-      if (!exportAllBranches && userBranch && userBranch !== 'ALL') {
-        query = query.eq('branch', userBranch);
-      }
+      while (hasMore) {
+        let query = supabase
+          .from('orders')
+          .select(`
+            *,
+            pickup_rider:riders!pickup_rider_id(name),
+            deliver_rider:riders!deliver_rider_id(name)
+          `)
+          .range(page * pageSize, (page + 1) * pageSize - 1);
 
-      const { data, error } = await query;
+        if (exportMode === 'range') {
+          query = query.gte('received_date', fromDate).lte('received_date', toDate);
+        }
 
-      if (error) {
-        throw new Error(`Supabase Query Error: ${error.message}`);
-      }
+        if (!exportAllBranches && userBranch && userBranch !== 'ALL') {
+          query = query.eq('branch', userBranch);
+        }
 
-      if (!data || data.length === 0) {
-        hasMore = false;
-      } else {
-        allFetchedData = [...allFetchedData, ...data];
-        if (data.length < pageSize) {
+        const { data, error } = await query;
+
+        if (error) {
+          throw new Error(`Supabase Query Error: ${error.message}`);
+        }
+
+        if (!data || data.length === 0) {
           hasMore = false;
         } else {
-          page++;
+          allFetchedData = [...allFetchedData, ...data];
+          if (data.length < pageSize) {
+            hasMore = false;
+          } else {
+            page++;
+          }
         }
       }
-    }
 
-    if (allFetchedData.length === 0) {
-      alert('ရွေးချယ်ထားသော သတ်မှတ်ချက်အတိုင်း ထုတ်ယူရန် စာရင်းမရှိပါ။');
-      return;
-    }
+      if (allFetchedData.length === 0) {
+        alert('ရွေးချယ်ထားသော သတ်မှတ်ချက်အတိုင်း ထုတ်ယူရန် စာရင်းမရှိပါ။');
+        return;
+      }
 
-    // ၂။ Branch Filter
-    let finalData = allFetchedData;
-    if (!exportAllBranches && userBranch && userBranch !== 'ALL') {
-      finalData = allFetchedData.filter(o => o.branch === userBranch);
-    }
+      let finalData = allFetchedData;
+      if (!exportAllBranches && userBranch && userBranch !== 'ALL') {
+        finalData = allFetchedData.filter(o => o.branch === userBranch);
+      }
 
-    if (finalData.length === 0) {
-      alert('ရွေးချယ်ထားသော Branch အတွက် ထုတ်ယူရန် စာရင်းမရှိပါ။');
-      return;
-    }
+      if (finalData.length === 0) {
+        alert('ရွေးချယ်ထားသော Branch အတွက် ထုတ်ယူရန် စာရင်းမရှိပါ။');
+        return;
+      }
 
-    // ၃။ Excel Headers ပုံစံပြောင်းခြင်း
-    const formattedData = finalData.map(order => ({
-      'Item ID': order.item_id || order.id || '-',
-      'Received Date': order.received_date ? order.received_date.split('T')[0] : '-',
-      'Sender Name': order.sender_name || '-',
-      'Sender Location': order.sender_loc || '-',
-      'Receiver Name': order.receiver_name || '-',
-      'Receiver Phone': order.receiver_phone || '-',
-      'Receiver Address': order.receiver_address || '-',
-      'Receiver Location': order.receiver_loc || '-',
-      'COD Amount': Number(order.cod_amount) || 0,
-      'Deli Fee': Number(order.deli_fee) || 0,
-      'Fee Type': order.fee_type || '-',
-      'Total Amount': Number(order.total_amount) || 0,
-      'Pickup Rider': order.pickup_rider?.name || '-',
-      'Status': order.status || '-',
-      'Deliver Rider': order.deliver_rider?.name || '-',
-      'Deliver Date' : order.deliver_date ? order.deliver_date.split('T')[0] : '-',
-      'Note': order.note || '-',
-      'Cleared Date': order.cleared_date ? order.cleared_date.split('T')[0] : '-',
-    }));
+      const formattedData = finalData.map(order => ({
+        'Item ID': order.item_id || order.id || '-',
+        'Received Date': order.received_date ? order.received_date.split('T')[0] : '-',
+        'Sender Name': order.sender_name || '-',
+        'Sender Location': order.sender_loc || '-',
+        'Receiver Name': order.receiver_name || '-',
+        'Receiver Phone': order.receiver_phone || '-',
+        'Receiver Address': order.receiver_address || '-',
+        'Receiver Location': order.receiver_loc || '-',
+        'COD Amount': Number(order.cod_amount) || 0,
+        'Deli Fee': Number(order.deli_fee) || 0,
+        'Fee Type': order.fee_type || '-',
+        'Total Amount': Number(order.total_amount) || 0,
+        'Pickup Rider': order.pickup_rider?.name || '-',
+        'Status': order.status || '-',
+        'Deliver Rider': order.deliver_rider?.name || '-',
+        'Deliver Date': order.deliver_date ? order.deliver_date.split('T')[0] : '-',
+        'Note': order.note || '-',
+        'Cleared Date': order.cleared_date ? order.cleared_date.split('T')[0] : '-',
+      }));
 
-    // 🟢 ၄။ ExcelJS ဖြင့် Official Table Format ဖန်တီးခြင်း
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Orders_Report');
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Orders_Report');
 
-    // Table ရဲ့ Headers များနှင့် Rows ဒေတာများကို ခွဲထုတ်ခြင်း
-    const tableColumns = Object.keys(formattedData[0]).map(key => ({
-      name: key,
-      filterButton: true // Auto-filter Dropdown ပါဝင်စေရန်
-    }));
-    
-    const tableRows = formattedData.map(item => Object.values(item));
+      const tableColumns = Object.keys(formattedData[0]).map(key => ({
+        name: key,
+        filterButton: true
+      }));
 
-    // Native Excel Table ထည့်သွင်းခြင်း (Ctrl + T Format)
-    worksheet.addTable({
-      name: 'OrdersTable',
-      ref: 'A1',
-      headerRow: true,
-      totalsRow: false,
-      style: {
-        theme: 'TableStyleMedium2', // သေသပ်လှပသော Emerald/Blue Style Theme
-        showRowStripes: true,       // စာကြောင်းတစ်ကြောင်းကျော် အရောင်အမှောင်စနစ် (Zebra Stripes)
-      },
-      columns: tableColumns,
-      rows: tableRows,
-    });
+      const tableRows = formattedData.map(item => Object.values(item));
 
-   // 🟢 ၅။ Column Width ကို Auto-fit ပုံစံစနစ်တကျ ညှိခြင်း
-    // worksheet.columns ရှိမရှိ သေချာအောင် if structure ဖြင့် အုပ်ပေးထားပါတယ်
-    if (worksheet.columns) {
-      worksheet.columns.forEach(column => {
-        let maxLen = 0;
-        // eachCell function ရှိမရှိ ?. (Optional Chaining) ဖြင့် ထပ်မံစစ်ဆေးပါတယ်
-        column.eachCell?.({ includeEmpty: true }, cell => {
-          const valLen = cell.value ? cell.value.toString().length : 0;
-          if (valLen > maxLen) maxLen = valLen;
-        });
-        column.width = Math.max(maxLen + 3, 5);
+      worksheet.addTable({
+        name: 'OrdersTable',
+        ref: 'A1',
+        headerRow: true,
+        totalsRow: false,
+        style: {
+          theme: 'TableStyleMedium2',
+          showRowStripes: true,
+        },
+        columns: tableColumns,
+        rows: tableRows,
       });
+
+      if (worksheet.columns) {
+        worksheet.columns.forEach(column => {
+          let maxLen = 0;
+          column.eachCell?.({ includeEmpty: true }, cell => {
+            const valLen = cell.value ? cell.value.toString().length : 0;
+            if (valLen > maxLen) maxLen = valLen;
+          });
+          column.width = Math.max(maxLen + 3, 5);
+        });
+      }
+
+      const buffer = await workbook.xlsx.writeBuffer();
+
+      const branchLabel = exportAllBranches ? 'All_Branches' : `Branch_${userBranch}`;
+      const fileName = exportMode === 'range'
+        ? `Orders_${startDate}_to_${endDate}_(${branchLabel}).xlsx`
+        : `Orders_All_Records_(${branchLabel}).xlsx`;
+
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+      if (typeof saveAs === 'function') {
+        saveAs(blob, fileName);
+      } else {
+        (saveAs as any)(blob, fileName);
+      }
+
+    } catch (err: any) {
+      console.error('Export error details:', err);
+      alert(`Excel Table ထုတ်ယူရာတွင် အမှားအယွင်းရှိခဲ့သည်:\n${err.message || err}`);
+    } finally {
+      setIsExporting(false);
     }
+  };
 
-    // ၆။ ဖိုင်အဖြစ် ထုတ်ယူပြီး ဒေါင်းလုဒ်ချခြင်း
-    const buffer = await workbook.xlsx.writeBuffer();
-    
-    const branchLabel = exportAllBranches ? 'All_Branches' : `Branch_${userBranch}`;
-    const fileName = exportMode === 'range' 
-      ? `Orders_${startDate}_to_${endDate}_(${branchLabel}).xlsx` 
-      : `Orders_All_Records_(${branchLabel}).xlsx`;
-
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    
-    // saveAs က အကြောင်းအမျိုးမျိုးကြောင့် undefined ဖြစ်မနေစေရန် Type Casting (as any) သုံးပြီး လုံခြုံစွာ ခေါ်ယူခြင်း
-    if (typeof saveAs === 'function') {
-      saveAs(blob, fileName);
-    } else {
-      (saveAs as any)(blob, fileName);
-    }
-
-  } catch (err: any) {
-    console.error('Export error details:', err);
-    alert(`Excel Table ထုတ်ယူရာတွင် အမှားအယွင်းရှိခဲ့သည်:\n${err.message || err}`);
-  } finally {
-    setIsExporting(false);
-  }
-};
-  // iOS Custom Smooth Card Style Macro
-  const iosCardClass = "bg-white/80 backdrop-blur-md border border-slate-200/40 rounded-[24px] p-5 shadow-[0_8px_32px_rgba(15,23,42,0.03)] transition-all duration-300"
-
+  // ──────────────────────────────────────────────
+  // 🎨 PREMIUM REDESIGNED UI — "Luxe Sapphire"
+  // ──────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#f4f6f9] text-slate-800 antialiased font-sans select-none pb-24 md:pb-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 text-slate-800 antialiased font-sans select-none pb-24 md:pb-8">
       
-      {/* 🧭 iOS Minimal Header Top Bar */}
-      <div className="bg-white/70 backdrop-blur-xl border-b border-slate-200/40 px-5 py-4 flex items-center justify-between sticky top-0 z-40 shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
-        <div className="flex items-center gap-3">
-          <img
-            src="/logo.png" 
-            alt="All In One Express Logo"
-            className="w-8 h-8 object-contain rounded-xl shadow-sm border border-slate-100"
-          />
-          <div className="flex flex-col">
-            <span className="text-slate-900 text-[16px] font-black tracking-tight uppercase">ALL IN ONE Express</span>
-            <span className="text-[10px] text-slate-400 font-bold tracking-wider uppercase -mt-0.5"></span>
+      {/* ── 🧭 Ultra-Premium Header with Glassmorphism ── */}
+      <header className="sticky top-0 z-50 backdrop-blur-2xl bg-white/60 border-b border-slate-200/40 shadow-[0_1px_0_rgba(0,0,0,0.02),0_4px_24px_rgba(0,0,0,0.03)]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between">
+          <div className="flex items-center gap-3.5">
+            <div className="relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl blur-md opacity-40" />
+              <img
+                src="/logo.png" 
+                alt="All In One Express Logo"
+                className="relative w-9 h-9 object-contain rounded-2xl shadow-lg border border-white/80 ring-1 ring-slate-900/5"
+              />
+            </div>
+            <div className="hidden sm:flex flex-col">
+              <span className="text-slate-900 text-[15px] font-black tracking-tight leading-tight">ALL IN ONE</span>
+              <span className="text-[10px] text-slate-400 font-bold tracking-[0.2em] uppercase leading-tight">Express System</span>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            {/* Branch Badge */}
+            <div className="hidden sm:flex items-center gap-2.5 bg-slate-100/80 backdrop-blur-sm border border-slate-200/50 px-4 py-2 rounded-2xl text-[11px] font-bold text-slate-600 shadow-inner">
+              <span className={`relative flex h-2.5 w-2.5`}>
+                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${userBranch ? 'bg-emerald-400' : 'bg-slate-300'} opacity-75`} />
+                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${userBranch ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+              </span>
+              <span className="tracking-wider">{userBranch ? `BRANCH: ${userBranch}` : 'LOADING...'}</span>
+            </div>
+            {/* Mobile Branch */}
+            <div className="sm:hidden flex items-center gap-2 bg-slate-100/80 border border-slate-200/50 px-3 py-1.5 rounded-full text-[10px] font-bold text-slate-500">
+              <span className={`w-1.5 h-1.5 rounded-full ${userBranch ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+              {userBranch || '...'}
+            </div>
           </div>
         </div>
-        
-        {/* Branch Capsule Badge */}
-        <div className="flex items-center gap-2 bg-slate-100/80 border border-slate-200/30 px-3 py-1.5 rounded-full text-[11px] font-bold text-slate-600 shadow-inner">
-          <span className={`w-1.5 h-1.5 rounded-full ${userBranch ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
-          {userBranch ? `BRANCH: ${userBranch}` : 'LOADING...'}
-        </div>
-      </div>
+      </header>
 
-      {/* ── Main Canvas Content ── */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+      {/* ── Main Content ── */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
         
         {loading ? (
-          /* Premium Shimmer Skeleton Loading */
-          <div className="space-y-6 animate-pulse">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {[...Array(3)].map((_, i) => <div key={i} className="h-20 bg-white rounded-[20px] border border-slate-100" />)}
+          /* ✨ Premium Shimmer Skeleton */
+          <div className="space-y-8 animate-pulse">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-32 bg-white/60 rounded-3xl border border-slate-100" />
+              ))}
             </div>
-            <div className="h-6 w-32 bg-slate-200 rounded-full" />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[...Array(4)].map((_, i) => <div key={i} className="h-28 bg-white rounded-[24px]" />)}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-20 bg-white/60 rounded-2xl border border-slate-100" />
+              ))}
             </div>
-            <div className="h-32 bg-white rounded-[24px]" />
+            <div className="h-48 bg-white/60 rounded-3xl border border-slate-100" />
           </div>
         ) : (
           <>
-            {/* 📱💻 iOS App Shortcuts Layout (Quick Links) */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-
-              {/* 🟢 အသစ်ထည့်သွင်းသော Scan & Print Button */}
-  <button
-    onClick={() => setIsScannerOpen(true)}
-    className="bg-white border border-slate-200/50 rounded-[20px] p-4 hover:border-emerald-500/40 hover:shadow-[0_12px_30px_rgba(16,185,129,0.08)] transition-all duration-300 flex items-center gap-3.5 group cursor-pointer active:scale-[0.98] text-left"
-  >
-    <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-all duration-300 shadow-sm">
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM14.625 3.75c-.621 0-1.125.504-1.125 1.125v4.5c0 .621.504 1.125 1.125 1.125h4.5c.621 0 1.125-.504 1.125-1.125v-4.5c0-.621-.504-1.125-1.125-1.125h-4.5zM14.625 14.625c-.621 0-1.125.504-1.125 1.125v4.5c0 .621.504 1.125 1.125 1.125h4.5c.621 0 1.125-.504 1.125-1.125v-4.5c0-.621-.504-1.125-1.125-1.125h-4.5z" />
-      </svg>
-    </div>
-    <div>
-      <h3 className="text-xs font-bold text-slate-800 tracking-tight transition-colors group-hover:text-emerald-600">Scan & Print</h3>
-      <p className="text-[11px] text-slate-400 font-medium mt-0.5">ဘောက်ချာ Scan ဖတ်၍ Print ရန်</p>
-    </div>
-  </button>
-              
-              {/* Shortcut: New Entry */}
-              <Link href="/entry" className="bg-white border border-slate-200/50 rounded-[20px] p-4 hover:border-orange-500/40 hover:shadow-[0_12px_30px_rgba(249,115,22,0.08)] transition-all duration-300 flex items-center gap-3.5 group cursor-pointer active:scale-[0.98]">
-                <div className="w-11 h-11 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center group-hover:bg-orange-500 group-hover:text-white transition-all duration-300 shadow-sm">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.852l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+            {/* ── 🚀 Quick Actions Grid (Refined iOS-Style) ── */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {/* Scan & Print */}
+              <button
+                onClick={() => setIsScannerOpen(true)}
+                className="group relative bg-white border border-slate-200/40 rounded-[28px] p-5 hover:border-emerald-300/60 hover:shadow-[0_16px_40px_rgba(16,185,129,0.1)] transition-all duration-500 flex flex-col items-center text-center gap-3 active:scale-[0.97] overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-b from-emerald-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[28px]" />
+                <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center shadow-lg shadow-emerald-500/25 group-hover:shadow-emerald-500/40 group-hover:scale-105 transition-all duration-300">
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM14.625 3.75c-.621 0-1.125.504-1.125 1.125v4.5c0 .621.504 1.125 1.125 1.125h4.5c.621 0 1.125-.504 1.125-1.125v-4.5c0-.621-.504-1.125-1.125-1.125h-4.5zM14.625 14.625c-.621 0-1.125.504-1.125 1.125v4.5c0 .621.504 1.125 1.125 1.125h4.5c.621 0 1.125-.504 1.125-1.125v-4.5c0-.621-.504-1.125-1.125-1.125h-4.5z" />
                   </svg>
                 </div>
-                <div>
-                  <h3 className="text-xs font-bold text-slate-800 tracking-tight transition-colors group-hover:text-orange-600">New Entry</h3>
+                <div className="relative">
+                  <h3 className="text-sm font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">Scan to Search</h3>
+                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">အချက်အလက်ရှာဖွေရန်</p>
+                </div>
+              </button>
+
+              {/* New Entry */}
+              <Link href="/entry" className="group relative bg-white border border-slate-200/40 rounded-[28px] p-5 hover:border-orange-300/60 hover:shadow-[0_16px_40px_rgba(249,115,22,0.1)] transition-all duration-500 flex flex-col items-center text-center gap-3 active:scale-[0.97] overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-b from-orange-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[28px]" />
+                <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 text-white flex items-center justify-center shadow-lg shadow-orange-500/25 group-hover:shadow-orange-500/40 group-hover:scale-105 transition-all duration-300">
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                </div>
+                <div className="relative">
+                  <h3 className="text-sm font-bold text-slate-800 group-hover:text-orange-700 transition-colors">New Entry</h3>
                   <p className="text-[11px] text-slate-400 font-medium mt-0.5">အော်ဒါအသစ်သွင်းရန်</p>
                 </div>
               </Link>
 
-              {/* Shortcut: Order List */}
-              <Link href="/list" className="bg-white border border-slate-200/50 rounded-[20px] p-4 hover:border-orange-500/40 hover:shadow-[0_12px_30px_rgba(249,115,22,0.08)] transition-all duration-300 flex items-center gap-3.5 group cursor-pointer active:scale-[0.98]">
-                <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center group-hover:bg-blue-500 group-hover:text-white transition-all duration-300 shadow-sm">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+              {/* Order List */}
+              <Link href="/list" className="group relative bg-white border border-slate-200/40 rounded-[28px] p-5 hover:border-blue-300/60 hover:shadow-[0_16px_40px_rgba(59,130,246,0.1)] transition-all duration-500 flex flex-col items-center text-center gap-3 active:scale-[0.97] overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-b from-blue-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[28px]" />
+                <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-400 to-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/25 group-hover:shadow-blue-500/40 group-hover:scale-105 transition-all duration-300">
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                   </svg>
                 </div>
-                <div>
-                  <h3 className="text-xs font-bold text-slate-800 tracking-tight transition-colors group-hover:text-orange-600">Order List</h3>
+                <div className="relative">
+                  <h3 className="text-sm font-bold text-slate-800 group-hover:text-blue-700 transition-colors">Order List</h3>
                   <p className="text-[11px] text-slate-400 font-medium mt-0.5">စာရင်းများစစ်ဆေးရန်</p>
                 </div>
               </Link>
 
-              {/* Shortcut: Riders */}
-              <Link href="/riders" className="bg-white border border-slate-200/50 rounded-[20px] p-4 hover:border-orange-500/40 hover:shadow-[0_12px_30px_rgba(249,115,22,0.08)] transition-all duration-300 flex items-center gap-3.5 group cursor-pointer active:scale-[0.98]">
-                <div className="w-11 h-11 rounded-xl bg-purple-50 text-purple-500 flex items-center justify-center group-hover:bg-purple-500 group-hover:text-white transition-all duration-300 shadow-sm">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+              {/* Riders */}
+              <Link href="/riders" className="group relative bg-white border border-slate-200/40 rounded-[28px] p-5 hover:border-purple-300/60 hover:shadow-[0_16px_40px_rgba(147,51,234,0.1)] transition-all duration-500 flex flex-col items-center text-center gap-3 active:scale-[0.97] overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-b from-purple-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[28px]" />
+                <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-400 to-purple-600 text-white flex items-center justify-center shadow-lg shadow-purple-500/25 group-hover:shadow-purple-500/40 group-hover:scale-105 transition-all duration-300">
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
                 </div>
-                <div>
-                  <h3 className="text-xs font-bold text-slate-800 tracking-tight transition-colors group-hover:text-orange-600">Riders</h3>
+                <div className="relative">
+                  <h3 className="text-sm font-bold text-slate-800 group-hover:text-purple-700 transition-colors">Riders</h3>
                   <p className="text-[11px] text-slate-400 font-medium mt-0.5">Rider များစီမံခန့်ခွဲရန်</p>
                 </div>
               </Link>
             </div>
 
-           <div className="bg-white/80 backdrop-blur-md border border-slate-200/50 rounded-[24px] p-6 shadow-[0_8px_32px_rgba(15,23,42,0.02)] space-y-4">
-  <div className="flex items-center gap-2">
-    <div className="w-2 h-4 bg-emerald-500 rounded-full" />
-    <h4 className="text-[12px] font-extrabold text-slate-700 uppercase tracking-wider">Excel စာရင်းထုတ်ယူခြင်းစနစ် (Data Export)</h4>
-  </div>
-
-  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-    {/* Mode Selector */}
-    <div className="flex flex-col gap-1.5">
-      <label className="text-[11px] font-bold text-slate-400 uppercase">Export ပုံစံ</label>
-      <div className="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-xl">
-        <button
-          type="button"
-          onClick={() => setExportMode('all')}
-          className={`py-1.5 text-xs font-bold rounded-lg transition-all ${exportMode === 'all' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-        >
-          စာရင်းအားလုံး
-        </button>
-        <button
-          type="button"
-          onClick={() => setExportMode('range')}
-          className={`py-1.5 text-xs font-bold rounded-lg transition-all ${exportMode === 'range' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-        >
-          ရက်စွဲအလိုက်
-        </button>
-      </div>
-    </div>
-
-    {/* Date Picker Range inputs */}
-    {exportMode === 'range' ? (
-      <div className="md:col-span-2 grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-left-2 duration-200">
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[11px] font-bold text-slate-400 uppercase">မှ (From Date)</label>
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-emerald-500 transition-colors w-full"
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[11px] font-bold text-slate-400 uppercase">ထိ (To Date)</label>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-medium text-slate-700 focus:outline-none focus:border-emerald-500 transition-colors w-full"
-          />
-        </div>
-      </div>
-    ) : (
-      <div className="md:col-span-2 text-slate-400 text-xs font-medium pb-2 italic">
-        * လက်ရှိ ဒေတာဘေ့စ်တွင် ရှိသမျှ Orders စာရင်းများကို စစ်ထုတ်၍ ဖိုင်ထုတ်ပေးမည်ဖြစ်သည်။
-      </div>
-    )}
-  </div>
-
-  {/* 🟢 ဖြည့်စွက်ထားသော Branch Filter Switch အပိုင်း */}
-  {userBranch && userBranch !== 'ALL' && (
-    <div className="pt-3 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3 animate-in fade-in duration-200">
-      <div className="flex flex-col gap-0.5">
-        <span className="text-xs font-bold text-slate-700">ထုတ်ယူမည့် Branch နယ်ပယ်</span>
-        <span className="text-[11px] text-slate-400 font-medium">
-          {exportAllBranches ? 'တစ်နိုင်ငံလုံးရှိ Branch အားလုံး၏ ဒေတာများကို ရယူပါမည်။' : `လက်ရှိ ${userBranch} Branch ဒေတာတစ်ခုတည်းကိုသာ ရယူပါမည်။`}
-        </span>
-      </div>
-      
-      {/* iOS Styled Segment Switch */}
-      <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/50 self-start md:self-auto">
-        <button
-          type="button"
-          onClick={() => setExportAllBranches(false)}
-          className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${!exportAllBranches ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-        >
-          {userBranch} သီးသန့်
-        </button>
-        <button
-          type="button"
-          onClick={() => setExportAllBranches(true)}
-          className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${exportAllBranches ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-        >
-          Branch အားလုံး
-        </button>
-      </div>
-    </div>
-  )}
-
-  {/* Action Submit Button */}
-  <div className="pt-3 border-t border-slate-100 flex justify-end">
-    <button
-      onClick={handleExportExcel}
-      disabled={isExporting}
-      className={`w-full md:w-auto px-6 py-2.5 rounded-xl font-bold text-xs text-white transition-all shadow-sm flex items-center justify-center gap-2 ${
-        isExporting 
-          ? 'bg-slate-400 cursor-not-allowed' 
-          : 'bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98]'
-      }`}
-    >
-      {isExporting ? (
-        <>
-          <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-          </svg>
-          ဖိုင်ထုတ်နေသည်...
-        </>
-      ) : (
-        <>
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.3}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          Excel (.xlsx) ထုတ်ယူမည်
-        </>
-      )}
-    </button>
-  </div>
-</div>
-
-            {/* 📈 iOS Styled Section Title */}
-            <div className="flex items-center gap-3 pt-2">
-              <span className="text-slate-400 font-bold text-[11px] uppercase tracking-widest block">
-                STATISTICS {userBranch !== 'ALL' ? `• ${userBranch}` : '• ALL BRANCHES'}
-              </span>
-              <div className="flex-1 border-t border-slate-200/60" />
-            </div>
-
-            {/* 📊 iOS Dashboard Statistics Widgets Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              
-              {/* Card: Total */}
-              <div className={iosCardClass}>
-                <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider block">Total</span>
-                <div className="flex items-baseline gap-1 mt-2">
-                  <span className="text-3xl font-black tracking-tight text-slate-900">{stats.total}</span>
-                  <span className="text-[11px] text-slate-400 font-bold uppercase">Items</span>
-                </div>
+            {/* ── 📊 Statistics Section ── */}
+            <section>
+              <div className="flex items-center gap-3 mb-5">
+                <div className="h-8 w-1.5 bg-gradient-to-b from-blue-500 to-indigo-600 rounded-full" />
+                <h2 className="text-sm font-extrabold text-slate-700 uppercase tracking-[0.2em]">
+                  Overview {userBranch !== 'ALL' ? `• ${userBranch}` : '• All Branches'}
+                </h2>
+                <div className="flex-1 border-t border-slate-200/60" />
               </div>
 
-              {/* Card: At Office */}
-              <div className={`${iosCardClass} bg-amber-50/50 border-amber-200/40`}>
-                <span className="text-[11px] font-extrabold text-amber-600 uppercase tracking-wider block">At Office</span>
-                <div className="flex items-baseline gap-1 mt-2">
-                  <span className="text-3xl font-black tracking-tight text-amber-700">{stats.atOffice}</span>
-                  <span className="text-[11px] text-amber-500 font-bold uppercase">Stored</span>
-                </div>
-              </div>
-
-              {/* Card: Pending */}
-              <div className={`${iosCardClass} bg-sky-50/40 border-sky-200/40`}>
-                <span className="text-[11px] font-extrabold text-sky-600 uppercase tracking-wider block">Pending</span>
-                <div className="flex items-baseline gap-1 mt-2">
-                  <span className="text-3xl font-black tracking-tight text-sky-700">{stats.pending}</span>
-                  <span className="text-[11px] text-sky-500 font-bold uppercase">Out</span>
-                </div>
-              </div>
-
-              {/* Card: Delivered */}
-              <div className={`${iosCardClass} bg-emerald-50/50 border-emerald-200/40`}>
-                <span className="text-[11px] font-extrabold text-emerald-600 uppercase tracking-wider block">Delivered</span>
-                <div className="flex items-baseline gap-1 mt-2">
-                  <span className="text-3xl font-black tracking-tight text-emerald-700">{stats.delivered}</span>
-                  <span className="text-[11px] text-emerald-500 font-bold uppercase">Done</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 💰 Premium Financial Warning Widget (Unpaid COD) */}
-            <div className="bg-white/80 backdrop-blur-md border border-rose-100 rounded-[24px] p-6 shadow-[0_12px_40px_rgba(225,29,72,0.04)] relative overflow-hidden group">
-              {/* Background abstract decoration for native look */}
-              <div className="absolute right-0 top-0 w-24 h-full bg-gradient-to-l from-rose-50/50 to-transparent pointer-events-none" />
-              
-              <div className="flex justify-between items-start relative z-10">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-                    <h4 className="text-[11px] font-extrabold text-rose-600 uppercase tracking-wider">မရသေးသောငွေ (UNPAID COD)</h4>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Total */}
+                <div className="group bg-white border border-slate-200/40 rounded-[24px] p-5 hover:shadow-[0_12px_40px_rgba(15,23,42,0.06)] transition-all duration-300 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-slate-100/60 to-transparent rounded-bl-[40px] -mr-2 -mt-2" />
+                  <div className="relative z-10">
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center mb-3">
+                      <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m8.25 3v6.75m0 0l-3-3m3 3l3-3M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                      </svg>
+                    </div>
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Orders</span>
+                    <p className="text-3xl font-black text-slate-900 mt-1 tracking-tight">{stats.total.toLocaleString()}</p>
                   </div>
-                  <p className="text-3xl font-black tracking-tight text-rose-600 pt-1">
-                    {stats.unpaidCod.toLocaleString()} <span className="text-sm font-bold text-rose-500 font-mono">MMK</span>
+                </div>
+
+                {/* At Office */}
+                <div className="group bg-amber-50/60 border border-amber-200/40 rounded-[24px] p-5 hover:shadow-[0_12px_40px_rgba(245,158,11,0.1)] transition-all duration-300 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-amber-100/60 to-transparent rounded-bl-[40px] -mr-2 -mt-2" />
+                  <div className="relative z-10">
+                    <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center mb-3">
+                      <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+                      </svg>
+                    </div>
+                    <span className="text-[11px] font-bold text-amber-500 uppercase tracking-wider">At Office</span>
+                    <p className="text-3xl font-black text-amber-700 mt-1 tracking-tight">{stats.atOffice.toLocaleString()}</p>
+                  </div>
+                </div>
+
+                {/* Pending / In Transit */}
+                <div className="group bg-sky-50/60 border border-sky-200/40 rounded-[24px] p-5 hover:shadow-[0_12px_40px_rgba(14,165,233,0.1)] transition-all duration-300 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-sky-100/60 to-transparent rounded-bl-[40px] -mr-2 -mt-2" />
+                  <div className="relative z-10">
+                    <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center mb-3">
+                      <svg className="w-5 h-5 text-sky-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+                      </svg>
+                    </div>
+                    <span className="text-[11px] font-bold text-sky-500 uppercase tracking-wider">Pending</span>
+                    <p className="text-3xl font-black text-sky-700 mt-1 tracking-tight">{stats.pending.toLocaleString()}</p>
+                  </div>
+                </div>
+
+                {/* Delivered */}
+                <div className="group bg-emerald-50/60 border border-emerald-200/40 rounded-[24px] p-5 hover:shadow-[0_12px_40px_rgba(16,185,129,0.1)] transition-all duration-300 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-emerald-100/60 to-transparent rounded-bl-[40px] -mr-2 -mt-2" />
+                  <div className="relative z-10">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center mb-3">
+                      <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <span className="text-[11px] font-bold text-emerald-500 uppercase tracking-wider">Delivered</span>
+                    <div className="flex items-baseline gap-2 mt-1">
+                      <p className="text-3xl font-black text-emerald-700 tracking-tight">{stats.delivered.toLocaleString()}</p>
+                      <span className="text-xs font-bold text-emerald-400 bg-emerald-100 px-2 py-0.5 rounded-full">{stats.deliveryRate}%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Progress Bar for Delivery Rate */}
+              <div className="mt-4 bg-white border border-slate-200/40 rounded-2xl p-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Delivery Progress</span>
+                  <span className="text-[11px] font-extrabold text-emerald-600">{stats.deliveryRate}% Complete</span>
+                </div>
+                <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 rounded-full transition-all duration-1000 ease-out"
+                    style={{ width: `${stats.deliveryRate}%` }}
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* ── 💰 Financial Card (Unpaid COD) ── */}
+            <div className="relative bg-gradient-to-br from-white via-white to-rose-50/30 border border-rose-200/40 rounded-[28px] p-6 shadow-[0_8px_40px_rgba(225,29,72,0.04)] overflow-hidden group">
+              <div className="absolute right-0 top-0 w-40 h-full bg-gradient-to-l from-rose-50/40 to-transparent pointer-events-none rounded-r-[28px]" />
+              <div className="absolute -right-8 -top-8 w-32 h-32 bg-rose-100/40 rounded-full blur-2xl" />
+              
+              <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                    <h4 className="text-[11px] font-extrabold text-rose-600 uppercase tracking-wider">မရသေးသောငွေ • Unpaid COD</h4>
+                  </div>
+                  <p className="text-4xl font-black tracking-tight text-rose-600">
+                    {stats.unpaidCod.toLocaleString()} 
+                    <span className="text-lg font-bold text-rose-400 ml-2">MMK</span>
+                  </p>
+                  <p className="text-xs text-slate-400 font-medium max-w-md">
+                    * Rider များထံမှ ရုံးခန်းသို့ ငွေလည်ပတ် မပြီးဆောင်းသေးသော စုစုပေါင်းငွေ ဖြစ်ပါသည်။
                   </p>
                 </div>
                 
-                {/* Minimal iOS Styled Alert Badge */}
-                <div className="w-10 h-10 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-500 shadow-sm">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                <div className="w-14 h-14 rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-500 shadow-inner shrink-0">
+                  <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
                 </div>
               </div>
-              
-              <p className="text-xs text-slate-400 font-medium mt-3.5 border-t border-slate-100 pt-3">
-                * Rider များထံမှ ရုံးခန်းသို့ ငွေလည်ပတ် မပြီးဆောင်းသေးသော စုစုပေါင်းငွေ ဖြစ်ပါသည်။
-              </p>
+            </div>
+
+            {/* ── 📥 Excel Export Card ── */}
+            <div className="bg-white border border-slate-200/40 rounded-[28px] p-6 shadow-[0_4px_24px_rgba(15,23,42,0.02)] space-y-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="text-sm font-extrabold text-slate-800">Excel Export</h4>
+                  <p className="text-[11px] text-slate-400 font-medium">စာရင်းများကို Excel ဖိုင်အဖြစ် ထုတ်ယူရန်</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                {/* Mode Toggle */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase">Export Mode</label>
+                  <div className="flex bg-slate-100 p-1 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setExportMode('all')}
+                      className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 ${
+                        exportMode === 'all' 
+                          ? 'bg-white text-slate-800 shadow-sm ring-1 ring-slate-200/50' 
+                          : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      အားလုံး
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExportMode('range')}
+                      className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 ${
+                        exportMode === 'range' 
+                          ? 'bg-white text-slate-800 shadow-sm ring-1 ring-slate-200/50' 
+                          : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      ရက်စွဲဖြင့်
+                    </button>
+                  </div>
+                </div>
+
+                {/* Date Range */}
+                {exportMode === 'range' ? (
+                  <div className="md:col-span-2 grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[11px] font-bold text-slate-400 uppercase">From</label>
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all w-full"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[11px] font-bold text-slate-400 uppercase">To</label>
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all w-full"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="md:col-span-2 flex items-center text-xs text-slate-400 font-medium italic">
+                    * ဒေတာဘေ့စ်ရှိ Orders အားလုံးကို ထုတ်ယူပါမည်။
+                  </div>
+                )}
+              </div>
+
+              {/* Branch Filter */}
+              {userBranch && userBranch !== 'ALL' && (
+                <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <span className="text-xs font-bold text-slate-700 block">Branch Scope</span>
+                    <span className="text-[11px] text-slate-400 font-medium">
+                      {exportAllBranches ? 'Branch အားလုံး၏ ဒေတာ' : `${userBranch} သီးသန့်`}
+                    </span>
+                  </div>
+                  <div className="flex bg-slate-100 p-1 rounded-xl self-start">
+                    <button
+                      type="button"
+                      onClick={() => setExportAllBranches(false)}
+                      className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                        !exportAllBranches ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      {userBranch} သီးသန့်
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExportAllBranches(true)}
+                      className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                        exportAllBranches ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      အားလုံး
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Export Button */}
+              <div className="pt-3 border-t border-slate-100 flex justify-end">
+                <button
+                  onClick={handleExportExcel}
+                  disabled={isExporting}
+                  className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-bold text-xs text-white transition-all shadow-sm flex items-center justify-center gap-2 ${
+                    isExporting 
+                      ? 'bg-slate-400 cursor-not-allowed' 
+                      : 'bg-gradient-to-r from-emerald-500 to-emerald-700 hover:from-emerald-600 hover:to-emerald-800 active:scale-[0.98] shadow-emerald-500/25'
+                  }`}
+                >
+                  {isExporting ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Exporting...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Export Excel (.xlsx)
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </>
         )}
 
-        {/* 🟢 Barcode Scanner Modal Component */}
+        {/* ── Modals ── */}
         {isScannerOpen && (
           <BarcodeScannerModal
             isOpen={isScannerOpen}
@@ -589,11 +655,18 @@ const [exportAllBranches, setExportAllBranches] = useState(true)
           />
         )}
 
-        {/* 🏷️ iOS Style Footer */}
-        <div className="mt-12 text-center text-slate-400 text-[10px] font-bold tracking-widest uppercase pt-6 border-t border-slate-200/50">
-          © 2026 ALL IN ONE EXPRESS SYSTEM • POWERED BY NEXT.JS
-        </div>
-      </div>
+        <ParcelDetailModal
+          order={selectedOrder}
+          onClose={() => setSelectedOrder(null)}
+        />
+
+        {/* ── Footer ── */}
+        <footer className="pt-8 border-t border-slate-200/50 text-center">
+          <p className="text-[10px] font-bold text-slate-400 tracking-[0.2em] uppercase">
+            © 2026 All In One Express • Powered by Next.js
+          </p>
+        </footer>
+      </main>
     </div>
   )
 }
