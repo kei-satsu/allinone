@@ -1187,7 +1187,7 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
           const locTotal = Object.values(senders).reduce((a, b) => Number(a) + Number(b), 0);
           return { loc, senders, locTotal };
         })
-        .filter(item => item.locTotal > 0) // စုစုပေါင်းပမာဏ ၀ ပြား ဖြစ်နေသော မြို့များကို ဖျောက်ထားရန်
+        .filter(item => item.locTotal !== 0)// စုစုပေါင်းပမာဏ ၀ ပြား ဖြစ်နေသော မြို့များကို ဖျောက်ထားရန်
         .sort((a, b) => b.locTotal - a.locTotal); // COD အများဆုံးမြို့ကို ထိပ်ဆုံးသို့ တင်ရန်
 
       // ပြစရာ မြို့စာရင်း လုံးဝမရှိတော့ပါက
@@ -1216,11 +1216,13 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
               {/* Sender များစာရင်း (မဆန့်ပါက ကတ်ထဲတွင် Scroll ဆွဲနိုင်သည်) */}
               <div className="text-[11px] space-y-1.5 flex-1 overflow-y-auto pr-1 custom-scrollbar min-h-0">
                 {Object.entries(senders)
-                  .filter(([_, totalCod]) => Number(totalCod) > 0) // Sender တစ်ဦးချင်းစီတွင် ၀ ဖြစ်နေပါက ဖျောက်ထားရန်
+                  .filter(([_, totalCod]) => Number(totalCod) !== 0) // Sender တစ်ဦးချင်းစီတွင် ၀ ဖြစ်နေပါက ဖျောက်ထားရန်
                   .map(([senderName, totalCod]) => (
                     <div key={senderName} className="flex justify-between items-center bg-white p-1.5 rounded border border-gray-100 shadow-xs">
                       <span className="font-medium text-gray-700 truncate max-w-[110px]" title={senderName}>👤 {senderName}</span>
-                      <span className="font-bold text-gray-900">{Number(totalCod).toLocaleString()} Ks</span>
+                      <span className={Number(totalCod) < 0 ? "text-red-500 font-semibold" : ""}>
+  {Number(totalCod).toLocaleString()} Ks
+</span>
                     </div>
                   ))}
               </div>
