@@ -226,13 +226,13 @@ const IconUpload = ({ className }: IconProps) => (
   </svg>
 );
 
-const compressImage = (file: File, quality: number = 0.88, maxDimension: number = 1920): Promise<File> => {
+const compressImage = (file: File, quality: number = 0.88, maxDimension: number = 1280): Promise<File> => {
   return new Promise((resolve, reject) => {
     
-    // 💡 [Size Guard] ဖိုင်ဆိုဒ်က ၁၅၀ KB အောက်ပဲရှိရင် မဝါးစေရန် ထပ်မချုံ့တော့ဘဲ မူရင်းအတိုင်း လွှတ်ပေးမည်
+    // 💡 200 KB အောက် ပုံများကို ထပ်မချုံ့ဘဲ မူရင်းအတိုင်း ထိန်းထားမည်
     const sizeInKB = file.size / 1024;
-    if (sizeInKB <= 150) {
-      console.log(`Skipping compression for ${file.name} - Already small enough (${Math.round(sizeInKB)} KB)`);
+    if (sizeInKB <= 200) {
+      console.log(`Skipping compression for ${file.name} (${Math.round(sizeInKB)} KB)`);
       return resolve(file);
     }
 
@@ -246,7 +246,7 @@ const compressImage = (file: File, quality: number = 0.88, maxDimension: number 
         let width = img.width;
         let height = img.height;
 
-        // Aspect Ratio မပျက်စေဘဲ သတ်မှတ်ထားသည့် Max Dimension သို့ ညှိခြင်း
+        // 720p Quality ရရှိစေရန် Max Dimension အတိုင်း Ratio ညှိခြင်း
         if (width > height) {
           if (width > maxDimension) {
             height = Math.round((height * maxDimension) / width);
@@ -264,13 +264,12 @@ const compressImage = (file: File, quality: number = 0.88, maxDimension: number 
         const ctx = canvas.getContext('2d');
         if (!ctx) return resolve(file);
 
-        // 🎨 Image Downscaling ရင်းရှာပ်မှု ပိုမိုကောင်းမွန်စေရန် Smoothing ချိန်ညှိခြင်း
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, width, height);
         
-        // Quality တန်ဖိုးကို အနည်းဆုံး 0.82 အောက် မလျော့စေရန် Safety Floor ထားခြင်း
-        const safeQuality = Math.max(quality, 0.82);
+        // 💡 Image Quality ကို 0.85 အောက် လျှော့မတွက်စေရန် ထိန်းချုပ်ခြင်း
+        const safeQuality = Math.max(quality, 0.85);
 
         canvas.toBlob(
           (blob) => {
@@ -414,10 +413,12 @@ const startCamera = useCallback(async (retryCount = 0) => {
       streamRef.current = null;
     }
 
-   const stream = await navigator.mediaDevices.getUserMedia({
+  const stream = await navigator.mediaDevices.getUserMedia({
   video: { 
     facingMode, 
-    // 💡AspectRatio အတင်းမချုပ်တော့ဘဲ ကင်မရာ native hardware အတိုင်း ပေးဖွင့်စေခြင်း
+    // 💡 720p / 1080p Resolution တောင်းဆိုရန် အောက်ပါ Bounds များ ထည့်သွင်းပါ
+    width: { ideal: 1280, max: 1920 },
+    height: { ideal: 720, max: 1080 },
     frameRate: { ideal: 30, max: 60 },
     advanced: [{ focusMode: 'continuous' } as any]
   },
@@ -964,8 +965,8 @@ const handleFinalSubmit = async () => {
     for (const img of capturedImages) {
       const queueItemId = `queue_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       
-      const targetQuality = img.quality === 'HD' ? 0.92 : 0.85;
-      const maxDimension = img.quality === 'HD' ? 1920 : 1280;
+      const targetQuality = img.quality === 'HD' ? 0.92 : 0.88;
+const maxDimension = img.quality === 'HD' ? 1920 : 1280;
 
       // 🔍 ၁။ မူရင်း File Size ကို KB ဖြင့် တွက်ထုတ်ခြင်း
       const originalKB = (img.file.size / 1024).toFixed(2);
