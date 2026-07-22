@@ -55,26 +55,32 @@ export default function TrashList() {
     }
   }
 
-  // ❌ ဒေတာဘေ့စ်ထဲကော Cloudinary ကောပါ အပြီးတိုင် ဖျက်ဆီးမည့် Function
-  const handlePermanentDelete = async (order: any) => {
-    if (confirm("⚠️ သတိပြုရန်!\nဒီမှတ်တမ်းကို အပြီးတိုင်ဖျက်ပါက ဘယ်လိုမှ ပြန်ယူ၍ ရတော့မည်မဟုတ်ပါ။ ဖြတ်ရန် သေချာပါသလား?")) {
-      setLoading(true)
-      try {
-        // (မှတ်ချက် - နောက်ပိုင်းတွင် Cloudinary Storage ပါ ရှင်းထုတ်ချင်ပါက Cloudinary Delete API ကို ဒီနေရာတွင် လှမ်းခေါ်နိုင်ပါသည်)
-        
-        // Supabase ထဲက မှတ်တမ်းကို အပြီးတိုင် ဖျက်ချလိုက်ခြင်း
-        const { error } = await supabase.from('orders').delete().eq('id', order.id)
-        if (error) throw error
-
-        alert("မှတ်တမ်းကို အပြီးတိုင် ဖျက်ဆီးလိုက်ပါပြီ။")
-        fetchData()
-      } catch (error: any) {
-        alert(error.message)
-      } finally {
-        setLoading(false)
+const handlePermanentDelete = async (order: any) => {
+  if (confirm("⚠️ သတိပြုရန်!\nဒီမှတ်တမ်းကို အပြီးတိုင်ဖျက်ပါက ဘယ်လိုမှ ပြန်ယူ၍ ရတော့မည်မဟုတ်ပါ။ ဖြတ်ရန် သေချာပါသလား?")) {
+    setLoading(true)
+    try {
+      // ၁။ Image URL ကို သုံးပြီး Cloudinary က ပုံကို ဖျက်မည်
+      if (order.image_url) {
+        await fetch('/api/cloudinary/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageUrl: order.image_url }) // <-- image_url ပို့ပေးလိုက်ရုံပါပဲ
+        });
       }
+
+      // ၂။ Supabase Database ထဲက Record ကို ဖျက်မည်
+      const { error } = await supabase.from('orders').delete().eq('id', order.id);
+      if (error) throw error;
+
+      alert("မှတ်တမ်းနှင့် Cloudinary ပုံကို အပြီးတိုင် ဖျက်ဆီးလိုက်ပါပြီ။");
+      fetchData();
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setLoading(false);
     }
   }
+}
 
   return (
     <div className="w-full h-full flex flex-col bg-[#f3f3f3] overflow-hidden select-none">

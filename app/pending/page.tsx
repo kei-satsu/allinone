@@ -86,13 +86,21 @@ export default function PendingEntry() {
     remark: ''
   })
 
-  const [cities, setCities] = useState<any[]>([]);
+  // ၁။ City အတွက် Interface သတ်မှတ်ပါ
+interface City {
+  "C.ID": string;        // သို့မဟုတ် number (Database ပေါ်မူတည်၍)
+  name: string;
+  sort_order?: number;   // Manual Sort ထည့်ထားပါက သုံးရန် (Optional)
+}
+
+// 2. useState မှာ Interface ကို ထည့်ပေးပါ
+const [cities, setCities] = useState<City[]>([]);
 
 const loadCities = async () => {
   const { data, error } = await supabase
     .from("cities")
     .select('*')
-    .order("name", { ascending: true });
+    .order('sort_order', { ascending: true });
   
   if (error) {
     console.error("Error fetching cities:", error);

@@ -816,10 +816,30 @@ const capturePhoto = useCallback(async () => {
     document.body.removeChild(link);
   };
 
-  const processSingleOfflineItem = async (item: any) => {
-    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'YOUR_CLOUD_NAME';
-    const uploadPreset = 'for_allinone';
+const processSingleOfflineItem = async (item: any) => {
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'YOUR_CLOUD_NAME';
+  const uploadPreset = 'for_allinone';
 
+  let secureUrl = item.cloudinary_url;
+
+  // ─── 🌟 STEP 1: Supabase မှာ Barcode စာရင်း ရှိပြီးသားလား အရင်စစ်ခြင်း ───
+  if (item.barcode) {
+    const { data: existingOrder } = await supabase
+      .from('orders')
+      .select('image_url')
+      .eq('barcode', item.barcode)
+      .maybeSingle();
+
+    // အကယ်၍ Supabase မှာ ရောက်ပြီးသား ဖြစ်နေပါက ထပ်မတင်တော့ဘဲ Telegram သို့ ပို့ပေးမည်
+    if (existingOrder) {
+      console.log(`Barcode [${item.barcode}] က Supabase မှာ ရှိပြီးသားမို့ Telegram သို့ တိုက်ရိုက်ပို့ပါမည်။`);
+      await sendToTelegram(existingOrder.image_url, item.uploader_note, item.barcode, item.branch);
+      return; // အောင်မြင်စွာ ပြီးစီးသွားသဖြင့် Function ထဲမှ ထွက်မည် (Queue ထဲမှ ဖျက်မည်)
+    }
+  }
+
+  // ─── 🌟 STEP 2: Cloudinary သို့ ပုံတင်ခြင်း (မတင်ရသေးပါက) ───
+  if (!secureUrl) {
     const recoveredFile = item.file instanceof File
       ? item.file
       : item.fileBase64
@@ -853,29 +873,37 @@ const capturePhoto = useCallback(async () => {
     }
 
     const cloudinaryData = await response.json();
-    const secureUrl = cloudinaryData.secure_url;
+    secureUrl = cloudinaryData.secure_url;
+  }
 
-    const { error: dbError } = await supabase
-      .from('orders')
-      .insert([
-        {
-          image_url: secureUrl,
-          branch: item.branch,
-          status: item.transit_to ? 'In-Transit' : 'Pending',
-          received_date: item.received_date,
-          uploader_note: item.uploader_note || null,
-          barcode: item.barcode || null,
-          transit_to: item.transit_to || null,      
-          transit_date: item.transit_date || null,
-        },
-      ]);
+  // ─── 🌟 STEP 3: Supabase သို့ ဒေတာ ထည့်သွင်းခြင်း ───
+  const { error: dbError } = await supabase
+    .from('orders')
+    .insert([
+      {
+        image_url: secureUrl,
+        branch: item.branch,
+        status: item.transit_to ? 'In-Transit' : 'Pending',
+        received_date: item.received_date,
+        uploader_note: item.uploader_note || null,
+        barcode: item.barcode || null,
+        transit_to: item.transit_to || null,      
+        transit_date: item.transit_date || null,
+      },
+    ]);
 
-    if (dbError) {
+  // အကယ်၍ Barcode ရှိပြီးသား Error (Code 23505) ဖြစ်ပါက Error မတက်စေဘဲ ဆက်သွားမည်
+  if (dbError) {
+    if (dbError.code === '23505') {
+      console.warn(`Barcode [${item.barcode}] က Supabase မှာ ရောက်ပြီးသား ဖြစ်နေပါသည်။`);
+    } else {
       throw dbError;
     }
+  }
 
-    await sendToTelegram(secureUrl, item.uploader_note, item.barcode, item.branch);
-  };
+  // ─── 🌟 STEP 4: Telegram သို့ အကြောင်းကြားစာ ပို့ခြင်း ───
+  await sendToTelegram(secureUrl, item.uploader_note, item.barcode, item.branch);
+};
 
   const uploadSingleItem = async (itemId: string) => {
     const item = queueItems.find((entry) => entry.id === itemId);

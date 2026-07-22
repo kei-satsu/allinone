@@ -6,6 +6,23 @@ import { useRouter } from 'next/navigation'
 import EditOrderModal from '@/components/EditOrderModal' // သင့် Component တည်နေရာလမ်းကြောင်းအတိုင်း ချိန်ပေးပါ
 import { printVoucher } from "@/utils/print"
 
+// 🌟 Manual ထည့်သွင်းထားသော မြို့များ စာရင်း
+const MANUAL_CITIES = [
+  { id: 'YGN', name: 'ရန်ကုန်' },
+  { id: 'MDY', name: 'မန္တလေး' },
+  { id: 'NPT', name: 'နေပြည်တော်' },
+  { id: 'TGI', name: 'တောင်ကြီး' },
+  { id: 'POL1', name: 'ပြင်ဦးလွင် SPY' },
+  { id: 'POL2', name: 'ပြင်ဦးလွင် စိုပြေ' },
+  { id: 'MGY', name: 'မကွေး' },
+  { id: 'MYW', name: 'မုံရွာ' },
+  { id: 'TDU', name: 'တံတားဦး' },
+  { id: 'KYS', name: 'ကျောက်ဆည်' },
+  { id: 'PTN', name: 'ပုသိမ်' },
+  { id: 'SGG', name: 'စစ်ကိုင်း' },
+  // ➕ မိမိထည့်ချင်သော မြို့များကို ဒီထဲမှာ ဆက်ထည့်နိုင်ပါတယ်
+]
+
 const COLUMN_DEFS = [
   { key: 'image_url', label: 'Photo', defaultVisible: true }, 
   { key: 'item_id', label: 'Item ID', defaultVisible: true },
@@ -157,30 +174,33 @@ useEffect(() => {
     return () => window.removeEventListener('click', handleCloseMenu)
   }, [])
 
-  const filteredOrders = orders.filter(o => {
-    // 📱 Mobile Global Search Logics
-    if (colFilters['global_search']) {
-      const query = colFilters['global_search'].toLowerCase()
-      const isMatch = 
-        String(o.item_id || '').toLowerCase().includes(query) ||
-        String(o.receiver_phone || '').toLowerCase().includes(query) ||
-        String(o.receiver_name || '').toLowerCase().includes(query) ||
-        String(o.sender_name || '').toLowerCase().includes(query)
-      if (!isMatch) return false
-    }
+  // 🌟 Transit City မရွေးရသေးပါက Data မပြဘဲ Empty Array [] သာ Return ပြန်မည်
+  const filteredOrders = !colFilters['transit_to'] 
+    ? [] 
+    : orders.filter(o => {
+        // 📱 Mobile Global Search Logics
+        if (colFilters['global_search']) {
+          const query = colFilters['global_search'].toLowerCase()
+          const isMatch = 
+            String(o.item_id || '').toLowerCase().includes(query) ||
+            String(o.receiver_phone || '').toLowerCase().includes(query) ||
+            String(o.receiver_name || '').toLowerCase().includes(query) ||
+            String(o.sender_name || '').toLowerCase().includes(query)
+          if (!isMatch) return false
+        }
 
-    // 💻 Desktop Grid Filter Logics
-    return Object.keys(colFilters).every(key => {
-      if (key === 'global_search') return true
-      const filterValue = colFilters[key]?.toLowerCase()
-      if (!filterValue) return true
-      let cellValue = ""
-      if (key === 'pickup_rider') cellValue = o.pickup_rider?.name || ""
-      else if (key === 'deliver_rider') cellValue = o.deliver_rider?.name || ""
-      else cellValue = String(o[key] || "")
-      return cellValue.toLowerCase().includes(filterValue)
-    })
-  })
+        // 💻 Desktop Grid Filter Logics
+        return Object.keys(colFilters).every(key => {
+          if (key === 'global_search') return true
+          const filterValue = colFilters[key]?.toLowerCase()
+          if (!filterValue) return true
+          let cellValue = ""
+          if (key === 'pickup_rider') cellValue = o.pickup_rider?.name || ""
+          else if (key === 'deliver_rider') cellValue = o.deliver_rider?.name || ""
+          else cellValue = String(o[key] || "")
+          return cellValue.toLowerCase().includes(filterValue)
+        })
+      })
 
   const handleFilterChange = (col: string, val: string) => {
     setColFilters(prev => ({ ...prev, [col]: val }))
@@ -305,6 +325,24 @@ useEffect(() => {
         </div>
         
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+
+{/* 🌟 Transit To Dropdown Filter */}
+<div className="relative min-w-[130px] sm:min-w-[150px]">
+  <select
+    value={colFilters['transit_to'] || ''}
+    onChange={(e) => handleFilterChange('transit_to', e.target.value)}
+    className="w-full bg-gray-50 border border-gray-300 focus:border-orange-500 focus:bg-white focus:outline-none px-2.5 py-1.5 text-xs text-gray-700 font-medium rounded-md transition-all shadow-sm cursor-pointer"
+  >
+    <option value="">Transit City ရွေးချယ်ပါ</option>
+    {MANUAL_CITIES.map((city) => (
+      <option key={city.id} value={city.id}>
+        {city.name}
+      </option>
+    ))}
+  </select>
+</div>
+
+
           {/* ── Columns Show/Hide Dropdown ── */}
           <div className="relative">
             <button 
@@ -347,10 +385,7 @@ useEffect(() => {
             Refresh
           </button>
 
-          <Link href="/entry" className="bg-orange-500 hover:bg-orange-600 text-white font-medium px-4 py-1.5 rounded-md shadow-sm transition-all flex items-center gap-1.5 text-xs">
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-            New Entry
-          </Link>
+         
         </div>
       </div>
 
@@ -385,13 +420,16 @@ useEffect(() => {
   {showMobileFilters && (
     <div className="px-3 pb-3 pt-1 grid grid-cols-2 gap-2 bg-gray-50 border-t border-gray-100 animate-in slide-in-from-top-2 duration-150">
       <div>
-        <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Branch</label>
-        <select className="w-full text-xs p-1.5 bg-white border border-gray-200 rounded-md" value={colFilters['branch'] || ''} onChange={e => handleFilterChange('branch', e.target.value)}>
-          <option value="">All Branches</option>
-          <option value="MDY">Mandalay</option>
-          <option value="YGN">Yangon</option>
-        </select>
-      </div>
+  <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">
+    Transit Date
+  </label>
+  <input
+    type="date"
+    className="w-full text-xs p-1.5 bg-white border border-gray-200 rounded-md text-gray-700 focus:outline-none focus:border-orange-500 cursor-pointer"
+    value={colFilters['transit_date'] || ''}
+    onChange={(e) => handleFilterChange('transit_date', e.target.value)}
+  />
+</div>
       <div>
         <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Status</label>
         <select className="w-full text-xs p-1.5 bg-white border border-gray-200 rounded-md" value={colFilters['status'] || ''} onChange={e => handleFilterChange('status', e.target.value)}>
@@ -402,6 +440,18 @@ useEffect(() => {
           <option value="In-Transit">In-Transit</option>
         </select>
       </div>
+{/* 🌟 [အသစ်ထည့်ရန်] Mobile Transit To Filter Input */}
+    <div>
+      <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Transit To</label>
+      <input
+        type="text"
+        placeholder="Transit To..."
+        className="w-full text-xs p-1.5 bg-white border border-gray-200 rounded-md focus:outline-none focus:border-orange-500 text-gray-700"
+        value={colFilters['transit_to'] || ''}
+        onChange={e => handleFilterChange('transit_to', e.target.value)}
+      />
+    </div>
+
       <div>
         <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Payment Type</label>
         <select className="w-full text-xs p-1.5 bg-white border border-gray-200 rounded-md" value={colFilters['fee_type'] || ''} onChange={e => handleFilterChange('fee_type', e.target.value)}>

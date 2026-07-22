@@ -546,7 +546,7 @@ async function performSearch(query: string) {
   <>
     <option value="">City မရွေးချယ်ရသေးပါ...</option>
     {MANUAL_CITIES.map(c => (
-      <option key={c.id} value={c.name}>{c.name}</option>
+      <option key={c.id} value={c.id}>{c.name}</option>
     ))}
   </>
 ) : (

@@ -8,7 +8,7 @@ import ExcelJS from 'exceljs';
 
 // ── Column အားလုံးသတ်မှတ်ချက် ──
 const COLUMN_DEFS = [
-  { key: 'item_id', label: 'Item ID', defaultVisible: true },
+  { key: 'item_id', label: 'Item ID', defaultVisible: false },
   { key: 'received_date', label: 'Received Date', defaultVisible: true },
   { key: 'branch', label: 'Branch', defaultVisible: false },
   { key: 'sender_name', label: 'Sender', defaultVisible: true },
@@ -414,16 +414,31 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
         'bg-gray-50 text-gray-700 border border-gray-200'
       }`}>{o.status}</span>
     )
-    if (key === 'image_url') return o.image_url ? (
-      <div className="flex items-center justify-center">
-        <img 
-          src={o.image_url} 
-          alt="Attachment" 
-          onClick={(e) => { e.stopPropagation(); setPreviewImage(o.image_url); }}
-          className="w-8 h-8 object-cover rounded border border-gray-200 cursor-pointer hover:scale-110 hover:shadow transition-all"
-        />
-      </div>
-    ) : <span className="text-gray-400 font-mono text-[10px]">-</span>
+   if (key === 'image_url') return (
+  <div className="flex items-center justify-center">
+    {o.image_url ? (
+      /* ပုံရှိလျှင်: အပြာရောင် Click ရသော Photo Icon ပြမည် */
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setPreviewImage(o.image_url); }}
+        className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+        title="ပုံကြည့်ရန် နှိပ်ပါ"
+      >
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      </button>
+    ) : (
+      /* ပုံမရှိလျှင်: မီးခိုးရောင် မကြောနိုင်သော No Photo Icon ပြမည် */
+      <span className="p-1 text-gray-300" title="ပုံမရှိပါ">
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          <line x1="3" y1="3" x2="21" y2="21" stroke="currentColor" strokeWidth={2} strokeLinecap="round" />
+        </svg>
+      </span>
+    )}
+  </div>
+)
     
     if (['cod_amount', 'deli_fee', 'total_amount'].includes(key)) return (
       <span className={key === 'total_amount' ? 'font-bold text-gray-900' : ''}>
@@ -1472,14 +1487,27 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <span className="font-mono font-bold text-gray-900 text-sm">{o.item_id}</span>
-                  {o.image_url && (
-                    <span 
-                      onClick={() => setPreviewImage(o.image_url)} 
-                      className="cursor-pointer text-xs bg-gray-100 p-0.5 px-1.5 rounded border border-gray-200 text-gray-500 font-medium"
-                    >
-                      🖼️ Photo
-                    </span>
-                  )}
+                  {o.image_url ? (
+  /* ပုံရှိလျှင် */
+  <button
+    type="button"
+    onClick={(e) => { e.stopPropagation(); setPreviewImage(o.image_url); }}
+    className="p-1 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
+    title="ပုံကြည့်ရန် နှိပ်ပါ"
+  >
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  </button>
+) : (
+  /* ပုံမရှိလျှင် */
+  <span className="p-1 text-gray-300 bg-gray-50 rounded-md" title="ပုံမရှိပါ">
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      <line x1="3" y1="3" x2="21" y2="21" stroke="currentColor" strokeWidth={2} strokeLinecap="round" />
+    </svg>
+  </span>
+)}
                 </div>
                 <div className="flex gap-1.5 items-center">
                   {renderCell(o, 'status')}
