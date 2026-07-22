@@ -195,57 +195,58 @@ const BarcodePrinterPage = () => {
     printWindow.document.close();
   };
 
-  // 📱 2. Mobile Thermal Print Logic (TSPL 10-Label Grid Coordinates)
-  const handleMobileThermalPrint = () => {
-    if (generatedList.length === 0) return alert('ကျေးဇူးပြု၍ Barcode များ အရင် Generate လုပ်ပါ။');
-    
-    let masterTsplCommand = '';
+  // 📱 2. Mobile Thermal Print Logic (TSPL Fixed Version)
+const handleMobileThermalPrint = () => {
+  if (generatedList.length === 0) return alert('ကျေးဇူးပြု၍ Barcode များ အရင် Generate လုပ်ပါ။');
+  
+  let masterTsplCommand = '';
 
-    if (isA6Grid) {
-      // 🌟 တစ်ရွက်လျှင် ၁၀ ခုစီအတွက် ကွက်တိ နေရာချခြင်း (5 Rows x 2 Columns)
-      // 1mm = 8 dots ဖြစ်လို့ အမြင့် 28.4mm = ~227 dots စီ ခြားပေးထားပါတယ်
-      const pages = chunkArray(generatedList, 10);
+  if (isA6Grid) {
+    const pages = chunkArray(generatedList, 10);
 
-      pages.forEach((pageItems) => {
+    pages.forEach((pageItems) => {
+      masterTsplCommand += 
+        `SIZE 100 mm,150 mm\r\n` +  // Spacing ပြင်ထားပါသည်
+        `GAP 2 mm,0 mm\r\n` +       // GAP Format ဖြည့်ထားပါသည်
+        `DIRECTION 1\r\n` +          // Print Direction ထည့်ပေးထားပါသည်
+        `CLS\r\n`;
+
+      pageItems.forEach((id, index) => {
+        const col = index % 2;        
+        const row = Math.floor(index / 2); 
+
+        const x = col === 0 ? 20 : 420; // Margin ချိန်ညှိချက်
+        const y = 30 + (row * 230);    
+
         masterTsplCommand += 
-          `SIZE 100 mm, 150 mm\r\n` +
-          `GAP 2 mm\r\n` +
-          `CLS\r\n`;
-
-        pageItems.forEach((id, index) => {
-          const col = index % 2;        
-          const row = Math.floor(index / 2); 
-
-          const x = col === 0 ? 16 : 416; // 🌟 Left padding 2mm = 16 dots စတင်ခြင်း
-          const y = 24 + (row * 234);    // 🌟 Row Step အမြင့်ကို 234 dots (27.2mm + 2mm) သို့ ချိန်ညှိခြင်း
-
-          masterTsplCommand += 
-            `TEXT ${x + 40},${y},"2",0,1,1,"ALL IN ONE DELI"\r\n` + 
-            `BARCODE ${x + 10},${y + 22},"128",48,1,0,2,2,"${id}"\r\n`;
-        });
-
-        masterTsplCommand += `PRINT 1\r\n`;
+          `TEXT ${x + 30},${y},"3",0,1,1,"ALL IN ONE Express"\r\n` + 
+          `BARCODE ${x + 10},${y + 25},"128",48,1,0,2,2,"${id}"\r\n`;
       });
-    } else {
-      generatedList.forEach((id) => {
-        const tsplBarcodeHeight = Math.floor(labelSize.h * 2.5);
-        masterTsplCommand += 
-          `SIZE ${labelSize.w} mm, ${labelSize.h} mm\r\n` +
-          `GAP 2 mm\r\n` +
-          `CLS\r\n` +
-          `TEXT 30,10,"2",0,1,1,"ALL IN ONE DELI"\r\n` + 
-          `BARCODE 15,45,"128",${tsplBarcodeHeight},1,0,2,2,"${id}"\r\n` +
-          `PRINT 1\r\n`;
-      });
-    }
 
-    try {
-      const base64Command = btoa(masterTsplCommand);
-      window.location.href = `rawbt://base64/${base64Command}`;
-    } catch (error) {
-      alert('ဖုန်းဖြင့် ပရင့်ထုတ်ရန် အခက်အခဲရှိနေပါသည်။ (RawBT App လိုအပ်ပါသည်)');
-    }
-  };
+      masterTsplCommand += `PRINT 1,1\r\n`; // SETS, COPIES Format
+    });
+  } else {
+    generatedList.forEach((id) => {
+      const tsplBarcodeHeight = Math.floor(labelSize.h * 2.2);
+      masterTsplCommand += 
+        `SIZE ${labelSize.w} mm,${labelSize.h} mm\r\n` +
+        `GAP 2 mm,0 mm\r\n` +
+        `DIRECTION 1\r\n` +
+        `CLS\r\n` +
+        `TEXT 30,15,"3",0,1,1,"ALL IN ONE Express"\r\n` + 
+        `BARCODE 20,45,"128",${tsplBarcodeHeight},1,0,2,2,"${id}"\r\n` +
+        `PRINT 1,1\r\n`;
+    });
+  }
+
+  try {
+    // UTF-8 Clean Base64 Encoding
+    const cleanBase64 = btoa(unescape(encodeURIComponent(masterTsplCommand)));
+    window.location.href = `rawbt:base64,${cleanBase64}`;
+  } catch (error) {
+    alert('ဖုန်းဖြင့် ပရင့်ထုတ်ရန် အခက်အခဲရှိနေပါသည်။ (RawBT App လိုအပ်ပါသည်)');
+  }
+};
 
   return (
     <div className="flex flex-col lg:flex-row min-h-screen bg-slate-900 text-slate-100 font-sans antialiased selection:bg-orange-500 selection:text-white">
