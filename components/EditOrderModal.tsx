@@ -20,13 +20,17 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
   const [loading, setLoading] = useState(false)
   const [riders, setRiders] = useState<any[]>([])
   const [senders, setSenders] = useState<any[]>([])
-  const [cities, setCities] = useState<any[]>([]) // ✨ Cities State အသစ်ထည့်သွင်းခြင်း
+  const [cities, setCities] = useState<any[]>([])
   const [filteredSenders, setFilteredSenders] = useState<any[]>([])
   const [showSenderDropdown, setShowSenderDropdown] = useState(false)
   const [originalCod, setOriginalCod] = useState<number>(0)
   const [resetKey, setResetKey] = useState<number>(Date.now())
 
+  // ✨ 1. Barcode အတွက် Lock State
+  const [isBarcodeLocked, setIsBarcodeLocked] = useState<boolean>(true)
+
   const [formData, setFormData] = useState({
+    barcode: '', // ✨ DB column: barcode
     sender_id: '',
     received_date: '',
     sender_name: '',
@@ -49,7 +53,6 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     branch: '',
     image_url: '',
     remark: '',
-    // ✨ Transit Information Fields
     transit_date: '',
     transit_to: ''
   })
@@ -58,6 +61,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
   useEffect(() => {
     if (orderData && isOpen) {
       setFormData({
+        barcode: orderData.barcode || '', // ✨ DB ရဲ့ barcode column ထည့်သွင်းခြင်း
         sender_id: orderData.sender_id || '',
         received_date: orderData.received_date || '',
         sender_name: orderData.sender_name || '',
@@ -80,10 +84,11 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
         branch: orderData.branch || '',
         image_url: orderData.image_url || '',
         remark: orderData.remark || '',
-        // ✨ Transit ဒေတာ အစပျိုးဖြည့်ခြင်း
         transit_date: orderData.transit_date || '',
         transit_to: orderData.transit_to || ''
       })
+
+      setIsBarcodeLocked(true) // Modal ဖွင့်တိုင်း Lock ပြန်ခတ်ထားမည်
 
       if (orderData.fee_type === 'Bill') {
         setOriginalCod((orderData.cod_amount || 0) + (orderData.deli_fee || 0))
@@ -198,6 +203,12 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     let changes: string[] = [];
     const fmtKg = (val: any) => `${(Number(val) || 0).toLocaleString()} Ks`;
 
+    // ✨ Barcode ပြောင်းလဲမှု မှတ်တမ်းယူခြင်း (barcode column)
+    const oldBarcode = orderData.barcode || '';
+    if (oldBarcode !== formData.barcode) {
+      changes.push(`🏷️ Barcode: "${oldBarcode}" ➔ "${formData.barcode}"`);
+    }
+
     if (orderData.received_date !== formData.received_date) {
       changes.push(`📅 Arrival Date: "${orderData.received_date || 'N/A'}" ➔ "${formData.received_date}"`);
     }
@@ -250,11 +261,9 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     if ((orderData.deliver_date || '') !== (formData.deliver_date || '')) {
       changes.push(`📆 Deliver Date: "${orderData.deliver_date || 'N/A'}" ➔ "${formData.deliver_date || 'Deleted'}"`);
     }
-    // ✨ Transit Date Change Log
     if ((orderData.transit_date || '') !== (formData.transit_date || '')) {
       changes.push(`🚚 Transit Date: "${orderData.transit_date || 'N/A'}" ➔ "${formData.transit_date || 'Deleted'}"`);
     }
-    // ✨ Transit To Change Log
     if ((orderData.transit_to || '') !== (formData.transit_to || '')) {
       changes.push(`🚛 Transit To: "${orderData.transit_to || 'N/A'}" ➔ "${formData.transit_to || 'Deleted'}"`);
     }
@@ -292,7 +301,6 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
 
     const updatedHistory = [...(orderData.history || []), newLogEntry];
 
-    // ✨ transit_date / transit_to ကို payload တွင် ထည့်သွင်းထားပြီးဖြစ်သည်
     const payload = {
         ...formData,
         pickup_rider_id: formData.pickup_rider_id || null,
@@ -334,7 +342,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
         <div className="bg-white border-b border-gray-200 px-5 py-4 flex items-center justify-between shrink-0">
           <div>
             <h2 className="text-base font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
-              📝 Edit Order Details (ID: {orderData?.item_id || orderData?.id})
+              📝 Edit Order Details (Barcode: {formData.barcode || orderData?.id})
             </h2>
             <p className="text-[11px] text-gray-500 mt-0.5">ရုံးခွဲ - {formData.branch === 'MDY' ? 'Mandalay' : 'Yangon'}</p>
           </div>
@@ -346,6 +354,59 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
           
           {/* LEFT COLUMN */}
           <div className="lg:col-span-8 space-y-4">
+
+            {/* ✨ Barcode (With Safety Lock Feature) */}
+            <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-xs">
+              <label className={labelStyle}>Barcode Code</label>
+              <div className="flex gap-2 items-center">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={formData.barcode}
+                    onChange={e => setFormData({ ...formData, barcode: e.target.value })}
+                    readOnly={isBarcodeLocked}
+                    className={`${winInput} font-mono font-bold tracking-wide transition-all ${
+                      isBarcodeLocked 
+                        ? 'bg-gray-100 text-gray-500 border-gray-300 cursor-not-allowed select-none' 
+                        : 'bg-amber-50/60 text-amber-900 border-amber-400 focus:ring-amber-200'
+                    }`}
+                    placeholder="Barcode ရိုက်ထည့်ပါ..."
+                    required
+                  />
+                  {!isBarcodeLocked && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-amber-600 font-bold uppercase animate-pulse">
+                      ⚠️ Editing
+                    </span>
+                  )}
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isBarcodeLocked) {
+                      if (confirm("Barcode ကို ပြင်ဆင်ရန် သေချာပါသလား? မှားယွင်းပြင်ဆင်မိပါက System ထဲတွင် Order ရှာမတွေ့တော့သည့် ပြဿနာဖြစ်နိုင်ပါသည်။")) {
+                        setIsBarcodeLocked(false);
+                      }
+                    } else {
+                      setIsBarcodeLocked(true);
+                    }
+                  }}
+                  className={`px-3.5 py-2.5 rounded-lg font-bold text-xs transition-all flex items-center gap-1.5 shrink-0 ${
+                    isBarcodeLocked 
+                      ? 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300' 
+                      : 'bg-amber-500 hover:bg-amber-600 text-white shadow-xs'
+                  }`}
+                >
+                  {isBarcodeLocked ? '🔒 Lock ဖြည်မည်' : '🔓 Lock ပြန်ခတ်မည်'}
+                </button>
+              </div>
+              <p className="text-[10px] text-gray-400 mt-1.5">
+                {isBarcodeLocked 
+                  ? '* မှားယွင်း မပြင်မိစေရန် Lock ခတ်ထားပါသည်။ ပြင်လိုပါက "Lock ဖြည်မည်" ကို နှိပ်ပါ။' 
+                  : '⚠️ အာရုံစိုက်၍ ပြင်ဆင်ပေးပါ၊ ပြီးပါက "Lock ပြန်ခတ်မည်" သို့မဟုတ် Save Changes ကို နှိပ်ပါ။'}
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-white p-4 rounded-lg border border-gray-200 shadow-xs">
               <div>
                 <label className={labelStyle}>Arrival Date</label>
@@ -536,26 +597,24 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                   <input type="date" value={formData.deliver_date} onChange={e => setFormData({...formData, deliver_date: e.target.value})} className={`${winInput} font-mono`} />
                 </div>
               </div>
-             <div>
-  <label className={labelStyle}>Delivery Rider</label>
-  <select 
-    value={formData.deliver_rider_id} 
-    onChange={e => setFormData({...formData, deliver_rider_id: e.target.value})} 
-    className={winSelect}
-  >
-    <option value="">Select delivery rider...</option>
-    
-    {/* 💡 Branch တူသည့် Rider များကိုသာ စစ်ထုတ်ပြီးပြသခြင်း */}
-    {riders
-      .filter(r => !formData.branch || r.branch === formData.branch)
-      .map(r => (
-        <option key={r.id} value={r.id}>
-          {r.name}
-        </option>
-      ))
-    }
-  </select>
-</div>
+              <div>
+                <label className={labelStyle}>Delivery Rider</label>
+                <select 
+                  value={formData.deliver_rider_id} 
+                  onChange={e => setFormData({...formData, deliver_rider_id: e.target.value})} 
+                  className={winSelect}
+                >
+                  <option value="">Select delivery rider...</option>
+                  {riders
+                    .filter(r => !formData.branch || r.branch === formData.branch)
+                    .map(r => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))
+                  }
+                </select>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={labelStyle}>Return Utility</label>
@@ -592,7 +651,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
               </div>
             </div>
 
-            {/* ✨ Transit Information (New Section) */}
+            {/* Transit Information */}
             <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-xs">
               <h3 className="font-bold text-gray-800 uppercase text-xs mb-3 flex items-center gap-1.5 text-indigo-600">🚛 Transit Information</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

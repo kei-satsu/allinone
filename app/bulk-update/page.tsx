@@ -7,13 +7,18 @@ import { Scanner } from '@yudiel/react-qr-scanner' // 📸 Camera Scanner Packag
 
 // 🌟 Manual ထည့်သွင်းထားသော မြို့များ စာရင်း
 const MANUAL_CITIES = [
-  { id: 'YGN', name: 'ရန်ကုန် (Yangon)' },
-  { id: 'MDY', name: 'မန္တလေး (Mandalay)' },
-  { id: 'NPT', name: 'နေပြည်တော် (Naypyidaw)' },
-  { id: 'TGI', name: 'တောင်ကြီး (Taunggyi)' },
-  { id: 'BGO', name: 'ပဲခူး (Bago)' },
-  { id: 'PYAy', name: 'ပြည် (Pyay)' },
-  { id: 'POL', name: 'ပြင်ဦးလွင် (Pyin Oo Lwin)' },
+  { id: 'YGN', name: 'ရန်ကုန်' },
+  { id: 'MDY', name: 'မန္တလေး' },
+  { id: 'NPT', name: 'နေပြည်တော်' },
+  { id: 'TGI', name: 'တောင်ကြီး' },
+  { id: 'POL1', name: 'ပြင်ဦးလွင် SPY' },
+  { id: 'POL2', name: 'ပြင်ဦးလွင် စိုပြေ' },
+  { id: 'MGY', name: 'မကွေး' },
+  { id: 'MYW', name: 'မုံရွာ' },
+  { id: 'TDU', name: 'တံတားဦး' },
+  { id: 'KYS', name: 'ကျောက်ဆည်' },
+  { id: 'PTN', name: 'ပုသိမ်' },
+  { id: 'SGG', name: 'စစ်ကိုင်း' },
   // ➕ မိမိထည့်ချင်သော မြို့များကို ဒီထဲမှာ ဆက်ထည့်နိုင်ပါတယ်
 ]
 
@@ -541,7 +546,7 @@ async function performSearch(query: string) {
   <>
     <option value="">City မရွေးချယ်ရသေးပါ...</option>
     {MANUAL_CITIES.map(c => (
-      <option key={c.id} value={c.name}>🌆 {c.name}</option>
+      <option key={c.id} value={c.name}>{c.name}</option>
     ))}
   </>
 ) : (
