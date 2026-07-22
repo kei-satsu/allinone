@@ -487,18 +487,40 @@ const handleSaveAsImage = useCallback(() => {
         className="printable-voucher bg-white text-black p-3 flex flex-col select-none box-border relative shadow-2xl"
       >
         <style
-          dangerouslySetInnerHTML={{
-            __html: `
-              @page { size: 4in 6in; margin: 0; }
-              @media print {
-                body * { visibility: hidden; }
-                .printable-voucher, .printable-voucher * { visibility: visible; }
-                .printable-voucher { position: absolute; left: 0; top: 0; width: 4in !important; height: 6in !important; box-shadow: none !important; padding: 12px !important; }
-                body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: transparent; }
-              }
-            `,
-          }}
-        />
+  dangerouslySetInnerHTML={{
+    __html: `
+      @page { 
+        size: 4in 6in; 
+        margin: 0; 
+      }
+      @media print {
+        /* ၁။ နောက်ခံ အမည်းနှင့် အခြား Element များကို မပြရန် */
+        html, body {
+          background: #ffffff !important;
+          color: #000000 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          width: 4in !important;
+          height: 6in !important;
+          overflow: hidden !important;
+        }
+
+        /* ၂။ Printable Voucher ကို သီးသန့် အပြည့်ဆွဲတင်ရန် */
+        .printable-voucher {
+          position: fixed !important;
+          left: 0 !important;
+          top: 0 !important;
+          width: 4in !important;
+          height: 6in !important;
+          box-shadow: none !important;
+          padding: 12px !important;
+          background: white !important;
+          z-index: 99999 !important;
+        }
+      }
+    `,
+  }}
+/>
 
         {/* ── TOP CONTENT AREA ── */}
         <div>
