@@ -122,153 +122,190 @@ export default function Dashboard() {
   }, [userBranch, allOrders])
 
   const handleExportExcel = async () => {
-    setIsExporting(true);
-    try {
-      let allFetchedData: any[] = [];
-      let page = 0;
-      const pageSize = 1000;
-      let hasMore = true;
+  setIsExporting(true);
+  try {
+    let allFetchedData: any[] = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
 
-      let fromDate = "";
-      let toDate = "";
+    let fromDate = "";
+    let toDate = "";
+    if (exportMode === 'range') {
+      if (!startDate || !endDate) {
+        alert('ကျေးဇူးပြု၍ စတင်မည့်ရက်နှင့် ဆုံးမည့်ရက်ကို ပြည့်စုံစွာ ရွေးချယ်ပေးပါ။');
+        setIsExporting(false);
+        return;
+      }
+      fromDate = `${startDate}T00:00:00`;
+      toDate = `${endDate}T23:59:59`;
+    }
+
+    while (hasMore) {
+      let query = supabase
+        .from('orders')
+        .select(`
+          *,
+          pickup_rider:riders!pickup_rider_id(name),
+          deliver_rider:riders!deliver_rider_id(name)
+        `)
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
       if (exportMode === 'range') {
-        if (!startDate || !endDate) {
-          alert('ကျေးဇူးပြု၍ စတင်မည့်ရက်နှင့် ဆုံးမည့်ရက်ကို ပြည့်စုံစွာ ရွေးချယ်ပေးပါ။');
-          setIsExporting(false);
-          return;
-        }
-        fromDate = `${startDate}T00:00:00`;
-        toDate = `${endDate}T23:59:59`;
+        query = query.gte('received_date', fromDate).lte('received_date', toDate);
       }
 
-      while (hasMore) {
-        let query = supabase
-          .from('orders')
-          .select(`
-            *,
-            pickup_rider:riders!pickup_rider_id(name),
-            deliver_rider:riders!deliver_rider_id(name)
-          `)
-          .range(page * pageSize, (page + 1) * pageSize - 1);
+      if (!exportAllBranches && userBranch && userBranch !== 'ALL') {
+        query = query.eq('branch', userBranch);
+      }
 
-        if (exportMode === 'range') {
-          query = query.gte('received_date', fromDate).lte('received_date', toDate);
-        }
+      const { data, error } = await query;
 
-        if (!exportAllBranches && userBranch && userBranch !== 'ALL') {
-          query = query.eq('branch', userBranch);
-        }
+      if (error) {
+        throw new Error(`Supabase Query Error: ${error.message}`);
+      }
 
-        const { data, error } = await query;
-
-        if (error) {
-          throw new Error(`Supabase Query Error: ${error.message}`);
-        }
-
-        if (!data || data.length === 0) {
+      if (!data || data.length === 0) {
+        hasMore = false;
+      } else {
+        allFetchedData = [...allFetchedData, ...data];
+        if (data.length < pageSize) {
           hasMore = false;
         } else {
-          allFetchedData = [...allFetchedData, ...data];
-          if (data.length < pageSize) {
-            hasMore = false;
-          } else {
-            page++;
-          }
+          page++;
         }
       }
-
-      if (allFetchedData.length === 0) {
-        alert('ရွေးချယ်ထားသော သတ်မှတ်ချက်အတိုင်း ထုတ်ယူရန် စာရင်းမရှိပါ။');
-        return;
-      }
-
-      let finalData = allFetchedData;
-      if (!exportAllBranches && userBranch && userBranch !== 'ALL') {
-        finalData = allFetchedData.filter(o => o.branch === userBranch);
-      }
-
-      if (finalData.length === 0) {
-        alert('ရွေးချယ်ထားသော Branch အတွက် ထုတ်ယူရန် စာရင်းမရှိပါ။');
-        return;
-      }
-
-      const formattedData = finalData.map(order => ({
-        'Item ID': order.item_id || order.id || '-',
-        'Received Date': order.received_date ? order.received_date.split('T')[0] : '-',
-        'Sender Name': order.sender_name || '-',
-        'Sender Location': order.sender_loc || '-',
-        'Receiver Name': order.receiver_name || '-',
-        'Receiver Phone': order.receiver_phone || '-',
-        'Receiver Address': order.receiver_address || '-',
-        'Receiver Location': order.receiver_loc || '-',
-        'COD Amount': Number(order.cod_amount) || 0,
-        'Deli Fee': Number(order.deli_fee) || 0,
-        'Fee Type': order.fee_type || '-',
-        'Total Amount': Number(order.total_amount) || 0,
-        'Pickup Rider': order.pickup_rider?.name || '-',
-        'Status': order.status || '-',
-        'Deliver Rider': order.deliver_rider?.name || '-',
-        'Deliver Date': order.deliver_date ? order.deliver_date.split('T')[0] : '-',
-        'Note': order.note || '-',
-        'Cleared Date': order.cleared_date ? order.cleared_date.split('T')[0] : '-',
-      }));
-
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('Orders_Report');
-
-      const tableColumns = Object.keys(formattedData[0]).map(key => ({
-        name: key,
-        filterButton: true
-      }));
-
-      const tableRows = formattedData.map(item => Object.values(item));
-
-      worksheet.addTable({
-        name: 'OrdersTable',
-        ref: 'A1',
-        headerRow: true,
-        totalsRow: false,
-        style: {
-          theme: 'TableStyleMedium2',
-          showRowStripes: true,
-        },
-        columns: tableColumns,
-        rows: tableRows,
-      });
-
-      if (worksheet.columns) {
-        worksheet.columns.forEach(column => {
-          let maxLen = 0;
-          column.eachCell?.({ includeEmpty: true }, cell => {
-            const valLen = cell.value ? cell.value.toString().length : 0;
-            if (valLen > maxLen) maxLen = valLen;
-          });
-          column.width = Math.max(maxLen + 3, 5);
-        });
-      }
-
-      const buffer = await workbook.xlsx.writeBuffer();
-
-      const branchLabel = exportAllBranches ? 'All_Branches' : `Branch_${userBranch}`;
-      const fileName = exportMode === 'range'
-        ? `Orders_${startDate}_to_${endDate}_(${branchLabel}).xlsx`
-        : `Orders_All_Records_(${branchLabel}).xlsx`;
-
-      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-
-      if (typeof saveAs === 'function') {
-        saveAs(blob, fileName);
-      } else {
-        (saveAs as any)(blob, fileName);
-      }
-
-    } catch (err: any) {
-      console.error('Export error details:', err);
-      alert(`Excel Table ထုတ်ယူရာတွင် အမှားအယွင်းရှိခဲ့သည်:\n${err.message || err}`);
-    } finally {
-      setIsExporting(false);
     }
-  };
+
+    if (allFetchedData.length === 0) {
+      alert('ရွေးချယ်ထားသော သတ်မှတ်ချက်အတိုင်း ထုတ်ယူရန် စာရင်းမရှိပါ။');
+      return;
+    }
+
+    let finalData = allFetchedData;
+    if (!exportAllBranches && userBranch && userBranch !== 'ALL') {
+      finalData = allFetchedData.filter(o => o.branch === userBranch);
+    }
+
+    if (finalData.length === 0) {
+      alert('ရွေးချယ်ထားသော Branch အတွက် ထုတ်ယူရန် စာရင်းမရှိပါ။');
+      return;
+    }
+
+    // 💡 Helper Function: ISO String ကို Timezone Safe ဖြစ်သော JS Date Object အဖြစ် ပြောင်းရန်
+    const parseExcelDate = (dateStr?: string | null) => {
+      if (!dateStr) return null;
+      const cleanDate = dateStr.split('T')[0];
+      const parts = cleanDate.split('-');
+      if (parts.length === 3) {
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1; // JS Month starts at 0
+        const day = parseInt(parts[2], 10);
+        return new Date(year, month, day);
+      }
+      return null;
+    };
+
+    // 💡 Formatted Data ပြင်ဆင်ခြင်း
+    const formattedData = finalData.map(order => ({
+      'Item ID': order.item_id || order.id || '-',
+      'Received Date': parseExcelDate(order.received_date), // ✅ Excel Date Object
+      'Sender Name': order.sender_name || '-',
+      'Sender Location': order.sender_loc || '-',
+      'Receiver Name': order.receiver_name || '-',
+      'Receiver Phone': order.receiver_phone || '-',
+      'Receiver Address': order.receiver_address || '-',
+      'Receiver Location': order.receiver_loc || '-',
+      'COD Amount': Number(order.cod_amount) || 0,
+      'Deli Fee': Number(order.deli_fee) || 0,
+      'Fee Type': order.fee_type || '-',
+      'Total Amount': Number(order.total_amount) || 0,
+      'Pickup Rider': order.pickup_rider?.name || '-',
+      'Status': order.status || '-',
+      'Deliver Rider': order.deliver_rider?.name || '-',
+      'Deliver Date': parseExcelDate(order.deliver_date),   // ✅ Excel Date Object
+      'Note': order.note || '-',
+      'Cleared Date': parseExcelDate(order.cleared_date),   // ✅ Excel Date Object
+    }));
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Orders_Report');
+
+    const tableColumns = Object.keys(formattedData[0]).map(key => ({
+      name: key,
+      filterButton: true
+    }));
+
+    const tableRows = formattedData.map(item => Object.values(item));
+
+    worksheet.addTable({
+      name: 'OrdersTable',
+      ref: 'A1',
+      headerRow: true,
+      totalsRow: false,
+      style: {
+        theme: 'TableStyleMedium2',
+        showRowStripes: true,
+      },
+      columns: tableColumns,
+      rows: tableRows,
+    });
+
+    // 💡 Date Columns ခေါင်းစဉ်များကို မှတ်သားထားခြင်း
+    const dateHeaderNames = ['Received Date', 'Deliver Date', 'Cleared Date'];
+
+    // 💡 Column တိုင်းအတွက် Format များနှင့် Column Width များကို ညှိယူခြင်း
+    if (worksheet.columns) {
+      worksheet.columns.forEach((column, colIndex) => {
+        let maxLen = 0;
+        
+        // Header နာမည်ကို ယူခြင်း
+        const headerName = tableColumns[colIndex]?.name;
+        const isDateCol = dateHeaderNames.includes(headerName);
+
+        column.eachCell?.({ includeEmpty: true }, (cell, rowNumber) => {
+          // Row 1 က Header ဖြစ်သောကြောင့် Data Row များကိုသာ Date Format ထည့်မည်
+          if (rowNumber > 1 && isDateCol && cell.value instanceof Date) {
+            cell.numFmt = 'yyyy-mm-dd'; // ✅ Excel အသိအမှတ်ပြု Date Format
+          }
+
+          // Width တွက်ချက်ခြင်း
+          let valLen = 0;
+          if (cell.value instanceof Date) {
+            valLen = 10; // "YYYY-MM-DD" length
+          } else if (cell.value !== null && cell.value !== undefined) {
+            valLen = cell.value.toString().length;
+          }
+
+          if (valLen > maxLen) maxLen = valLen;
+        });
+
+        column.width = Math.max(maxLen + 4, 12);
+      });
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    const branchLabel = exportAllBranches ? 'All_Branches' : `Branch_${userBranch}`;
+    const fileName = exportMode === 'range'
+      ? `Orders_${startDate}_to_${endDate}_(${branchLabel}).xlsx`
+      : `Orders_All_Records_(${branchLabel}).xlsx`;
+
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+    if (typeof saveAs === 'function') {
+      saveAs(blob, fileName);
+    } else {
+      (saveAs as any)(blob, fileName);
+    }
+
+  } catch (err: any) {
+    console.error('Export error details:', err);
+    alert(`Excel Table ထုတ်ယူရာတွင် အမှားအယွင်းရှိခဲ့သည်:\n${err.message || err}`);
+  } finally {
+    setIsExporting(false);
+  }
+};
 
   // ──────────────────────────────────────────────
   // 🎨 PREMIUM REDESIGNED UI — "Luxe Sapphire"
