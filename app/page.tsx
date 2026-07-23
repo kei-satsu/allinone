@@ -193,18 +193,20 @@ export default function Dashboard() {
     }
 
     // 💡 Helper Function: ISO String ကို Timezone Safe ဖြစ်သော JS Date Object အဖြစ် ပြောင်းရန်
-    const parseExcelDate = (dateStr?: string | null) => {
-      if (!dateStr) return null;
-      const cleanDate = dateStr.split('T')[0];
-      const parts = cleanDate.split('-');
-      if (parts.length === 3) {
-        const year = parseInt(parts[0], 10);
-        const month = parseInt(parts[1], 10) - 1; // JS Month starts at 0
-        const day = parseInt(parts[2], 10);
-        return new Date(year, month, day);
-      }
-      return null;
-    };
+   const parseExcelDate = (dateStr?: string | null) => {
+  if (!dateStr) return null;
+  const cleanDate = dateStr.split('T')[0];
+  const parts = cleanDate.split('-');
+  if (parts.length === 3) {
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1; // JS Month starts at 0
+    const day = parseInt(parts[2], 10);
+    
+    // Date.UTC သုံးလိုက်ခြင်းဖြင့် ExcelJS က UTC ဖြင့် အတိအကျ ဖတ်သွားပါမည်
+    return new Date(Date.UTC(year, month, day));
+  }
+  return null;
+};
 
     // 💡 Formatted Data ပြင်ဆင်ခြင်း
     const formattedData = finalData.map(order => ({
