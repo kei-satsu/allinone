@@ -301,16 +301,18 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
 
     const updatedHistory = [...(orderData.history || []), newLogEntry];
 
-    const payload = {
-        ...formData,
-        pickup_rider_id: formData.pickup_rider_id || null,
-        deliver_rider_id: formData.deliver_rider_id || null,
-        deliver_date: formData.deliver_date || null,
-        cleared_date: formData.cleared_date || null,
-        transit_date: formData.transit_date || null,
-        transit_to: formData.transit_to || null,
-        history: updatedHistory
-    }
+   const payload = {
+    ...formData,
+    // Barcode အလွတ်ဖြစ်နေရင် သို့မဟုတ် Space ပဲပါရင် DB ကို '' အစား null ပို့ပေးမည်
+    barcode: formData.barcode?.trim() ? formData.barcode.trim() : null, 
+    pickup_rider_id: formData.pickup_rider_id || null,
+    deliver_rider_id: formData.deliver_rider_id || null,
+    deliver_date: formData.deliver_date || null,
+    cleared_date: formData.cleared_date || null,
+    transit_date: formData.transit_date || null,
+    transit_to: formData.transit_to || null,
+    history: updatedHistory
+}
 
     const { error } = await supabase
       .from('orders')
@@ -360,19 +362,18 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
               <label className={labelStyle}>Barcode Code</label>
               <div className="flex gap-2 items-center">
                 <div className="relative flex-1">
-                  <input
-                    type="text"
-                    value={formData.barcode}
-                    onChange={e => setFormData({ ...formData, barcode: e.target.value })}
-                    readOnly={isBarcodeLocked}
-                    className={`${winInput} font-mono font-bold tracking-wide transition-all ${
-                      isBarcodeLocked 
-                        ? 'bg-gray-100 text-gray-500 border-gray-300 cursor-not-allowed select-none' 
-                        : 'bg-amber-50/60 text-amber-900 border-amber-400 focus:ring-amber-200'
-                    }`}
-                    placeholder="Barcode ရိုက်ထည့်ပါ..."
-                    required
-                  />
+                <input
+  type="text"
+  value={formData.barcode}
+  onChange={e => setFormData({ ...formData, barcode: e.target.value })}
+  readOnly={isBarcodeLocked}
+  className={`${winInput} font-mono font-bold tracking-wide transition-all ${
+    isBarcodeLocked 
+      ? 'bg-gray-100 text-gray-500 border-gray-300 cursor-not-allowed select-none' 
+      : 'bg-amber-50/60 text-amber-900 border-amber-400 focus:ring-amber-200'
+  }`}
+  placeholder="Barcode ရိုက်ထည့်ပါ..."
+/>
                   {!isBarcodeLocked && (
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-amber-600 font-bold uppercase animate-pulse">
                       ⚠️ Editing
