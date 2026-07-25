@@ -8,7 +8,7 @@ import ExcelJS from 'exceljs';
 
 // ── Column အားလုံးသတ်မှတ်ချက် ──
 const COLUMN_DEFS = [
-  { key: 'item_id', label: 'Item ID', defaultVisible: false },
+  { key: 'item_id', label: 'Item ID', defaultVisible: true },
   { key: 'received_date', label: 'Received Date', defaultVisible: true },
   { key: 'branch', label: 'Branch', defaultVisible: false },
   { key: 'sender_name', label: 'Sender', defaultVisible: true },

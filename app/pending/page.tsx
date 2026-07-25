@@ -61,6 +61,8 @@ export default function PendingEntry() {
 
   const today = new Date().toISOString().split('T')[0]
 
+   
+
   const [formData, setFormData] = useState({
     received_date: today,
     sender_id: null as string | null,
@@ -70,7 +72,7 @@ export default function PendingEntry() {
     receiver_name: '',
     receiver_phone: '',
     receiver_address: '',
-    receiver_loc: 'MDY',
+    receiver_loc: userBranch,
     cod_amount: 0,
     deli_fee: 0,
     fee_type: 'Deli',
@@ -86,34 +88,43 @@ export default function PendingEntry() {
     remark: ''
   })
 
-  // ၁။ City အတွက် Interface သတ်မှတ်ပါ
+  // ၁။ City Interface
 interface City {
-  "C.ID": string;        // သို့မဟုတ် number (Database ပေါ်မူတည်၍)
+  "C.ID": string;
   name: string;
-  sort_order?: number;   // Manual Sort ထည့်ထားပါက သုံးရန် (Optional)
+  sort_order?: number;
 }
 
-// 2. useState မှာ Interface ကို ထည့်ပေးပါ
+// 2. State
 const [cities, setCities] = useState<City[]>([]);
 
-const loadCities = async () => {
+// မိမိ ရောက်နေသော / သုံးနေသော Current Branch ID (ဥပမာ 'YGN')
+
+
+const loadCities = async (targetBranch?: string) => {
+  // Parameter မပါလာပါက userBranch သို့မဟုတ် localStorage မှ ယူမည်
+  const activeBranch = targetBranch || userBranch || localStorage.getItem('user_branch') || '';
+
   const { data, error } = await supabase
     .from("cities")
     .select('*')
-    .order('sort_order', { ascending: true });
+    .order('sort_order', { ascending: true });  
   
   if (error) {
     console.error("Error fetching cities:", error);
     return;
   }
   
-  if (data) setCities(data);
+  if (data) {
+    // activeBranch ပေါ်မူတည်ပြီး ထိပ်ဆုံး ရွှေ့ပေးခြင်း
+    const topCity = data.filter(city => city["C.ID"] === activeBranch);
+    const otherCities = data.filter(city => city["C.ID"] !== activeBranch);
+
+    setCities([...topCity, ...otherCities]);
+  }
 };
 
-// စာမျက်နှာ စပွင့်ပွင့်ချင်းမှာ မြို့စာရင်း ဆွဲထုတ်ခိုင်းရန်
-useEffect(() => {
-  loadCities();
-}, []);
+
 
   // 🌟 Tab နှိပ်ပြီး Select Box ပေါ်ရောက်တာနဲ့ Dropdown ကို Auto ဖြည်ချပေးမယ့် စနစ်
   const handleSelectFocus = (e: React.FocusEvent<HTMLSelectElement>) => {
@@ -137,6 +148,7 @@ useEffect(() => {
     setUserBranch(storedBranch)
     fetchRiders(storedBranch)
     fetchPendingItems(storedBranch)
+    loadCities(storedBranch)
 
     const storedQueue = localStorage.getItem('offline_orders_queue')
     if (storedQueue) {
@@ -225,20 +237,20 @@ useEffect(() => {
     fetchSenders()
   }, [userBranch])
 
-  async function fetchPendingItems(branch: string) {
+ async function fetchPendingItems(branch: string) {
   const { data, error } = await supabase
     .from('orders')
     .select('*')
     .eq('branch', branch)
     .eq('is_deleted', false)
-    // 💡 receiver_name က null ဖြစ်နေတာ သို့မဟုတ် စာလုံးအလွတ် "" ဖြစ်နေတာတွေကိုပဲ ရှာခိုင်းလိုက်တာပါ
     .or('receiver_name.is.null,receiver_name.eq.""') 
     .order('created_at', { ascending: true })
 
   if (!error && data) {
     setPendingItems(data)
     if (data.length > 0 && !selectedItem) {
-      handleSelectItem(data[0])
+      // 💡 3rd Parameter အနေနဲ့ branch ကို ထည့်ပေးလိုက်ပါ
+      handleSelectItem(data[0], true, branch) 
     }
   }
 }
@@ -367,47 +379,49 @@ useEffect(() => {
     return () => clearTimeout(timer)
   }, [syncQueue, isOnline, syncing])
 
-  const handleSelectItem = (item: any, shouldFocusInput = true) => {
-    setSelectedItem(item)
-    setOriginalCod(item.cod_amount || 0)
-    setZoomScale(1); setRotation(0); setPosition({ x: 0, y: 0 })
+ const handleSelectItem = (item: any, shouldFocusInput = true, branchOverride?: string) => {
+  // state မရသေးရင် parameter သို့မဟုတ် localStorage မှ တိုက်ရိုက်ယူမည်
+  const activeBranch = branchOverride || userBranch || localStorage.getItem('user_branch') || ''
 
-    setSelectedSenderId(item.sender_id ? String(item.sender_id) : '')
-    setSearchQuery(item.sender_name || '')
-    setFormData(prev => ({
-      received_date: item.received_date || today,
-      sender_id: persistSenderId ?? item.sender_id ?? null,
-      sender_name: persistSenderName || item.sender_name || '',
-      sender_phone: item.sender_phone || '',
-      sender_loc: persistSenderLoc || item.sender_loc || userBranch,
-      receiver_name: item.receiver_name || '',
-      receiver_phone: item.receiver_phone || '',
-      receiver_address: item.receiver_address || '',
-      receiver_loc: item.receiver_loc || 'MDY',
-      cod_amount: item.cod_amount || 0,
-      deli_fee: item.deli_fee || 0,
-      fee_type: item.fee_type || 'Deli',
-      total_amount: item.total_amount || 0,
-      pickup_rider_id: persistPickupRiderId || item.pickup_rider_id || '',
-      status: item.status === 'Pending' ? 'At Office' : (item.status || 'At Office'),
-      deliver_rider_id: item.deliver_rider_id || '',
-      deliver_date: item.deliver_date || '',
-      note: item.note || '',
-      cleared_date: item.cleared_date || '',
-      
-      branch: item.branch || userBranch,
-      image_url: item.image_url || '',
-      remark: item.remark || ''
-    }))
+  setSelectedItem(item)
+  setOriginalCod(item.cod_amount || 0)
+  setZoomScale(1); setRotation(0); setPosition({ x: 0, y: 0 })
 
-    if (shouldFocusInput) {
-  setTimeout(() => receiverNameRef.current?.focus(), 50)
-} else {
-      if (document.activeElement instanceof HTMLElement) {
-        document.activeElement.blur() // Arrow Key နဲ့ အမြန်ကျော်ရင် focus ဖြုတ်ပေးထားမယ်
-      }
+  setSelectedSenderId(item.sender_id ? String(item.sender_id) : '')
+  setSearchQuery(item.sender_name || '')
+  setFormData(prev => ({
+    received_date: item.received_date || today,
+    sender_id: persistSenderId ?? item.sender_id ?? null,
+    sender_name: persistSenderName || item.sender_name || '',
+    sender_phone: item.sender_phone || '',
+    sender_loc: persistSenderLoc || item.sender_loc || activeBranch,
+    receiver_name: item.receiver_name || '',
+    receiver_phone: item.receiver_phone || '',
+    receiver_address: item.receiver_address || '',
+    receiver_loc: item.receiver_loc || activeBranch, // 👈 userBranch အစား activeBranch သုံးပေးပါ
+    cod_amount: item.cod_amount || 0,
+    deli_fee: item.deli_fee || 0,
+    fee_type: item.fee_type || 'Deli',
+    total_amount: item.total_amount || 0,
+    pickup_rider_id: persistPickupRiderId || item.pickup_rider_id || '',
+    status: item.status === 'Pending' ? 'At Office' : (item.status || 'At Office'),
+    deliver_rider_id: item.deliver_rider_id || '',
+    deliver_date: item.deliver_date || '',
+    note: item.note || '',
+    cleared_date: item.cleared_date || '',
+    branch: item.branch || activeBranch, // 👈 activeBranch သုံးပေးပါ
+    image_url: item.image_url || '',
+    remark: item.remark || ''
+  }))
+
+  if (shouldFocusInput) {
+    setTimeout(() => receiverNameRef.current?.focus(), 50)
+  } else {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
     }
   }
+}
 
   const handleUndo = async () => {
     if (processedStack.length === 0) return
