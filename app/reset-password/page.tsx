@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
+// 🖼️ Replace with the same background image path used in the login page
+const BACKGROUND_IMAGE = '/loginbackground.png'
+
 export default function ResetPasswordPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
@@ -11,7 +14,7 @@ export default function ResetPasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [checkingSession, setCheckingSession] = useState(true)
-  
+
   // 🌟 Password အသစ် ရိုက်ထည့်ရမယ့် Mode
   const [isRecoveryMode, setIsRecoveryMode] = useState(false)
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
@@ -27,13 +30,13 @@ export default function ResetPasswordPage() {
     // 2. URL ပါရာမီတာများနှင့် Active Session များကို စစ်ဆေးခြင်း
     const checkRecoveryStatus = async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      
+
       if (session) {
         setIsRecoveryMode(true)
       } else if (typeof window !== 'undefined') {
         const hasHashToken = window.location.hash.includes('access_token') || window.location.hash.includes('type=recovery')
         const hasQueryCode = window.location.search.includes('code=')
-        
+
         if (hasHashToken || hasQueryCode) {
           setIsRecoveryMode(true)
         }
@@ -89,7 +92,6 @@ export default function ResetPasswordPage() {
     setLoading(true)
     setMessage(null)
 
-    // ၁။ Supabase သို့ Password အသစ် update လုပ်ခြင်း
     const { error } = await supabase.auth.updateUser({
       password: newPassword,
     })
@@ -102,30 +104,39 @@ export default function ResetPasswordPage() {
         text: 'Password အသစ် အောင်မြင်စွာ ပြောင်းလဲပြီးပါပြီ! Login စာမျက်နှာသို့ ပြန်လည် ပို့ပေးနေပါသည်...',
         type: 'success',
       })
-      
-      // ၂။ Password ပြောင်းပြီးပါက Session အသစ်အတွက် Sign Out လုပ်ပေးခြင်း
+
       await supabase.auth.signOut()
-      
+
       setTimeout(() => {
         router.push('/login')
       }, 1500)
     }
   }
 
-  // Session စစ်ဆေးနေစဉ် Loading Spinner ပြပေးခြင်း
+  // Session စစ်ဆေးနေစဉ် Loading Spinner (glass theme)
   if (checkingSession) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f3f3f3]">
-        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+      <div
+        className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: `url('${BACKGROUND_IMAGE}')` }}
+      >
+        <div className="absolute inset-0 bg-black/40 backdrop-brightness-75" />
+        <div className="relative z-10 w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f3f3f3] p-4">
-      <div className="max-w-md w-full bg-white rounded-3xl shadow-md border border-slate-200/60 p-8">
-        
-        <h2 className="text-2xl font-bold text-slate-800 text-center mb-6">
+    <div
+      className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat"
+      style={{ backgroundImage: `url('${BACKGROUND_IMAGE}')` }}
+    >
+      {/* Dark overlay */}
+      <div className="absolute inset-0 bg-black/40 backdrop-brightness-75" />
+
+      {/* Glassmorphism card */}
+      <div className="relative z-10 w-full max-w-md bg-white/10 backdrop-blur-xl border border-white/30 rounded-2xl shadow-2xl p-8">
+        <h2 className="text-2xl font-bold text-white text-center mb-6">
           {isRecoveryMode ? 'Password အသစ် သတ်မှတ်ရန်' : 'Password မေ့နေပါသလား'}
         </h2>
 
@@ -133,8 +144,8 @@ export default function ResetPasswordPage() {
           <div
             className={`p-3.5 rounded-2xl mb-5 text-xs font-semibold ${
               message.type === 'success'
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
-                : 'bg-rose-50 text-rose-700 border border-rose-200/60'
+                ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-300/30'
+                : 'bg-rose-500/20 text-rose-200 border border-rose-300/30'
             }`}
           >
             {message.text}
@@ -142,10 +153,10 @@ export default function ResetPasswordPage() {
         )}
 
         {isRecoveryMode ? (
-          /* 🔑 အဆင့် (၂) - Password အသစ် ရိုက်ထည့်ရမယ့် Form */
+          /* 🔑 အဆင့် (၂) - Password အသစ် Form */
           <form onSubmit={handleUpdatePassword} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-600 mb-1.5">
+              <label className="block text-xs font-bold text-white/80 mb-1.5">
                 Password အသစ်
               </label>
               <input
@@ -154,12 +165,12 @@ export default function ResetPasswordPage() {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Password အသစ် ရိုက်ထည့်ပါ"
-                className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 focus:outline-none text-sm transition-all text-slate-800"
+                className="w-full px-4 py-3 rounded-2xl bg-transparent border border-white/30 text-white placeholder-white/50 focus:border-white focus:ring-0 outline-none text-sm transition-all"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-600 mb-1.5">
+              <label className="block text-xs font-bold text-white/80 mb-1.5">
                 Password အသစ် ထပ်ရိုက်ပါ
               </label>
               <input
@@ -168,23 +179,23 @@ export default function ResetPasswordPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Password အသစ် ပြန်ရိုက်ထည့်ပါ"
-                className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 focus:outline-none text-sm transition-all text-slate-800"
+                className="w-full px-4 py-3 rounded-2xl bg-transparent border border-white/30 text-white placeholder-white/50 focus:border-white focus:ring-0 outline-none text-sm transition-all"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold py-3.5 rounded-2xl shadow-sm transition-all active:scale-[0.98] text-sm disabled:opacity-50 mt-2"
+              className="w-full bg-white text-gray-900 font-bold py-3 rounded-full shadow-lg hover:bg-gray-100 transition-colors disabled:opacity-70 disabled:cursor-not-allowed text-sm mt-2"
             >
               {loading ? 'အတည်ပြုနေသည်...' : 'Password အသစ် ပြောင်းမည်'}
             </button>
           </form>
         ) : (
-          /* ✉️ အဆင့် (၁) - Email ရိုက်ထည့်ပြီး Reset Link တောင်းရမယ့် Form */
+          /* ✉️ အဆင့် (၁) - Email Form */
           <form onSubmit={handleSendResetEmail} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-600 mb-1.5">
+              <label className="block text-xs font-bold text-white/80 mb-1.5">
                 သင့် အီးမေးလ် (Email)
               </label>
               <input
@@ -193,14 +204,14 @@ export default function ResetPasswordPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="example@gmail.com"
-                className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 focus:outline-none text-sm transition-all text-slate-800"
+                className="w-full px-4 py-3 rounded-2xl bg-transparent border border-white/30 text-white placeholder-white/50 focus:border-white focus:ring-0 outline-none text-sm transition-all"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold py-3.5 rounded-2xl shadow-sm transition-all active:scale-[0.98] text-sm disabled:opacity-50 mt-2"
+              className="w-full bg-white text-gray-900 font-bold py-3 rounded-full shadow-lg hover:bg-gray-100 transition-colors disabled:opacity-70 disabled:cursor-not-allowed text-sm mt-2"
             >
               {loading ? 'ပို့ပေးနေသည်...' : 'Reset Link ပို့မည်'}
             </button>
@@ -211,12 +222,11 @@ export default function ResetPasswordPage() {
           <button
             type="button"
             onClick={() => router.push('/login')}
-            className="text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors"
+            className="text-sm text-white/70 hover:text-white transition-colors underline"
           >
             ← Login စာမျက်နှာသို့ ပြန်သွားမည်
           </button>
         </div>
-
       </div>
     </div>
   )
