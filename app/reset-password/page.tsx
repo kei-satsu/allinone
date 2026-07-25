@@ -10,23 +10,38 @@ export default function ResetPasswordPage() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [checkingSession, setCheckingSession] = useState(true)
   
-  // 🌟 User ဟာ Password အသစ် ရိုက်ထည့်ရမယ့် အဆင့် ရောက်မရောက် မှတ်သည့် State
+  // 🌟 Password အသစ် ရိုက်ထည့်ရမယ့် Mode
   const [isRecoveryMode, setIsRecoveryMode] = useState(false)
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
 
   useEffect(() => {
-    // 1. Supabase Event မှ Recovery Link ဖြင့် ဝင်လာသည်ကို စောင့်ကြည့်ခြင်း
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
-      if (event === 'PASSWORD_RECOVERY') {
+    // 1. Supabase Auth State Event ကို စောင့်ကြည့်ခြင်း
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY' || session) {
         setIsRecoveryMode(true)
       }
     })
 
-    // 2. Hash/Token URL မှာ ပါလာပါက Recovery Mode သို့ တိုက်ရိုက်ပြောင်းရန်
-    if (typeof window !== 'undefined' && window.location.hash.includes('access_token')) {
-      setIsRecoveryMode(true)
+    // 2. URL ပါရာမီတာများနှင့် Active Session များကို စစ်ဆေးခြင်း
+    const checkRecoveryStatus = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (session) {
+        setIsRecoveryMode(true)
+      } else if (typeof window !== 'undefined') {
+        const hasHashToken = window.location.hash.includes('access_token') || window.location.hash.includes('type=recovery')
+        const hasQueryCode = window.location.search.includes('code=')
+        
+        if (hasHashToken || hasQueryCode) {
+          setIsRecoveryMode(true)
+        }
+      }
+      setCheckingSession(false)
     }
+
+    checkRecoveryStatus()
 
     return () => {
       subscription.unsubscribe()
@@ -52,11 +67,12 @@ export default function ResetPasswordPage() {
         text: 'Password ပြင်ရန် link ကို အီးမေးလ်သို့ ပို့ပေးထားပါသည်။ Email စစ်ဆေးပေးပါ။',
         type: 'success',
       })
+      setEmail('')
     }
     setLoading(false)
   }
 
-  // 🔹 အဆင့် (၂) - Password အသစ် ပြောင်းလဲပေးသည့် Function
+  // 🔹 အဆင့် (၂) - Password အသစ် ပြောင်းလဲပြီး Login စာမျက်နှာသို့ ပို့ပေးသည့် Function
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -73,23 +89,36 @@ export default function ResetPasswordPage() {
     setLoading(true)
     setMessage(null)
 
-    // Supabase သို့ Password အသစ် update လုပ်ခြင်း
+    // ၁။ Supabase သို့ Password အသစ် update လုပ်ခြင်း
     const { error } = await supabase.auth.updateUser({
       password: newPassword,
     })
 
     if (error) {
       setMessage({ text: error.message, type: 'error' })
+      setLoading(false)
     } else {
       setMessage({
-        text: 'Password အသစ် ပြောင်းလဲပြီးပါပြီ! Login စာမျက်နှာသို့ သို့ သွားနေပါသည်...',
+        text: 'Password အသစ် အောင်မြင်စွာ ပြောင်းလဲပြီးပါပြီ! Login စာမျက်နှာသို့ ပြန်လည် ပို့ပေးနေပါသည်...',
         type: 'success',
       })
+      
+      // ၂။ Password ပြောင်းပြီးပါက Session အသစ်အတွက် Sign Out လုပ်ပေးခြင်း
+      await supabase.auth.signOut()
+      
       setTimeout(() => {
         router.push('/login')
-      }, 2000)
+      }, 1500)
     }
-    setLoading(false)
+  }
+
+  // Session စစ်ဆေးနေစဉ် Loading Spinner ပြပေးခြင်း
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f3f3f3]">
+        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
   }
 
   return (
@@ -125,7 +154,7 @@ export default function ResetPasswordPage() {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Password အသစ် ရိုက်ထည့်ပါ"
-                className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 focus:outline-none text-sm transition-all"
+                className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 focus:outline-none text-sm transition-all text-slate-800"
               />
             </div>
 
@@ -139,7 +168,7 @@ export default function ResetPasswordPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Password အသစ် ပြန်ရိုက်ထည့်ပါ"
-                className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 focus:outline-none text-sm transition-all"
+                className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 focus:outline-none text-sm transition-all text-slate-800"
               />
             </div>
 
@@ -164,7 +193,7 @@ export default function ResetPasswordPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="example@gmail.com"
-                className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 focus:outline-none text-sm transition-all"
+                className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 focus:outline-none text-sm transition-all text-slate-800"
               />
             </div>
 
@@ -177,6 +206,16 @@ export default function ResetPasswordPage() {
             </button>
           </form>
         )}
+
+        <div className="mt-6 text-center">
+          <button
+            type="button"
+            onClick={() => router.push('/login')}
+            className="text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors"
+          >
+            ← Login စာမျက်နှာသို့ ပြန်သွားမည်
+          </button>
+        </div>
 
       </div>
     </div>
