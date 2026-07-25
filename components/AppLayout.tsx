@@ -254,9 +254,9 @@ function useAuth(redirectIfMissing: boolean) {
         setRealBranch(null)
         setUserEmail(null)
         localStorage.removeItem("user_branch")
-        if (redirectIfMissing && pathname !== "/login") {
-          router.replace("/login")
-        }
+        if (redirectIfMissing && pathname !== "/login" && pathname !== "/reset-password") {
+  router.replace("/login")
+}
       }
     })
 
@@ -402,11 +402,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [hideMobileDock, setHideMobileDock] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
-  const isLoginPage = pathname === "/login"
+  const isPublicPage = pathname === "/login" || pathname === "/reset-password"
   const isIntakePage = pathname === "/intake" 
   
   const isVocPage = pathname === "/voc"
-  const { userEmail , userBranch, realBranch, branchInfo, isAuthenticated, isReady, logout, changeBranch } = useAuth(!isLoginPage)
+  const { userEmail , userBranch, realBranch, branchInfo, isAuthenticated, isReady, logout, changeBranch } = useAuth(!isPublicPage)
   const sidebarRef = useRef<HTMLElement>(null)
 
   const [mounted, setMounted] = useState(false)
@@ -474,9 +474,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener("keydown", handleKeyDown)
   }, [isMobile, sidebarLocked, isIntakePage])
 
-  if (!mounted || !isReady) return <div className="w-full h-screen bg-[#f3f3f3]" />
-  if (isLoginPage) return <div className="w-full min-h-screen">{children}</div>
-  if (!isAuthenticated) return <div className="w-full min-h-screen bg-[#f3f3f3]" />
+if (!mounted || !isReady) return <div className="w-full h-screen bg-[#f3f3f3]" />
+if (isPublicPage) return <div className="w-full min-h-screen">{children}</div>
+if (!isAuthenticated) return <div className="w-full min-h-screen bg-[#f3f3f3]" />
 
   if (pathname === "/trash" && realBranch !== "ADMIN") {
     return <div className="w-full h-screen bg-[#f3f3f3]" />
@@ -700,7 +700,7 @@ if (item.path === "/trash" && realBranch !== "ADMIN") {
 
           {/* ── Mobile Dock ── */}
 {/* ── 📱 iOS Mobile Dock with Tuned Ambient Bottom Fade ── */}
-{isMobile && !isLoginPage && !hideMobileDock && !mobileSidebarOpen && !isIntakePage && !isVocPage &&(
+{isMobile && !isPublicPage && !hideMobileDock && !mobileSidebarOpen && !isIntakePage && !isVocPage &&(
   <>
     {/* 🌫️ iOS Bottom Gradient Sheet Mask (အောက်ဆုံးအနားသတ်ကို Solid မဟုတ်ဘဲ ၈၀% Opacity ဖြင့် ဝါးပေးထားသော Mask) */}
     <div className="fixed inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#f4f6f9]/80 via-[#f4f6f9]/40 to-transparent pointer-events-none z-40 md:hidden backdrop-blur-[1px]" />
