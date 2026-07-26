@@ -128,7 +128,7 @@ useEffect(() => {
       `)
       .eq('is_deleted', false)
       .eq('transit_to', activeBranch)
-      .eq('status', 'Arrived')
+      .neq('status', 'In-Transit')
       .order('created_at', { ascending: false })
 
     if (error) console.error(error)
