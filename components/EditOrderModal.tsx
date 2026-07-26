@@ -117,14 +117,27 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     fetchCities()
   }, [isOpen])
 
+  
+
   useEffect(() => {
-    if (!formData.branch || !isOpen) return
-    async function fetchRiders() {
-      const { data, error } = await supabase.from('riders').select('*').eq('branch', formData.branch)
-      if (!error && data) setRiders(data)
-    }
-    fetchRiders()
-  }, [formData.branch, isOpen])
+  if (!isOpen) return;
+
+  // localStorage မှ အကောက်ဝင်ထားသော branch ကို ယူမည် (မရှိပါက formData.branch ကို fallback ထားမည်)
+  const currentBranch = localStorage.getItem('user_branch') || formData.branch;
+  if (!currentBranch) return;
+
+  async function fetchRiders() {
+    const { data, error } = await supabase
+      .from('riders')
+      .select('*')
+      .eq('branch', currentBranch)
+      .order('name', { ascending: true });
+
+    if (!error && data) setRiders(data);
+  }
+
+  fetchRiders();
+}, [isOpen, formData.branch]);
 
   // 3. Sender ရှာဖွေခြင်းနှင့် ရွေးချယ်ခြင်းယန္တရား
   const handleSenderNameChange = (val: string) => {
@@ -599,23 +612,20 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                 </div>
               </div>
               <div>
-                <label className={labelStyle}>Delivery Rider</label>
-                <select 
-                  value={formData.deliver_rider_id} 
-                  onChange={e => setFormData({...formData, deliver_rider_id: e.target.value})} 
-                  className={winSelect}
-                >
-                  <option value="">Select delivery rider...</option>
-                  {riders
-                    .filter(r => !formData.branch || r.branch === formData.branch)
-                    .map(r => (
-                      <option key={r.id} value={r.id}>
-                        {r.name}
-                      </option>
-                    ))
-                  }
-                </select>
-              </div>
+  <label className={labelStyle}>Delivery Rider</label>
+  <select 
+    value={formData.deliver_rider_id} 
+    onChange={e => setFormData({...formData, deliver_rider_id: e.target.value})} 
+    className={winSelect}
+  >
+    <option value="">Select delivery rider...</option>
+    {riders.map(r => (
+      <option key={r.id} value={r.id}>
+        {r.name}
+      </option>
+    ))}
+  </select>
+</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={labelStyle}>Return Utility</label>
