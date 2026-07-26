@@ -121,7 +121,7 @@ export default function Dashboard() {
     }
   }, [userBranch, allOrders])
 
-  const handleExportExcel = async () => {
+const handleExportExcel = async () => {
   setIsExporting(true);
   try {
     let allFetchedData: any[] = [];
@@ -149,15 +149,26 @@ export default function Dashboard() {
           pickup_rider:riders!pickup_rider_id(name),
           deliver_rider:riders!deliver_rider_id(name)
         `)
-        .range(page * pageSize, (page + 1) * pageSize - 1);
+        // 🔴 is_deleted true မဟုတ်သော (null သို့မဟုတ် false ဖြစ်သော) Record များကိုသာ ဆွဲမည်
+        .or('is_deleted.is.null,is_deleted.eq.false');
 
-      if (exportMode === 'range') {
+      // 🔴 Branch နှင့် Date Condition များကို သတ်မှတ်ခြင်း
+      if (!exportAllBranches && userBranch && userBranch !== 'ALL') {
+        if (exportMode === 'range') {
+          // branch + received_date သို့မဟုတ် transit_to + arrival_date ဖြင့် စစ်ဆေးခြင်း
+          const condBranch = `and(branch.eq.${userBranch},received_date.gte.${fromDate},received_date.lte.${toDate})`;
+          const condTransit = `and(transit_to.eq.${userBranch},arrival_date.gte.${fromDate},arrival_date.lte.${toDate})`;
+          query = query.or(`${condBranch},${condTransit}`);
+        } else {
+          // Date Range မပါပါက branch သို့မဟုတ် transit_to ညီသည်များကို ဆွဲမည်
+          query = query.or(`branch.eq.${userBranch},transit_to.eq.${userBranch}`);
+        }
+      } else if (exportMode === 'range') {
+        // All Branches အတွက် Date Range ဖြင့် ဆွဲခြင်း
         query = query.gte('received_date', fromDate).lte('received_date', toDate);
       }
 
-      if (!exportAllBranches && userBranch && userBranch !== 'ALL') {
-        query = query.eq('branch', userBranch);
-      }
+      query = query.range(page * pageSize, (page + 1) * pageSize - 1);
 
       const { data, error } = await query;
 
@@ -182,36 +193,64 @@ export default function Dashboard() {
       return;
     }
 
-    let finalData = allFetchedData;
+    // 🔴 1. is_deleted true ဖြစ်နေသည့် Record များကို ဖယ်ထုတ်ခြင်း
+    let finalData = allFetchedData.filter(o => !o.is_deleted);
+
+    // 🔴 2. Branch & Date logic ကို သေချာအောင် In-memory Double Check လုပ်ခြင်း
     if (!exportAllBranches && userBranch && userBranch !== 'ALL') {
-      finalData = allFetchedData.filter(o => o.branch === userBranch);
+      const fromTime = fromDate ? new Date(fromDate).getTime() : 0;
+      const toTime = toDate ? new Date(toDate).getTime() : 0;
+
+      finalData = finalData.filter(order => {
+        const isOriginBranch = order.branch === userBranch;
+        const isTransitBranch = order.transit_to === userBranch;
+
+        if (exportMode === 'range') {
+          let matchBranchDate = false;
+          let matchTransitDate = false;
+
+          if (isOriginBranch && order.received_date) {
+            const rTime = new Date(order.received_date).getTime();
+            matchBranchDate = rTime >= fromTime && rTime <= toTime;
+          }
+
+          if (isTransitBranch && order.arrival_date) {
+            const aTime = new Date(order.arrival_date).getTime();
+            matchTransitDate = aTime >= fromTime && aTime <= toTime;
+          }
+
+          return matchBranchDate || matchTransitDate;
+        } else {
+          return isOriginBranch || isTransitBranch;
+        }
+      });
     }
 
     if (finalData.length === 0) {
-      alert('ရွေးချယ်ထားသော Branch အတွက် ထုတ်ယူရန် စာရင်းမရှိပါ။');
+      alert('ရွေးချယ်ထားသော သတ်မှတ်ချက်/Branch အတွက် ထုတ်ယူရန် စာရင်းမရှိပါ။');
       return;
     }
 
     // 💡 Helper Function: ISO String ကို Timezone Safe ဖြစ်သော JS Date Object အဖြစ် ပြောင်းရန်
-   const parseExcelDate = (dateStr?: string | null) => {
-  if (!dateStr) return null;
-  const cleanDate = dateStr.split('T')[0];
-  const parts = cleanDate.split('-');
-  if (parts.length === 3) {
-    const year = parseInt(parts[0], 10);
-    const month = parseInt(parts[1], 10) - 1; // JS Month starts at 0
-    const day = parseInt(parts[2], 10);
-    
-    // Date.UTC သုံးလိုက်ခြင်းဖြင့် ExcelJS က UTC ဖြင့် အတိအကျ ဖတ်သွားပါမည်
-    return new Date(Date.UTC(year, month, day));
-  }
-  return null;
-};
+    const parseExcelDate = (dateStr?: string | null) => {
+      if (!dateStr) return null;
+      const cleanDate = dateStr.split('T')[0];
+      const parts = cleanDate.split('-');
+      if (parts.length === 3) {
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1; // JS Month starts at 0
+        const day = parseInt(parts[2], 10);
+        
+        return new Date(Date.UTC(year, month, day));
+      }
+      return null;
+    };
 
     // 💡 Formatted Data ပြင်ဆင်ခြင်း
     const formattedData = finalData.map(order => ({
       'Item ID': order.item_id || order.id || '-',
-      'Received Date': parseExcelDate(order.received_date), // ✅ Excel Date Object
+      'Received Date': parseExcelDate(order.received_date),
+      'Arrival Date': parseExcelDate(order.arrival_date),
       'Sender Name': order.sender_name || '-',
       'Sender Location': order.sender_loc || '-',
       'Receiver Name': order.receiver_name || '-',
@@ -225,9 +264,9 @@ export default function Dashboard() {
       'Pickup Rider': order.pickup_rider?.name || '-',
       'Status': order.status || '-',
       'Deliver Rider': order.deliver_rider?.name || '-',
-      'Deliver Date': parseExcelDate(order.deliver_date),   // ✅ Excel Date Object
+      'Deliver Date': parseExcelDate(order.deliver_date),
       'Note': order.note || '-',
-      'Cleared Date': parseExcelDate(order.cleared_date),   // ✅ Excel Date Object
+      'Cleared Date': parseExcelDate(order.cleared_date),
     }));
 
     const workbook = new ExcelJS.Workbook();
@@ -261,20 +300,17 @@ export default function Dashboard() {
       worksheet.columns.forEach((column, colIndex) => {
         let maxLen = 0;
         
-        // Header နာမည်ကို ယူခြင်း
         const headerName = tableColumns[colIndex]?.name;
         const isDateCol = dateHeaderNames.includes(headerName);
 
         column.eachCell?.({ includeEmpty: true }, (cell, rowNumber) => {
-          // Row 1 က Header ဖြစ်သောကြောင့် Data Row များကိုသာ Date Format ထည့်မည်
           if (rowNumber > 1 && isDateCol && cell.value instanceof Date) {
-            cell.numFmt = 'yyyy-mm-dd'; // ✅ Excel အသိအမှတ်ပြု Date Format
+            cell.numFmt = 'yyyy-mm-dd';
           }
 
-          // Width တွက်ချက်ခြင်း
           let valLen = 0;
           if (cell.value instanceof Date) {
-            valLen = 10; // "YYYY-MM-DD" length
+            valLen = 10;
           } else if (cell.value !== null && cell.value !== undefined) {
             valLen = cell.value.toString().length;
           }

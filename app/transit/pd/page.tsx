@@ -302,7 +302,7 @@ async function handleQuickAtOffice(order: any) {
 
     if (error) throw error;
 
-    alert('Status ကို "At Office" သို့ အောင်မြင်စွာ ပြောင်းလဲပြီးပါပြီ။');
+    alert('Status ကို "Arrived" သို့ အောင်မြင်စွာ ပြောင်းလဲပြီးပါပြီ။');
     setContextMenu(null); // Context menu ပိတ်ရန်
     
     // 🌟 မရှိတဲ့ fetchRecentOrders လိုင်းကို ဖြုတ်ပြီး fetchData() တစ်ခုတည်းကိုပဲ ခေါ်ခိုင်းလိုက်ပါပြီ
