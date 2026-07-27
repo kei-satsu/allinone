@@ -1,5 +1,3 @@
-// app/reset-password/page.tsx
-
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -15,34 +13,36 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false)
   const [checkingSession, setCheckingSession] = useState(true)
   
-  // Link ပါမပါ စစ်ဆေးမည့် State
   const [isValidLink, setIsValidLink] = useState(false)
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
 
   useEffect(() => {
     // 1. Supabase Auth Event ကို စောင့်ကြည့်ခြင်း
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
         setIsValidLink(true)
       }
     })
 
-    // 2. URL ပါရာမီတာ စစ်ဆေးခြင်း
+    // 2. URL Code / Hash ကို စစ်ဆေးပြီး Session ရယူခြင်း
     const checkRecoveryStatus = async () => {
       if (typeof window !== 'undefined') {
+        const searchParams = new URLSearchParams(window.location.search)
+        const code = searchParams.get('code')
         const hash = window.location.hash
-        const search = window.location.search
 
-        const isRecovery = 
-          hash.includes('type=recovery') || 
-          hash.includes('access_token') || 
-          search.includes('code=')
-
-        if (isRecovery) {
+        // 🔑 PKCE Flow: URL တွင် code ပါလာလျှင် Session အဖြစ် လဲလှယ်ယူခြင်း
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code)
+          if (!error) {
+            setIsValidLink(true)
+          } else {
+            setMessage({ text: 'Link သက်တမ်း ကုန်သွားပါပြီ သို့မဟုတ် မမှန်ကန်ပါ။', type: 'error' })
+          }
+        } 
+        // 🔑 Implicit Flow: URL Hash ထဲတွင် type=recovery သို့မဟုတ် access_token ပါလာလျှင်
+        else if (hash.includes('type=recovery') || hash.includes('access_token')) {
           setIsValidLink(true)
-        } else {
-          // ⚠️ Link မပါဘဲ တိုက်ရိုက်ဝင်လာလျှင်
-          setIsValidLink(false)
         }
       }
       setCheckingSession(false)
@@ -130,7 +130,6 @@ export default function ResetPasswordPage() {
         )}
 
         {isValidLink ? (
-          /* 🔑 Link မှတစ်ဆင့် ဝင်ရောက်လာမှသာ Password အသစ် Form ကို ပြမည် */
           <form onSubmit={handleUpdatePassword} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-white/80 mb-1.5">
@@ -169,7 +168,6 @@ export default function ResetPasswordPage() {
             </button>
           </form>
         ) : (
-          /* 🚫 Link မပါဘဲ တိုက်ရိုက် ဝင်လာသူများအား ပြသမည့် အသိပေးစာ */
           <div className="text-center space-y-4 py-4">
             <p className="text-sm text-rose-200 bg-rose-500/20 p-4 rounded-2xl border border-rose-300/30 font-semibold">
               ⚠️ တိုက်ရိုက် ဝင်ရောက်၍ မရပါ။ ကျေးဇူးပြု၍ Admin ပို့ပေးထားသော Reset Link မှတစ်ဆင့် ပြန်လည် ဝင်ရောက်ပေးပါ။
