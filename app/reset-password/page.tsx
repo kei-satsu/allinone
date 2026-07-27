@@ -1,44 +1,48 @@
+// app/reset-password/page.tsx
+
 'use client'
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
-// 🖼️ Replace with the same background image path used in the login page
 const BACKGROUND_IMAGE = '/loginbackground.png'
 
 export default function ResetPasswordPage() {
   const router = useRouter()
-  const [email, setEmail] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [checkingSession, setCheckingSession] = useState(true)
-
-  // 🌟 Password အသစ် ရိုက်ထည့်ရမယ့် Mode
-  const [isRecoveryMode, setIsRecoveryMode] = useState(false)
+  
+  // Link ပါမပါ စစ်ဆေးမည့် State
+  const [isValidLink, setIsValidLink] = useState(false)
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
 
   useEffect(() => {
-    // 1. Supabase Auth State Event ကို စောင့်ကြည့်ခြင်း
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'PASSWORD_RECOVERY' || session) {
-        setIsRecoveryMode(true)
+    // 1. Supabase Auth Event ကို စောင့်ကြည့်ခြင်း
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsValidLink(true)
       }
     })
 
-    // 2. URL ပါရာမီတာများနှင့် Active Session များကို စစ်ဆေးခြင်း
+    // 2. URL ပါရာမီတာ စစ်ဆေးခြင်း
     const checkRecoveryStatus = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
+      if (typeof window !== 'undefined') {
+        const hash = window.location.hash
+        const search = window.location.search
 
-      if (session) {
-        setIsRecoveryMode(true)
-      } else if (typeof window !== 'undefined') {
-        const hasHashToken = window.location.hash.includes('access_token') || window.location.hash.includes('type=recovery')
-        const hasQueryCode = window.location.search.includes('code=')
+        const isRecovery = 
+          hash.includes('type=recovery') || 
+          hash.includes('access_token') || 
+          search.includes('code=')
 
-        if (hasHashToken || hasQueryCode) {
-          setIsRecoveryMode(true)
+        if (isRecovery) {
+          setIsValidLink(true)
+        } else {
+          // ⚠️ Link မပါဘဲ တိုက်ရိုက်ဝင်လာလျှင်
+          setIsValidLink(false)
         }
       }
       setCheckingSession(false)
@@ -51,31 +55,7 @@ export default function ResetPasswordPage() {
     }
   }, [])
 
-  // 🔹 အဆင့် (၁) - Email ဆီ Reset Link ပို့ပေးသည့် Function
-  const handleSendResetEmail = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setMessage(null)
-
-    const redirectTo = `${window.location.origin}/reset-password`
-
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo,
-    })
-
-    if (error) {
-      setMessage({ text: error.message, type: 'error' })
-    } else {
-      setMessage({
-        text: 'Password ပြင်ရန် link ကို အီးမေးလ်သို့ ပို့ပေးထားပါသည်။ Email စစ်ဆေးပေးပါ။',
-        type: 'success',
-      })
-      setEmail('')
-    }
-    setLoading(false)
-  }
-
-  // 🔹 အဆင့် (၂) - Password အသစ် ပြောင်းလဲပြီး Login စာမျက်နှာသို့ ပို့ပေးသည့် Function
+  // Password အသစ် ပြောင်းလဲသည့် Function
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -113,7 +93,6 @@ export default function ResetPasswordPage() {
     }
   }
 
-  // Session စစ်ဆေးနေစဉ် Loading Spinner (glass theme)
   if (checkingSession) {
     return (
       <div
@@ -131,13 +110,11 @@ export default function ResetPasswordPage() {
       className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat"
       style={{ backgroundImage: `url('${BACKGROUND_IMAGE}')` }}
     >
-      {/* Dark overlay */}
       <div className="absolute inset-0 bg-black/40 backdrop-brightness-75" />
 
-      {/* Glassmorphism card */}
       <div className="relative z-10 w-full max-w-md bg-white/10 backdrop-blur-xl border border-white/30 rounded-2xl shadow-2xl p-8">
         <h2 className="text-2xl font-bold text-white text-center mb-6">
-          {isRecoveryMode ? 'Password အသစ် သတ်မှတ်ရန်' : 'Password မေ့နေပါသလား'}
+          Password အသစ် သတ်မှတ်ရန်
         </h2>
 
         {message && (
@@ -152,8 +129,8 @@ export default function ResetPasswordPage() {
           </div>
         )}
 
-        {isRecoveryMode ? (
-          /* 🔑 အဆင့် (၂) - Password အသစ် Form */
+        {isValidLink ? (
+          /* 🔑 Link မှတစ်ဆင့် ဝင်ရောက်လာမှသာ Password အသစ် Form ကို ပြမည် */
           <form onSubmit={handleUpdatePassword} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-white/80 mb-1.5">
@@ -192,41 +169,20 @@ export default function ResetPasswordPage() {
             </button>
           </form>
         ) : (
-          /* ✉️ အဆင့် (၁) - Email Form */
-          <form onSubmit={handleSendResetEmail} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-white/80 mb-1.5">
-                သင့် အီးမေးလ် (Email)
-              </label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="example@gmail.com"
-                className="w-full px-4 py-3 rounded-2xl bg-transparent border border-white/30 text-white placeholder-white/50 focus:border-white focus:ring-0 outline-none text-sm transition-all"
-              />
-            </div>
-
+          /* 🚫 Link မပါဘဲ တိုက်ရိုက် ဝင်လာသူများအား ပြသမည့် အသိပေးစာ */
+          <div className="text-center space-y-4 py-4">
+            <p className="text-sm text-rose-200 bg-rose-500/20 p-4 rounded-2xl border border-rose-300/30 font-semibold">
+              ⚠️ တိုက်ရိုက် ဝင်ရောက်၍ မရပါ။ ကျေးဇူးပြု၍ Admin ပို့ပေးထားသော Reset Link မှတစ်ဆင့် ပြန်လည် ဝင်ရောက်ပေးပါ။
+            </p>
             <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-white text-gray-900 font-bold py-3 rounded-full shadow-lg hover:bg-gray-100 transition-colors disabled:opacity-70 disabled:cursor-not-allowed text-sm mt-2"
+              type="button"
+              onClick={() => router.push('/login')}
+              className="w-full bg-white/20 hover:bg-white/30 text-white font-bold py-3 rounded-full transition-colors text-sm"
             >
-              {loading ? 'ပို့ပေးနေသည်...' : 'Reset Link ပို့မည်'}
+              Login စာမျက်နှာသို့ ပြန်သွားမည်
             </button>
-          </form>
+          </div>
         )}
-
-        <div className="mt-6 text-center">
-          <button
-            type="button"
-            onClick={() => router.push('/login')}
-            className="text-sm text-white/70 hover:text-white transition-colors underline"
-          >
-            ← Login စာမျက်နှာသို့ ပြန်သွားမည်
-          </button>
-        </div>
       </div>
     </div>
   )
