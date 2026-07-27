@@ -88,6 +88,18 @@ export default function PendingEntry() {
     remark: ''
   })
 
+  // 💡 Cloudinary URL ထဲသို့ Transformation parameters များ ထည့်ပေးသည့် function
+const getCloudinaryUrl = (url: string, transform = 'w_150,q_auto,f_auto') => {
+  if (!url || typeof url !== 'string') return '';
+  
+  // Cloudinary URL ဖြစ်ပါက /upload/ ၏ နောက်တွင် transform လာထည့်ပေးမည်
+  if (url.includes('/upload/')) {
+    return url.replace('/upload/', `/upload/${transform}/`);
+  }
+  
+  return url; // Cloudinary URL မဟုတ်ပါက မူလအတိုင်း ပြန်ပေးမည်
+};
+
   // ၁။ City Interface
 interface City {
   "C.ID": string;
@@ -766,11 +778,13 @@ if (updatedPending.length > 0) {
           }
         `}
       >
-        <img 
-          src={item.image_url} 
-          className="w-full h-full object-cover select-none pointer-events-none" 
-          alt="thumb" 
-        />
+  <img 
+  src={getCloudinaryUrl(item.image_url, 'w_250,q_auto,f_auto')} 
+  loading="lazy"
+  decoding="async"
+  className="w-full h-full object-cover select-none pointer-events-none" 
+  alt="thumb" 
+/>
         {item.uploader_note && (
           <span 
             className="absolute top-1 right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-black animate-pulse" 
@@ -859,17 +873,17 @@ if (updatedPending.length > 0) {
                 </div>
 
                 <div className="w-full h-full flex items-center justify-center overflow-hidden pointer-events-none">
-                  <img 
-                    src={selectedItem.image_url} 
-                    alt="Voucher" 
-                    draggable={false} 
-                    style={{ 
-                      transform: `translate(${position.x}px, ${position.y}px) scale(${zoomScale}) rotate(${rotation}deg)`,
-                      transformOrigin: 'center center',
-                      cursor: isDragging ? 'grabbing' : 'grab'
-                    }}
-                    className="max-w-full max-h-full object-contain shadow-2xl transition-transform duration-75 ease-out pointer-events-auto"
-                  />
+                 <img 
+  src={getCloudinaryUrl(selectedItem.image_url, 'q_auto,f_auto')} 
+  alt="Voucher" 
+  draggable={false} 
+  style={{ 
+    transform: `translate(${position.x}px, ${position.y}px) scale(${zoomScale}) rotate(${rotation}deg)`,
+    transformOrigin: 'center center',
+    cursor: isDragging ? 'grabbing' : 'grab'
+  }}
+  className="max-w-full max-h-full object-contain shadow-2xl transition-transform duration-75 ease-out pointer-events-auto"
+/>
                 </div>
                 <div className="absolute bottom-2 right-3 text-[10px] bg-black/60 text-gray-400 px-2 py-0.5 rounded font-mono pointer-events-none z-10">
                   Zoom: {Math.round(zoomScale * 100)}%
@@ -913,7 +927,15 @@ if (updatedPending.length > 0) {
           isActive ? 'border-orange-500 ring-2 ring-orange-500/30' : 'border-gray-800 hover:border-gray-500'
         }`}
       >
-        <img src={item.image_url} className="w-full h-full object-cover select-none pointer-events-none" alt="thumb" />
+
+        <img 
+        src={getCloudinaryUrl(item.image_url, 'w_100,q_auto,f_auto')} 
+        loading="lazy"
+        decoding="async"
+        alt="thumb" 
+        className="w-full h-full object-cover select-none pointer-events-none" 
+      />
+          
         {item.uploader_note && (
           <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-black animate-pulse" title="Has Note" />
         )}
