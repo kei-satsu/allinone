@@ -5,6 +5,9 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import EditOrderModal from '@/components/EditOrderModal' // သင့် Component တည်နေရာလမ်းကြောင်းအတိုင်း ချိန်ပေးပါ
 import { printVoucher } from "@/utils/print"
+import { useOrderSelection } from '@/hooks/useOrderSelection'
+import SelectionSummaryBar from '@/components/SelectionSummaryBar'
+import OrderTable from '@/components/OrderTable'
 
 // 🌟 Manual ထည့်သွင်းထားသော မြို့များ စာရင်း
 const MANUAL_CITIES = [
@@ -56,6 +59,22 @@ const COLUMN_DEFS = [
 export default function OrderList() {
   const router = useRouter()
   const [orders, setOrders] = useState<any[]>([])
+  // 🟢 Custom Hook ခေါ်ယူခြင်း
+    const {
+      selectedOrders,
+      selectedCount,
+      selectedCodTotal,
+      selectedDeliTotal,
+      selectedGrandTotal,
+      isAllSelected: selectAll, // isAllSelected ကို selectAll နာမည်ဖြင့် အစားထိုးသုံးပါသည်
+      isDraggingSelection,
+      setIsDraggingSelection,
+      toggleOrderSelection,
+      selectAllFiltered,
+      clearSelection,
+      handleRowMouseDown,
+      handleRowMouseEnter,
+    } = useOrderSelection(orders);
   const [riders, setRiders] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [editingOrder, setEditingOrder] = useState<any>(null)
@@ -339,6 +358,14 @@ useEffect(() => {
         
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
 
+          <SelectionSummaryBar
+  selectedCount={selectedCount}
+  selectedCodTotal={selectedCodTotal}
+  selectedDeliTotal={selectedDeliTotal}
+  selectedGrandTotal={selectedGrandTotal}
+  onClear={clearSelection}
+/>
+
 {/* 🌟 Transit To Dropdown Filter */}
 <div className="relative min-w-[130px] sm:min-w-[150px]">
   <select
@@ -346,6 +373,8 @@ useEffect(() => {
     onChange={(e) => handleFilterChange('transit_to', e.target.value)}
     className="w-full bg-gray-50 border border-gray-300 focus:border-orange-500 focus:bg-white focus:outline-none px-2.5 py-1.5 text-xs text-gray-700 font-medium rounded-md transition-all shadow-sm cursor-pointer"
   >
+
+    
     <option value="">Transit City ရွေးချယ်ပါ</option>
     {MANUAL_CITIES.map((city) => (
       <option key={city.id} value={city.id}>
@@ -357,6 +386,8 @@ useEffect(() => {
 
 
           {/* ── Columns Show/Hide Dropdown ── */}
+
+
           <div className="relative">
             <button 
               onClick={() => setShowColDropdown(!showColDropdown)}
@@ -486,214 +517,35 @@ useEffect(() => {
   )}
 </div>
 
-      {/* ── Container Workspace Area ── */}
-      <div className="flex-1 overflow-auto bg-white sm:mx-5 sm:my-3 sm:rounded-lg sm:border sm:border-gray-200 sm:shadow-sm">
-        
-        {/* 💻 Desktop Table View (Only visible on screens bigger than Mobile) */}
-        <div className="hidden sm:block min-w-[800px] lg:min-w-0">
-          <table className="w-full text-left whitespace-nowrap text-[12px]">
-            <thead className="sticky top-0 z-20 bg-white shadow-[0_1px_0_0_rgba(229,231,235,1)]">
-              <tr className="text-gray-400 border-b border-gray-200 font-semibold uppercase tracking-wider text-[10px]">
-                {COLUMN_DEFS.map(col => visibleCols[col.key] && (
-                  <th key={col.key} className={`py-2.5 px-3 ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right' : ''} ${col.key === 'image_url' ? 'text-center' : ''}`}>
-                    {col.label}
-                  </th>
-                ))}
-              </tr>
-             <tr className="bg-gray-50/80 border-b border-gray-200">
-  {COLUMN_DEFS.map(col => visibleCols[col.key] && (
-    <th key={`filter-${col.key}`} className="px-2 py-1.5 font-normal">
-      {col.key === 'image_url' ? (
-        <div className="h-5" />
-      ) : ['branch', 'status', 'fee_type'].includes(col.key) ? (
-        <select
-          className="w-full bg-transparent border-b border-gray-300 focus:border-orange-500 focus:outline-none py-1 text-[11px] text-gray-700 font-medium cursor-pointer"
-          value={colFilters[col.key] || ''}
-          onChange={e => handleFilterChange(col.key, e.target.value)}
-        >
-          <option value="">All</option>
-          {col.key === 'branch' && (
-            <>
-              <option value="MDY">MDY</option>
-              <option value="YGN">YGN</option>
-            </>
-          )}
-          {col.key === 'status' && (
-            <>
-              <option value="At Office">At Office</option>
-              <option value="On Way">On Way</option>
-              <option value="Delivered">Delivered</option>
-              <option value="In-Transit">In-Transit</option>
-            </>
-          )}
-          {col.key === 'fee_type' && (
-            <>
-              <option value="Deli">Deli</option>
-              <option value="Kpay">Kpay</option>
-              <option value="Cash">Cash</option>
-              <option value="Bill">Bill</option>
-            </>
-          )}
-        </select>
-      ) : ['pickup_rider', 'deliver_rider'].includes(col.key) ? (
-        <select
-          className="w-full bg-transparent border-b border-gray-300 focus:border-orange-500 focus:outline-none py-1 text-[11px] text-gray-700 font-medium cursor-pointer"
-          value={colFilters[col.key] || ''}
-          onChange={e => handleFilterChange(col.key, e.target.value)}
-        >
-          <option value="">All Riders</option>
-          {riders.map(r => (
-            <option key={r.id} value={r.name}>{r.name}</option>
-          ))}
-        </select>
-      ) : (
-        <input 
-          className={filterInputCls} 
-          placeholder="Filter..." 
-          value={colFilters[col.key] || ''}
-          onChange={e => handleFilterChange(col.key, e.target.value)} 
-        />
-      )}
-    </th>
-  ))}
-</tr> 
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading ? (
-                <tr>
-                  <td colSpan={COLUMN_DEFS.length} className="p-20 text-center">
-                    <div className="inline-flex items-center gap-3 text-gray-400 font-medium text-sm">
-                      <span className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-                      Loading Records...
-                    </div>
-                  </td>
-                </tr>
-              ) : filteredOrders.map((o) => (
-                <tr 
-                  key={o.id} 
-                  onClick={() => setViewingDetailOrder(o)}
-                  onContextMenu={(e) => handleRowContextMenu(e, o)} 
-                  
-                  className="hover:bg-gray-50/80 transition-colors cursor-context-menu"
-                >
-                  {COLUMN_DEFS.map(col => visibleCols[col.key] && (
-                    <td key={`${o.id}-${col.key}`} className={`py-2.5 px-3 text-gray-700 ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right' : ''}`}>
-                      {renderCell(o, col.key)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* 📱 Mobile Optimized Card List (Only visible on Mobile Phones) */}
-        <div className="sm:hidden flex flex-col divide-y divide-gray-100 h-full overflow-y-auto bg-gray-50 pb-20">
-          {loading ? (
-            <div className="p-12 text-center text-gray-400 text-xs flex flex-col items-center gap-2 justify-center">
-              <span className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-              Loading Records...
-            </div>
-          ) : filteredOrders.length === 0 ? (
-            <div className="p-12 text-center text-gray-400 text-xs font-medium">
-              မှတ်တမ်းများ မရှိသေးပါ (သို့) ရှာဖွေမှု မတွေ့ရှိပါ။
-            </div>
-          ) : (
-            filteredOrders.map((o) => (
-              <div 
-                key={o.id} 
-                onClick={() => setViewingDetailOrder(o)}
-                className="bg-white p-3.5 flex flex-col gap-2.5 shadow-sm border-b border-gray-100 active:bg-gray-50/80 transition-colors"
-              >
-                {/* Card Top Header */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-bold text-gray-900 text-sm">{o.item_id}</span>
-                    {renderCell(o, 'branch')}
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    {renderCell(o, 'status')}
-                    
-                    {/* Mobile 3-Dots Action Trigger Button */}
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); handleRowContextMenu(e, o); }}
-                      className="p-1.5 bg-gray-50 border border-gray-200 rounded-md text-gray-500 active:bg-gray-200 transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Logistics Route Information */}
-                <div className="grid grid-cols-2 gap-2 text-xs border-y border-gray-50 py-2 bg-gray-50/40 rounded-md px-2">
-                  <div>
-                    <span className="text-[10px] text-gray-400 font-bold uppercase block">Sender</span>
-                    <span className="font-medium text-gray-800 truncate block">{o.sender_name || '-'} ({o.sender_loc || '-'})</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-gray-400 font-bold uppercase block">Receiver</span>
-                    <span className="font-medium text-gray-800 truncate block">{o.receiver_name || '-'} ({o.receiver_loc || '-'})</span>
-                  </div>
-                  {o.receiver_phone && (
-                    <div className="col-span-2 pt-0.5">
-                      <a 
-                        href={`tel:${o.receiver_phone}`} 
-                        className="text-orange-600 font-semibold inline-flex items-center gap-1 hover:underline text-[11px]"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        📞 {o.receiver_phone} (နှိပ်၍ ဖုန်းခေါ်ရန်)
-                      </a>
-                    </div>
-                  )}
-                </div>
-
-                {/* Pricing & Fees Grid */}
-          <div className="flex items-center justify-between text-xs pt-1">
-            <div className="flex gap-4 text-gray-500 text-[11px]">
-              <span>COD: <strong className="text-gray-700">{o.cod_amount?.toLocaleString() || 0} Ks</strong></span>
-              <span>Deli: <strong className="text-gray-700">{o.deli_fee?.toLocaleString() || 0} Ks</strong></span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-gray-900 font-bold text-xs">Total: {o.total_amount?.toLocaleString() || 0} Ks</span>
-             {o.image_url ? (
-  /* ပုံရှိလျှင် */
-  <button
-    type="button"
-    onClick={(e) => { e.stopPropagation(); setPreviewImage(o.image_url); }}
-    className="p-1 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
-    title="ပုံကြည့်ရန် နှိပ်ပါ"
-  >
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-    </svg>
-  </button>
-) : (
-  /* ပုံမရှိလျှင် */
-  <span className="p-1 text-gray-300 bg-gray-50 rounded-md" title="ပုံမရှိပါ">
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-      <line x1="3" y1="3" x2="21" y2="21" stroke="currentColor" strokeWidth={2} strokeLinecap="round" />
-    </svg>
-  </span>
-)}
-            </div>
-          </div>
-
-          
-
-        </div>   
-            ))
-          )}
-        </div>
-
-        {!loading && filteredOrders.length === 0 && (
-          <div className="hidden sm:block p-16 text-center text-gray-400 font-medium">
-            မှတ်တမ်းများ မရှိသေးပါ (သို့) ရှာဖွေမှု မတွေ့ရှိပါ။
-          </div>
-        )}
-      </div>
+      {/* ── Container Workspace Area (OrderTable Component ဖြင့် အစားထိုးခြင်း) ── */}
+     <OrderTable
+       orders={filteredOrders}
+       columnDefs={COLUMN_DEFS}
+       visibleCols={visibleCols}
+       showFilterBar={true}
+       colFilters={colFilters}
+       onFilterChange={handleFilterChange}
+       riders={riders}
+       locationOptions={[]}
+       loading={loading}
+       loadingMore={false}
+       hasMore={false}
+       onLoadMore={() => {}}
+       
+       // 🟢 Hook မှ ထွက်လာသော Selection Props များနှင့် ချိတ်ဆက်ခြင်း
+       selectedOrders={selectedOrders}
+       isAllSelected={selectAll}
+       onToggleSelectAll={() => selectAllFiltered(filteredOrders)}
+       onToggleOrderSelection={toggleOrderSelection}
+       onRowMouseDown={handleRowMouseDown}
+       onRowMouseEnter={handleRowMouseEnter}
+       onStopDragging={() => setIsDraggingSelection(false)}
+     
+       // Event Callbacks
+       onRowClick={(order) => setViewingDetailOrder(order)}
+       onRowContextMenu={(e, order) => handleRowContextMenu(e, order)}
+       onPreviewImage={(url) => setPreviewImage(url)}
+     />
       
      
 

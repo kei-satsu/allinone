@@ -6,6 +6,9 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import EditOrderModal from '@/components/EditOrderModal' // သင့် Component တည်နေရာလမ်းကြောင်းအတိုင်း ချိန်ပေးပါ
 import { printVoucher } from "@/utils/print"
+import { useOrderSelection } from '@/hooks/useOrderSelection'
+import SelectionSummaryBar from '@/components/SelectionSummaryBar'
+import OrderTable from '@/components/OrderTable'
 
 const COLUMN_DEFS = [
   { key: 'image_url', label: 'Photo', defaultVisible: true }, 
@@ -114,6 +117,23 @@ function MultiSelectFilter({
 export default function OrderList() {
   const router = useRouter()
   const [orders, setOrders] = useState<any[]>([])
+  const filteredOrders = orders;
+  // 🟢 Custom Hook ခေါ်ယူခြင်း
+  const {
+    selectedOrders,
+    selectedCount,
+    selectedCodTotal,
+    selectedDeliTotal,
+    selectedGrandTotal,
+    isAllSelected: selectAll, // isAllSelected ကို selectAll နာမည်ဖြင့် အစားထိုးသုံးပါသည်
+    isDraggingSelection,
+    setIsDraggingSelection,
+    toggleOrderSelection,
+    selectAllFiltered,
+    clearSelection,
+    handleRowMouseDown,
+    handleRowMouseEnter,
+  } = useOrderSelection(orders);
   const [riders, setRiders] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -135,10 +155,7 @@ export default function OrderList() {
   const [viewingDetailOrder, setViewingDetailOrder] = useState<any | null>(null);
   const [showMobileFilters, setShowMobileFilters] = useState(false)
   
-  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
-  const [selectAll, setSelectAll] = useState(false); // Header checkbox အတွက်
-  const [isDraggingSelection, setIsDraggingSelection] = useState(false);
-
+  
 // Excel Export အတွက် State များ
 const [showExcelModal, setShowExcelModal] = useState(false);
 const [excelCols, setExcelCols] = useState<Record<string, boolean>>(() => {
@@ -150,29 +167,8 @@ const [excelCols, setExcelCols] = useState<Record<string, boolean>>(() => {
 });
 
 
-  // Toggle order တစ်ခုချင်း select / deselect
-const toggleOrderSelection = (orderId: string) => {
-  setSelectedOrders(prev => {
-    const newSet = new Set(prev);
-    if (newSet.has(orderId)) {
-      newSet.delete(orderId);
-    } else {
-      newSet.add(orderId);
-    }
-    return newSet;
-  });
-};
 
-// Filter လက်ရှိပြသော Orders အားလုံးကို select လုပ်ရန်
-const selectAllFiltered = () => {
-  const filteredIds = new Set(filteredOrders.map(o => o.id));
-  setSelectedOrders(filteredIds);
-};
 
-// ရွေးထားသမျှ အားလုံးဖြုတ်ရန်
-const clearSelection = () => {
-  setSelectedOrders(new Set());
-};
 
 
 
@@ -413,14 +409,9 @@ useEffect(() => {
   setShowExcelModal(false);
 };
 
-  const filteredOrders = orders;
+  
 
-  const selectedOrderList = filteredOrders.filter(o => selectedOrders.has(o.id));
-  const selectedCount = selectedOrderList.length;
-  const selectedCodTotal = selectedOrderList.reduce((sum, o) => sum + (Number(o.cod_amount) || 0), 0);
-  const selectedDeliTotal = selectedOrderList.reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
-  const selectedGrandTotal = selectedOrderList.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
-
+  
   const handleFilterChange = (col: string, val: string | string[]) => {
     setColFilters(prev => ({ ...prev, [col]: val }))
   }
@@ -482,14 +473,6 @@ useEffect(() => {
     }
   }
 
-  useEffect(() => {
-  if (filteredOrders.length === 0) {
-    setSelectAll(false);
-    return;
-  }
-  const allSelected = filteredOrders.every(o => selectedOrders.has(o.id));
-  setSelectAll(allSelected);
-}, [selectedOrders, filteredOrders]);
 
   
 
@@ -552,29 +535,9 @@ useEffect(() => {
     return o[key] || '-'
   }
 
-  useEffect(() => {
-    const stopDragging = () => setIsDraggingSelection(false);
-    window.addEventListener('mouseup', stopDragging);
-    return () => window.removeEventListener('mouseup', stopDragging);
-  }, []);
+ 
 
-  const handleRowMouseDown = (orderId: string) => {
-    setIsDraggingSelection(true);
-    setSelectedOrders(prev => {
-      const next = new Set(prev);
-      next.add(orderId);
-      return next;
-    });
-  };
-
-  const handleRowMouseEnter = (orderId: string) => {
-    if (!isDraggingSelection) return;
-    setSelectedOrders(prev => {
-      const next = new Set(prev);
-      next.add(orderId);
-      return next;
-    });
-  };
+  
 
   const locationOptions = Array.from(new Set([
     ...orders.map(o => o.sender_loc).filter(Boolean),
@@ -611,28 +574,13 @@ useEffect(() => {
         
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
           {/* ── Columns Show/Hide Dropdown ── */}
-{selectedOrders.size > 0 && (
-  <div className="ml-2 flex flex-wrap items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-2.5 shadow-sm">
-    <span className="text-sm font-bold text-orange-800 whitespace-nowrap">
-      Selected: <span className="ml-1 rounded-full bg-orange-500 px-2 py-0.5 text-white">{selectedCount}</span>
-    </span>
-    <span className="text-[11px] font-semibold text-gray-700">
-      COD: <span className="text-orange-700">{selectedCodTotal.toLocaleString()} Ks</span>
-    </span>
-    <span className="text-[11px] font-semibold text-gray-700">
-      Deli: <span className="text-orange-700">{selectedDeliTotal.toLocaleString()} Ks</span>
-    </span>
-    <span className="text-[11px] font-semibold text-gray-700">
-      Total: <span className="text-orange-700">{selectedGrandTotal.toLocaleString()} Ks</span>
-    </span>
-    <button 
-      onClick={clearSelection}
-      className="rounded-md bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-600 transition-colors hover:bg-red-100"
-    >
-      ဖြုတ်မည်
-    </button>
-  </div>
-)}
+<SelectionSummaryBar
+  selectedCount={selectedCount}
+  selectedCodTotal={selectedCodTotal}
+  selectedDeliTotal={selectedDeliTotal}
+  selectedGrandTotal={selectedGrandTotal}
+  onClear={clearSelection}
+/>
 
           <div className="flex items-center gap-2">
             <button
@@ -798,277 +746,34 @@ useEffect(() => {
   )}
 </div>
 
-      {/* ── Container Workspace Area ── */}
-      <div className="flex-1 overflow-auto bg-white sm:mx-5 sm:my-3 sm:rounded-lg sm:border sm:border-gray-200 sm:shadow-sm">
-        
-        {/* 💻 Desktop Table View (Only visible on screens bigger than Mobile) */}
-        <div className="hidden sm:block min-w-[800px] lg:min-w-0">
-          <table className="w-full text-left whitespace-nowrap text-[12px]">
-            <thead className="sticky top-0 z-20 bg-white shadow-[0_1px_0_0_rgba(229,231,235,1)]">
-              <tr className="text-gray-400 border-b border-gray-200 font-semibold uppercase tracking-wider text-[10px]">
-                {/* 👇 Selection Checkbox Header */}
-    <th className="py-2.5 px-2 text-center w-10">
-      <input
-        type="checkbox"
-        className="w-4 h-4 text-orange-500 rounded border-gray-300 accent-orange-500 cursor-pointer"
-        checked={selectAll}
-        onChange={() => {
-          if (selectAll) {
-            clearSelection();
-          } else {
-            selectAllFiltered();
-          }
-        }}
-      />
-    </th>
-                {COLUMN_DEFS.map(col => visibleCols[col.key] && (
-                  <th key={col.key} className={`py-2.5 px-3 ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right' : ''} ${col.key === 'image_url' ? 'text-center' : ''}`}>
-                    {col.label}
-                  </th>
-                ))}
-              </tr>
-{showFilterBar && (
-  <tr className="bg-gray-50/80 border-b border-gray-200">
-    <th className="w-10 px-2 py-1.5" />
-    {COLUMN_DEFS.map(col => visibleCols[col.key] && (
-      <th key={`filter-${col.key}`} className="px-2 py-1.5 font-normal">
-        {col.key === 'image_url' ? (
-          <div className="h-5" />
-        ) : ['branch', 'status', 'fee_type', 'pickup_rider', 'deliver_rider', 'sender_loc', 'receiver_loc'].includes(col.key) ? (
-          <MultiSelectFilter
-            label={col.label}
-            options={
-              col.key === 'branch'
-                ? [{ label: 'MDY', value: 'MDY' }, { label: 'YGN', value: 'YGN' }]
-                : col.key === 'status'
-                  ? [
-                      { label: 'At Office', value: 'At Office' },
-                      { label: 'On Way', value: 'On Way' },
-                      { label: 'Delivered', value: 'Delivered' },
-                      { label: 'In-Transit', value: 'In-Transit' },
-                    ]
-                  : col.key === 'fee_type'
-                    ? [
-                        { label: 'Deli', value: 'Deli' },
-                        { label: 'Kpay', value: 'Kpay' },
-                        { label: 'Cash', value: 'Cash' },
-                        { label: 'Bill', value: 'Bill' },
-                      ]
-                    : col.key === 'pickup_rider' || col.key === 'deliver_rider'
-                      ? riders.map(r => ({ label: r.name, value: r.name }))
-                      : locationOptions.map(loc => ({ label: loc, value: loc }))
-            }
-            selectedValues={Array.isArray(colFilters[col.key]) ? colFilters[col.key] as string[] : []}
-            onChange={(values) => handleFilterChange(col.key, values)}
-          />
-        ) : ['received_date', 'deliver_date', 'cleared_date', 'created_at', 'transit_date'].includes(col.key) ? (
-          <input
-            type="date"
-            className={filterInputCls}
-            value={typeof colFilters[col.key] === 'string' ? colFilters[col.key] : ''}
-            onChange={(e) => handleFilterChange(col.key, e.target.value)}
-          />
-        ) : (
-          <input 
-            className={filterInputCls}
-            placeholder="Filter..." 
-            value={typeof colFilters[col.key] === 'string' ? colFilters[col.key] : ''}
-            onChange={e => handleFilterChange(col.key, e.target.value)} 
-          />
-        )}
-      </th>
-    ))}
-  </tr>
-)}
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading ? (
-                <tr>
-                  <td colSpan={COLUMN_DEFS.length} className="p-20 text-center">
-                    <div className="inline-flex items-center gap-3 text-gray-400 font-medium text-sm">
-                      <span className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-                      Loading Records...
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                <>
-                  {filteredOrders.map((o) => (
-                    <tr 
-                      key={o.id} 
-                      onClick={() => setViewingDetailOrder(o)}
-                      onContextMenu={(e) => handleRowContextMenu(e, o)} 
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        handleRowMouseDown(o.id);
-                      }}
-                      onMouseEnter={() => handleRowMouseEnter(o.id)}
-                      onMouseUp={() => setIsDraggingSelection(false)}
-                      className="hover:bg-gray-50/80 transition-colors cursor-context-menu select-none"
-                    >
-                  {/* 👇 Checkbox Cell */}
-      <td className="py-2.5 px-2 text-center" onClick={(e) => e.stopPropagation()}>
-        <input
-          type="checkbox"
-          className="w-4 h-4 text-orange-500 rounded border-gray-300 accent-orange-500 cursor-pointer"
-          checked={selectedOrders.has(o.id)}
-          onChange={() => toggleOrderSelection(o.id)}
-        />
-      </td>
-                      {COLUMN_DEFS.map(col => visibleCols[col.key] && (
-                        <td key={`${o.id}-${col.key}`} className={`py-2.5 px-3 text-gray-700 ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right' : ''}`}>
-                          {renderCell(o, col.key)}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                  {hasMore && (
-                    <tr>
-                      <td colSpan={COLUMN_DEFS.filter(col => visibleCols[col.key]).length + 1} className="px-3 py-3">
-                        <button
-                          onClick={() => fetchData({ append: true })}
-                          disabled={loadingMore}
-                          className="w-full rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-[11px] font-semibold text-orange-700 transition-all hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {loadingMore ? 'Loading...' : 'Load More'}
-                        </button>
-                      </td>
-                    </tr>
-                  )}
-                </>
-              )}
-            </tbody>
-          </table>
-        </div>
+    <OrderTable
+  orders={filteredOrders}
+  columnDefs={COLUMN_DEFS}
+  visibleCols={visibleCols}
+  showFilterBar={true}
+  colFilters={colFilters}
+  onFilterChange={handleFilterChange}
+  riders={riders}
+  locationOptions={[]}
+  loading={loading}
+  loadingMore={false}
+  hasMore={false}
+  onLoadMore={() => {}}
+  
+  // 🟢 Hook မှ ထွက်လာသော Selection Props များနှင့် ချိတ်ဆက်ခြင်း
+  selectedOrders={selectedOrders}
+  isAllSelected={selectAll}
+  onToggleSelectAll={() => selectAllFiltered(filteredOrders)}
+  onToggleOrderSelection={toggleOrderSelection}
+  onRowMouseDown={handleRowMouseDown}
+  onRowMouseEnter={handleRowMouseEnter}
+  onStopDragging={() => setIsDraggingSelection(false)}
 
-        {/* 📱 Mobile Optimized Card List (Only visible on Mobile Phones) */}
-        <div className="sm:hidden flex flex-col divide-y divide-gray-100 h-full overflow-y-auto bg-gray-50 pb-20">
-          {loading ? (
-            <div className="p-12 text-center text-gray-400 text-xs flex flex-col items-center gap-2 justify-center">
-              <span className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-              Loading Records...
-            </div>
-          ) : filteredOrders.length === 0 ? (
-            <div className="p-12 text-center text-gray-400 text-xs font-medium">
-              မှတ်တမ်းများ မရှိသေးပါ (သို့) ရှာဖွေမှု မတွေ့ရှိပါ။
-            </div>
-          ) : (
-            <>
-              {filteredOrders.map((o) => (
-                <div 
-                  key={o.id} 
-                  onClick={() => setViewingDetailOrder(o)}
-                  className="bg-white p-3.5 flex flex-col gap-2.5 shadow-sm border-b border-gray-100 active:bg-gray-50/80 transition-colors"
-                >
-                {/* Card Top Header */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                     {/* 👇 Checkbox on Mobile Card */}
-      <input
-        type="checkbox"
-        className="w-5 h-5 text-orange-500 rounded border-gray-300 accent-orange-500 cursor-pointer"
-        checked={selectedOrders.has(o.id)}
-        onChange={() => toggleOrderSelection(o.id)}
-        onClick={(e) => e.stopPropagation()} // card click နဲ့ မရောအောင်
-      />
-                    <span className="font-mono font-bold text-gray-900 text-sm">{o.item_id}</span>
-                    {renderCell(o, 'branch')}
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    {renderCell(o, 'status')}
-                    
-                    {/* Mobile 3-Dots Action Trigger Button */}
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); handleRowContextMenu(e, o); }}
-                      className="p-1.5 bg-gray-50 border border-gray-200 rounded-md text-gray-500 active:bg-gray-200 transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Logistics Route Information */}
-                <div className="grid grid-cols-2 gap-2 text-xs border-y border-gray-50 py-2 bg-gray-50/40 rounded-md px-2">
-                  <div>
-                    <span className="text-[10px] text-gray-400 font-bold uppercase block">Sender</span>
-                    <span className="font-medium text-gray-800 truncate block">{o.sender_name || '-'} ({o.sender_loc || '-'})</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-gray-400 font-bold uppercase block">Receiver</span>
-                    <span className="font-medium text-gray-800 truncate block">{o.receiver_name || '-'} ({o.receiver_loc || '-'})</span>
-                  </div>
-                  {o.receiver_phone && (
-                    <div className="col-span-2 pt-0.5">
-                      <a 
-                        href={`tel:${o.receiver_phone}`} 
-                        className="text-orange-600 font-semibold inline-flex items-center gap-1 hover:underline text-[11px]"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        📞 {o.receiver_phone} (နှိပ်၍ ဖုန်းခေါ်ရန်)
-                      </a>
-                    </div>
-                  )}
-                </div>
-
-                {/* Pricing & Fees Grid */}
-          <div className="flex items-center justify-between text-xs pt-1">
-            <div className="flex gap-4 text-gray-500 text-[11px]">
-              <span>COD: <strong className="text-gray-700">{o.cod_amount?.toLocaleString() || 0} Ks</strong></span>
-              <span>Deli: <strong className="text-gray-700">{o.deli_fee?.toLocaleString() || 0} Ks</strong></span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-gray-900 font-bold text-xs">Total: {o.total_amount?.toLocaleString() || 0} Ks</span>
-         {o.image_url ? (
-  /* ပုံရှိလျှင် */
-  <button
-    type="button"
-    onClick={(e) => { e.stopPropagation(); setPreviewImage(o.image_url); }}
-    className="p-1 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
-    title="ပုံကြည့်ရန် နှိပ်ပါ"
-  >
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-    </svg>
-  </button>
-) : (
-  /* ပုံမရှိလျှင် */
-  <span className="p-1 text-gray-300 bg-gray-50 rounded-md" title="ပုံမရှိပါ">
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-      <line x1="3" y1="3" x2="21" y2="21" stroke="currentColor" strokeWidth={2} strokeLinecap="round" />
-    </svg>
-  </span>
-)}
-            </div>
-          </div>
-
-          
-
-                </div>
-              ))}
-              {hasMore && (
-                <div className="border-t border-gray-100 bg-white p-3">
-                  <button
-                    onClick={() => fetchData({ append: true })}
-                    disabled={loadingMore}
-                    className="w-full rounded-full border border-orange-200 bg-orange-50 px-3 py-2 text-[11px] font-semibold text-orange-700 transition-all hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {loadingMore ? 'Loading...' : 'Load More'}
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        {!loading && filteredOrders.length === 0 && (
-          <div className="hidden sm:block p-16 text-center text-gray-400 font-medium">
-            မှတ်တမ်းများ မရှိသေးပါ (သို့) ရှာဖွေမှု မတွေ့ရှိပါ။
-          </div>
-        )}
-      </div>
+  // Event Callbacks
+  onRowClick={(order) => setViewingDetailOrder(order)}
+  onRowContextMenu={(e, order) => handleRowContextMenu(e, order)}
+  onPreviewImage={(url) => setPreviewImage(url)}
+/> 
       
      
 
