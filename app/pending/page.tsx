@@ -10,6 +10,8 @@ interface QueueItem {
   payload: any;
 }
 
+ 
+
 export default function PendingEntry() {
   const router = useRouter()
   const senderInputRef = useRef<HTMLInputElement>(null)
@@ -61,6 +63,24 @@ export default function PendingEntry() {
 
   const today = new Date().toISOString().split('T')[0]
 
+     // Rider ID ဖြင့် Rider Name ရှာပေးသည့် Helper Logic
+const getRiderName = (riderId: string | number | null) => {
+  if (!riderId) return 'N/A';
+  const rider = riders?.find((r: any) => r.id === riderId);
+  return rider ? `${rider.name} (${riderId})` : riderId;
+};
+
+// History Log ထည့်ပေးသည့် Helper Function
+const appendLog = (currentHistory: any[], action: string, note: string) => {
+  const operator = userBranch || localStorage.getItem('user_branch') || 'Unknown Office';
+  const newLogEntry = {
+    timestamp: new Date().toISOString(),
+    action: action,
+    operator: operator,
+    note: note
+  };
+  return [...(currentHistory || []), newLogEntry];
+};
    
 
   const [formData, setFormData] = useState({
@@ -535,16 +555,38 @@ const loadCities = async (targetBranch?: string) => {
     }
     setLoading(true)
 
-    let finalSenderId = formData.sender_id
-    const isOnlineNow = navigator.onLine
+    
 
-    // Base Order Payload ပြင်ဆင်ခြင်း
-    const baseOrderPayload: any = {
-      ...formData,
-      pickup_rider_id: formData.pickup_rider_id || null,
-      deliver_rider_id: formData.deliver_rider_id || null,
-      cleared_date: formData.cleared_date || null,
-    }
+
+
+// Log Note ပြင်ဆင်ခြင်း
+const logNote = [
+  `Status: ${formData.status || selectedItem?.status || 'N/A'}`,
+  `Pickup Rider: ${getRiderName(formData.pickup_rider_id)}`,
+  `Deliver Rider: ${getRiderName(formData.deliver_rider_id)}`,
+  `Sender: ${formData.sender_name || 'N/A'} (${formData.sender_phone || 'N/A'})`,
+  `Receiver: ${formData.receiver_name || 'N/A'} (${formData.receiver_phone || 'N/A'})`,
+  `City: ${formData.receiver_loc || 'N/A'}`,
+  `COD: ${formData.cod_amount || 0} Ks`,
+  `Deli: ${formData.deli_fee || 0} Ks`,
+  `Total: ${formData.total_amount || 0} Ks`,
+  `Cleared Date: ${formData.cleared_date || 'N/A'}`
+].join(' | ');
+
+  // ✨ [အသစ်ထည့်ရန်] ၂။ မူလ selectedItem.history ထဲသို့ Log အသစ် ပေါင်းထည့်ခြင်း
+  const updatedHistory = appendLog(selectedItem.history, "Data Entry Processed", logNote);
+
+  let finalSenderId = formData.sender_id
+  const isOnlineNow = navigator.onLine
+
+  // Base Order Payload ပြင်ဆင်ခြင်း
+  const baseOrderPayload: any = {
+    ...formData,
+    history: updatedHistory, // 👈 ✨ [အသစ်ထည့်ရန်] history ကို Payload ထဲ ထည့်ပေးလိုက်ပါ
+    pickup_rider_id: formData.pickup_rider_id || null,
+    deliver_rider_id: formData.deliver_rider_id || null,
+    cleared_date: formData.cleared_date || null,
+  }
 
     if (formData.status === 'On Way' || formData.status === 'Delivered') {
       baseOrderPayload.deliver_date = formData.deliver_date || null
