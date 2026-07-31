@@ -24,12 +24,12 @@ const COLUMN_DEFS = [
   { key: 'agent_fee', label: 'Agent Fee', defaultVisible: true },
   { key: 'status', label: 'Status', defaultVisible: true },
   { key: 'image_url', label: 'Photo', defaultVisible: true }, 
-  { key: 'pickup_rider', label: 'Pickup By', defaultVisible: true },
-  { key: 'deliver_rider', label: 'Deliver By', defaultVisible: true },
+  { key: 'pickup_rider', label: 'Pickup By', defaultVisible: false },
+  { key: 'deliver_rider', label: 'Deliver By', defaultVisible: false },
   { key: 'deliver_date', label: 'Deliver Date', defaultVisible: true },
   { key: 'note', label: 'Note', defaultVisible: true },
-  { key: 'transit_date', label: 'Transit Date', defaultVisible: false },
-  { key: 'transit_to', label: 'Transit To', defaultVisible: false },
+  { key: 'transit_date', label: 'Transit Date', defaultVisible: true },
+  { key: 'transit_to', label: 'Transit To', defaultVisible: true },
   { key: 'remark', label: 'Remark', defaultVisible: false },
 
 ]
@@ -174,15 +174,29 @@ if (ordersError) {
   });
   alert(`Orders fetch failed: ${ordersError.message || ordersError.details || 'Unknown Error'}`);
 } else {
-  // 🌟 JS filter ဖြင့် transit array အလွတ် မဟုတ်ကြောင်းနှင့် transit_from ပါဝင်ကြောင်း စစ်ထုတ်ခြင်း
-  const validOrders = (ordersData || []).filter((order) => {
-    const transitList = Array.isArray(order.transit) ? order.transit : [];
-    return transitList.length > 0 && transitList.some((leg: any) => leg.transit_from === activeBranch);
-  });
+  // 🌟 Filter လုပ်ပြီးတာနဲ့ activeBranch နဲ့ ကိုက်ညီသော transit_to & transit_date များကို Mapping လုပ်ခြင်း
+  const mappedOrders = (ordersData || [])
+    .filter((order) => {
+      const transitList = Array.isArray(order.transit) ? order.transit : [];
+      return transitList.length > 0 && transitList.some((leg: any) => leg.transit_from === activeBranch || leg.transit_form === activeBranch);
+    })
+    .map((order) => {
+      const transitList = Array.isArray(order.transit) ? order.transit : [];
+      
+      // activeBranch နဲ့ ကိုက်ညီတဲ့ transit leg ကို ရှာယူခြင်း
+      const activeLeg = transitList.find((leg: any) => leg.transit_from === activeBranch || leg.transit_form === activeBranch);
 
-  setReportData(validOrders);
+      return {
+        ...order,
+        // Root level object ထဲသို့ transit_to နှင့် transit_date ကို Extract လုပ်ပြီး ထည့်ပေးခြင်း
+        transit_to: activeLeg?.transit_to || order.transit_to || '-',
+        transit_date: activeLeg?.transit_date || order.transit_date || '-',
+      };
+    });
+
+  // Mapped ဖြစ်ပြီးသား data ကို State ထဲ ထည့်ခြင်း
+  setReportData(mappedOrders);
 }
-
       // ၂။ Handovers စာရင်းဆွဲထုတ်ခြင်း
       const { data: handoversData, error: handoversError } = await supabase
         .from('cash_handovers')
