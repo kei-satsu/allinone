@@ -136,26 +136,45 @@ useEffect(() => {
 
 
   const fetchData = async (branchCode?: string) => {
-    const activeBranch = branchCode || userBranch;
-    if (!activeBranch) return;
+  const activeBranch = branchCode || userBranch;
+  if (!activeBranch) return;
 
-    setLoading(true)
-    const { data, error } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        pickup_rider:riders!orders_pickup_rider_id_fkey(name),
-        deliver_rider:riders!orders_deliver_rider_id_fkey(name)
-      `)
-      .eq('is_deleted', false)
-      .eq('transit_to', activeBranch)
-      .neq('status', 'In-Transit')
-      .order('created_at', { ascending: false })
+  setLoading(true);
 
-    if (error) console.error(error)
-    else setOrders(data || [])
-    setLoading(false)
+  // 🌟 Supabase Query: Active Branch သို့ ရောက်ရှိခဲ့ပြီး In-Transit မဟုတ်တော့သော အော်ဒါများ
+  const { data, error } = await supabase
+    .from('orders')
+    .select(`
+      *,
+      pickup_rider:riders!orders_pickup_rider_id_fkey(name),
+      deliver_rider:riders!orders_deliver_rider_id_fkey(name)
+    `)
+    .eq('is_deleted', false)
+    .filter('transit', 'cs', JSON.stringify([{ transit_to: activeBranch }])) // ✨ JSON Array ထဲတွင် activeBranch ပါသမျှ ရှာမည်
+    .neq('status', 'In-Transit') // Confirm လုပ်ပြီးသား (Arrived / At Office / Delivered စသဖြင့်)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error("Fetch Error:", error.message, error.details);
+  } else if (data) {
+    // 🌟 Map လုပ်ပြီး မိမိ Branch နှင့် သက်ဆိုင်သော Leg ၏ transit_to / transit_date ကို ယူပေးခြင်း
+    const formattedOrders = data.map((order: any) => {
+      const currentLeg = Array.isArray(order.transit)
+        ? order.transit.find((t: any) => t.transit_to === activeBranch)
+        : null;
+
+      return {
+        ...order,
+        transit_to: currentLeg ? currentLeg.transit_to : order.transit_to,
+        transit_date: currentLeg ? currentLeg.transit_date : order.transit_date,
+      };
+    });
+
+    setOrders(formattedOrders);
   }
+
+  setLoading(false);
+};
 
   const fetchRiders = async () => {
     const { data } = await supabase.from('riders').select('*')

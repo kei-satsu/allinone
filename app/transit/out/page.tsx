@@ -149,27 +149,46 @@ useEffect(() => {
   const [colFilters, setColFilters] = useState<Record<string, string>>({})
 
 
-  const fetchData = async (branchCode?: string) => {
-    const activeBranch = branchCode || userBranch;
-    if (!activeBranch) return;
+ const fetchData = async (branchCode?: string) => {
+  const activeBranch = branchCode || userBranch;
+  if (!activeBranch) return;
 
-    setLoading(true)
-    const { data, error } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        pickup_rider:riders!orders_pickup_rider_id_fkey(name),
-        deliver_rider:riders!orders_deliver_rider_id_fkey(name)
-      `)
-      .eq('is_deleted', false)
-      .eq('branch', activeBranch)
-      .neq('transit_to', '')
-      .order('created_at', { ascending: false })
+  setLoading(true);
 
-    if (error) console.error(error)
-    else setOrders(data || [])
-    setLoading(false)
-  }
+  // 🌟 Database ဘက်တွင်တင် activeBranch ပါသော transit များကို တိုက်ရိုက် Filter လုပ်ယူခြင်း
+  const { data, error } = await supabase
+    .from('orders')
+    .select(`
+      *,
+      pickup_rider:riders!orders_pickup_rider_id_fkey(name),
+      deliver_rider:riders!orders_deliver_rider_id_fkey(name)
+    `)
+    .eq('is_deleted', false)
+    .filter('transit', 'cs', JSON.stringify([{ transit_from: activeBranch }]))
+    .order('created_at', { ascending: false });
+
+  if (!error && data) {
+    // DB က မိမိ Branch ဒေတာတွေကိုပဲ သီးသန့် ရွေးထုတ်ပေးလိုက်ပြီဖြစ်၍ .map() သာ လုပ်ရန်လိုတော့သည်
+    const formattedOrders = data.map((order: any) => {
+      const currentLeg = Array.isArray(order.transit)
+        ? order.transit.find((t: any) => t.transit_from === activeBranch)
+        : null;
+
+      return {
+        ...order,
+        transit_to: currentLeg ? currentLeg.transit_to : order.transit_to,
+        transit_date: currentLeg ? currentLeg.transit_date : order.transit_date,
+      };
+    });
+
+    setOrders(formattedOrders);
+  } else if (error) {
+  // 🌟 error.message နှင့် error.details ကိုပါ ထုတ်ကြည့်ခြင်း
+  console.error("Fetch Error Message:", error.message, error.details, error.hint);
+}
+
+  setLoading(false);
+};
 
   const fetchRiders = async () => {
     const { data } = await supabase.from('riders').select('*')
@@ -194,32 +213,55 @@ useEffect(() => {
   }, [])
 
   // 🌟 Transit City မရွေးရသေးပါက Data မပြဘဲ Empty Array [] သာ Return ပြန်မည်
-  const filteredOrders = !colFilters['transit_to'] 
-    ? [] 
-    : orders.filter(o => {
-        // 📱 Mobile Global Search Logics
-        if (colFilters['global_search']) {
-          const query = colFilters['global_search'].toLowerCase()
+// 🌟 Transit City မရွေးရသေးပါက Data မပြဘဲ Empty Array [] သာ Return ပြန်မည်
+const filteredOrders = !colFilters['transit_to'] 
+  ? [] 
+  : orders.filter(o => {
+      // 📱 Mobile Global Search Logics
+      if (colFilters['global_search']) {
+        const query = colFilters['global_search'].trim().toLowerCase();
+        if (query) {
           const isMatch = 
             String(o.item_id || '').toLowerCase().includes(query) ||
             String(o.receiver_phone || '').toLowerCase().includes(query) ||
             String(o.receiver_name || '').toLowerCase().includes(query) ||
-            String(o.sender_name || '').toLowerCase().includes(query)
-          if (!isMatch) return false
+            String(o.sender_name || '').toLowerCase().includes(query);
+          if (!isMatch) return false;
+        }
+      }
+
+      // 💻 Desktop Grid Filter Logics
+      return Object.keys(colFilters).every(key => {
+        if (key === 'global_search') return true;
+        const rawFilter = colFilters[key];
+        if (!rawFilter || !rawFilter.trim()) return true;
+
+        const filterValue = rawFilter.trim().toLowerCase();
+
+        // 🌟 Smart Transit To Matching (City ID 'MDY' သို့မဟုတ် City Name 'မန္တလေး' ၂ မျိုးလုံး စစ်ပေးခြင်း)
+        if (key === 'transit_to') {
+          const cityObj = MANUAL_CITIES.find(
+            c => c.id.toLowerCase() === filterValue || c.name.toLowerCase() === filterValue
+          );
+          const orderTransitTo = String(o.transit_to || '').trim().toLowerCase();
+
+          if (cityObj) {
+            return (
+              orderTransitTo.includes(cityObj.id.toLowerCase()) ||
+              orderTransitTo.includes(cityObj.name.toLowerCase())
+            );
+          }
+          return orderTransitTo.includes(filterValue);
         }
 
-        // 💻 Desktop Grid Filter Logics
-        return Object.keys(colFilters).every(key => {
-          if (key === 'global_search') return true
-          const filterValue = colFilters[key]?.toLowerCase()
-          if (!filterValue) return true
-          let cellValue = ""
-          if (key === 'pickup_rider') cellValue = o.pickup_rider?.name || ""
-          else if (key === 'deliver_rider') cellValue = o.deliver_rider?.name || ""
-          else cellValue = String(o[key] || "")
-          return cellValue.toLowerCase().includes(filterValue)
-        })
-      })
+        let cellValue = "";
+        if (key === 'pickup_rider') cellValue = o.pickup_rider?.name || "";
+        else if (key === 'deliver_rider') cellValue = o.deliver_rider?.name || "";
+        else cellValue = String(o[key] ?? "");
+
+        return cellValue.toLowerCase().includes(filterValue);
+      });
+    });
 
   const handleFilterChange = (col: string, val: string) => {
     setColFilters(prev => ({ ...prev, [col]: val }))

@@ -95,19 +95,23 @@ export default function BulkUpdatePage() {
     if (data) setCities(data)
   }
 
-  async function fetchRecentOrders(branch: string) {
-    setSearchLoading(true)
-    const { data, error } = await supabase
-      .from('orders')
-      .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
-      .or(`branch.eq.${branch},transit_to.eq.${branch}`)
-      .in('status', ['At Office', 'Pending', 'In-Transit','On Way'])
-      .order('created_at', { ascending: false })
-      .limit(40)
+ async function fetchRecentOrders(branch: string) {
+  setSearchLoading(true)
+  
+  const { data, error } = await supabase
+    .from('orders')
+    .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
+    .or(`branch.eq.${branch},transit.cs.[{"transit_to":"${branch}"}]`) // 👈 branch parameter အမှန်အတိုင်း သုံးထားသည်
+    .in('status', ['At Office', 'Pending', 'In-Transit', 'On Way'])
+    .order('created_at', { ascending: false })
+    .limit(40)
 
-    if (!error && data) setOrders(data)
-    setSearchLoading(false)
+  if (!error && data) {
+    setOrders(data)
   }
+  
+  setSearchLoading(false)
+}
 
 async function performSearch(query: string) {
     if (!userBranch) return
@@ -120,7 +124,7 @@ async function performSearch(query: string) {
       .from('orders')
       .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
       // 💡 Branch/Transit စစ်ဆေးချက် AND Search Term စစ်ဆေးချက်
-      .or(`branch.eq.${userBranch},transit_to.eq.${userBranch}`)
+      .or(`branch.eq.${userBranch},transit.cs.[{"transit_to":"${userBranch}"}]`)
       .or(`item_id.ilike.%${query}%,barcode.ilike.%${query}%,sender_name.ilike.%${query}%,receiver_name.ilike.%${query}%,receiver_phone.ilike.%${query}%`)
       .order('created_at', { ascending: false })
 
@@ -155,7 +159,7 @@ async function performSearch(query: string) {
         .from('orders')
         .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
         // 💡 .or() နှစ်ခု ဆက်ရေးလိုက်ပါက Supabase မှ AND ပုံစံဖြင့် ချိတ်ဆက်စစ်ဆေးပေးပါသည်
-        .or(`branch.eq.${userBranch},transit_to.eq.${userBranch}`)
+        .or(`branch.eq.${userBranch},transit.cs.[{"transit_to":"${userBranch}"}]`)
         .or(`item_id.eq.${value},barcode.eq.${value}`)
         .maybeSingle()
 
@@ -187,7 +191,7 @@ async function performSearch(query: string) {
     const { data, error } = await supabase
       .from('orders')
       .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
-      .or(`branch.eq.${userBranch},transit_to.eq.${userBranch}`)
+      .or(`branch.eq.${userBranch},transit.cs.[{"transit_to":"${userBranch}"}]`)
       .or(`item_id.eq.${value},barcode.eq.${value}`)
       .maybeSingle()
 
@@ -256,7 +260,7 @@ async function performSearch(query: string) {
     }
   }
 
-  const handleBulkUpdateSubmit = async (e: React.FormEvent) => {
+ const handleBulkUpdateSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (selectedIds.length === 0) return alert("ကျေးဇူးပြု၍ အပ်ဒိတ်လုပ်မည့် ပါဆယ်ထုပ်များကို အရင်ရွေးချယ်ပါ!")
 
@@ -284,7 +288,12 @@ async function performSearch(query: string) {
         }
 
         if (isInTransit) {
-          if (currentOrder.transit_to !== bulkRiderId) {
+          // JSONB Array ထဲမှ နောက်ဆုံး Transit Leg ၏ destination ကို ယူစစ်ခြင်း
+          const lastTransitLeg = currentOrder.transit && currentOrder.transit.length > 0 
+            ? currentOrder.transit[currentOrder.transit.length - 1] 
+            : null;
+
+          if (lastTransitLeg?.transit_to !== bulkRiderId) {
             changes.push(`Transit City ကို "${targetEntityName}" သို့ ပြောင်းလဲခဲ့သည်`);
           }
         } else {
@@ -312,8 +321,34 @@ async function performSearch(query: string) {
         };
 
         if (isInTransit) {
-          updateData.transit_to = bulkRiderId || null;       
-          updateData.transit_date = bulkDeliverDate || null; 
+          const activeBranch = userBranch || localStorage.getItem('user_branch') || 'Unknown';
+          const targetTransitDate = bulkDeliverDate ? bulkDeliverDate : new Date().toISOString().split('T')[0];
+
+          // မူရင်း Transit Array ကို ကူးယူခြင်း
+          let existingTransit = Array.isArray(currentOrder.transit) ? [...currentOrder.transit] : [];
+
+          // transit_from က activeBranch နဲ့ တူတဲ့ leg ကို Index ရှာခြင်း
+          const existingLegIndex = existingTransit.findIndex((leg: any) => leg.transit_from === activeBranch);
+
+          if (existingLegIndex !== -1) {
+            // 🌟 transit_from တူတာ ရှိပြီးသားဆိုရင် အဲ့ဒီ leg ကိုပဲ update လုပ်မည်
+            existingTransit[existingLegIndex] = {
+              ...existingTransit[existingLegIndex],
+              transit_to: bulkRiderId,
+              transit_date: targetTransitDate
+            };
+          } else {
+            // 🌟 မရှိသေးပါက Leg အသစ်အဖြစ် Array ထဲ Push ထည့်မည်
+            existingTransit.push({
+              transit_from: activeBranch,
+              transit_to: bulkRiderId,
+              transit_date: targetTransitDate
+            });
+          }
+
+          updateData.transit = existingTransit;
+
+          // Deliver Rider ဒေတာများ ရှင်းထုတ်ခြင်း
           updateData.deliver_rider_id = null;               
           updateData.deliver_date = null;
         } else {

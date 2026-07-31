@@ -147,7 +147,10 @@ export default function DailyReport() {
     setLoading(true)
 
     try {
-      // ၁။ Orders များအားဆွဲထုတ်ခြင်း
+    // 🎯 ၁။ activeBranch သို့မဟုတ် activeDate မရောက်သေးပါက Query မဆွဲဘဲ ရပ်ထားမည်
+if (!activeBranch || !activeDate) return;
+
+// ၂။ Orders များအားဆွဲထုတ်ခြင်း
 const { data: ordersData, error: ordersError } = await supabase
   .from('orders')
   .select(`
@@ -156,18 +159,29 @@ const { data: ordersData, error: ordersError } = await supabase
     deliver_rider:riders!orders_deliver_rider_id_fkey(name)
   `)
   .eq('is_deleted', false)
-  .eq('branch', activeBranch)        // 🎯 ၁။ branch က activeBranch (ဥပမာ- YGN) နဲ့တင် ကွက်တိတူရမယ် (ဒါကြောင့် MDY တွေ လုံးဝမလာတော့ပါ)
-  .not('transit_to', 'is', null)     // 🎯 ၂။ transit_to က null (အလွတ်) မဖြစ်ရဘူး (မြို့တစ်ခုခု ဖြည့်ထားရမယ်)
-  .neq('transit_to', '')             // စာသားအလွတ် "" ဖြစ်နေရင်လည်း ဖယ်ထုတ်မယ်
-  .eq('deliver_date', activeDate)    // 🎯 ၃။ deliver_date က ရွေးထားတဲ့ ရက်စွဲနဲ့ ကွက်တိ တူရမယ်
-  .order('created_at', { ascending: false })
+  .eq('deliver_date', activeDate)
+  // 🌟 JSONB Filter ကို PostgREST filter 'cs' (Contains) ဖြင့် အမှားအယွင်းမရှိအောင် အတိအကျ စစ်ထုတ်ခြင်း
+  .filter('transit', 'cs', `[{"transit_from": "${activeBranch}"}]`)
+  .order('created_at', { ascending: false });
 
-      if (ordersError) {
-        console.error('Orders Error:', ordersError)
-        alert(`Orders fetch failed: ${ordersError.message || ordersError}`)
-      } else {
-        setReportData(ordersData || [])
-      }
+if (ordersError) {
+  // 🌟 Error အတိအကျကို Console တွင် မြင်ရအောင် Print ထုတ်ခြင်း
+  console.error('Orders Error Details:', {
+    message: ordersError.message,
+    details: ordersError.details,
+    hint: ordersError.hint,
+    code: ordersError.code,
+  });
+  alert(`Orders fetch failed: ${ordersError.message || ordersError.details || 'Unknown Error'}`);
+} else {
+  // 🌟 JS filter ဖြင့် transit array အလွတ် မဟုတ်ကြောင်းနှင့် transit_from ပါဝင်ကြောင်း စစ်ထုတ်ခြင်း
+  const validOrders = (ordersData || []).filter((order) => {
+    const transitList = Array.isArray(order.transit) ? order.transit : [];
+    return transitList.length > 0 && transitList.some((leg: any) => leg.transit_from === activeBranch);
+  });
+
+  setReportData(validOrders);
+}
 
       // ၂။ Handovers စာရင်းဆွဲထုတ်ခြင်း
       const { data: handoversData, error: handoversError } = await supabase

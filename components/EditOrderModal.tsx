@@ -54,50 +54,61 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     image_url: '',
     remark: '',
     transit_date: '',
-    transit_to: ''
+    transit_to: '',
+    transit: [] as any[],
   })
 
   // 1. Form အချက်အလက်များ မူရင်းအတိုင်း ဖြည့်သွင်းခြင်း
-  useEffect(() => {
-    if (orderData && isOpen) {
-      setFormData({
-        barcode: orderData.barcode || '', // ✨ DB ရဲ့ barcode column ထည့်သွင်းခြင်း
-        sender_id: orderData.sender_id || '',
-        received_date: orderData.received_date || '',
-        sender_name: orderData.sender_name || '',
-        sender_phone: orderData.sender_phone || '',
-        sender_loc: orderData.sender_loc || 'MDY',
-        receiver_name: orderData.receiver_name || '',
-        receiver_phone: orderData.receiver_phone || '',
-        receiver_address: orderData.receiver_address || '',
-        receiver_loc: orderData.receiver_loc || 'MDY',
-        cod_amount: orderData.cod_amount || 0,
-        deli_fee: orderData.deli_fee || 0,
-        fee_type: orderData.fee_type || 'Deli',
-        total_amount: orderData.total_amount || 0,
-        pickup_rider_id: orderData.pickup_rider_id || '',
-        status: orderData.status || 'At Office',
-        deliver_rider_id: orderData.deliver_rider_id || '',
-        deliver_date: orderData.deliver_date || '',
-        note: orderData.note || '',
-        cleared_date: orderData.cleared_date || '',
-        branch: orderData.branch || '',
-        image_url: orderData.image_url || '',
-        remark: orderData.remark || '',
-        transit_date: orderData.transit_date || '',
-        transit_to: orderData.transit_to || ''
-      })
+useEffect(() => {
+  if (orderData && isOpen) {
+    // 🌟 လက်ရှိ Logged-in ဝင်ထားသော Branch Code ကို ယူမည်
+    const currentBranch = localStorage.getItem('user_branch') || orderData.branch || 'MDY';
+    const transitList = Array.isArray(orderData.transit) ? orderData.transit : [];
 
-      setIsBarcodeLocked(true) // Modal ဖွင့်တိုင်း Lock ပြန်ခတ်ထားမည်
+    // 🌟 transit_from === currentBranch ဖြစ်သည့် Leg ကို ရှာယူခြင်း
+    const activeLeg = transitList.find((t: any) => t.transit_from === currentBranch);
 
-      if (orderData.fee_type === 'Bill') {
-        setOriginalCod((orderData.cod_amount || 0) + (orderData.deli_fee || 0))
-      } else {
-        setOriginalCod(orderData.cod_amount || 0)
-      }
-      setResetKey(Date.now())
+    setFormData({
+      barcode: orderData.barcode || '',
+      sender_id: orderData.sender_id || '',
+      received_date: orderData.received_date || '',
+      sender_name: orderData.sender_name || '',
+      sender_phone: orderData.sender_phone || '',
+      sender_loc: orderData.sender_loc || 'MDY',
+      receiver_name: orderData.receiver_name || '',
+      receiver_phone: orderData.receiver_phone || '',
+      receiver_address: orderData.receiver_address || '',
+      receiver_loc: orderData.receiver_loc || 'MDY',
+      cod_amount: orderData.cod_amount || 0,
+      deli_fee: orderData.deli_fee || 0,
+      fee_type: orderData.fee_type || 'Deli',
+      total_amount: orderData.total_amount || 0,
+      pickup_rider_id: orderData.pickup_rider_id || '',
+      status: orderData.status || 'At Office',
+      deliver_rider_id: orderData.deliver_rider_id || '',
+      deliver_date: orderData.deliver_date || '',
+      note: orderData.note || '',
+      cleared_date: orderData.cleared_date || '',
+      branch: orderData.branch || '',
+      image_url: orderData.image_url || '',
+      remark: orderData.remark || '',
+      
+      // 🌟 Matching Leg ရှိပါက ထို Leg ထဲမှ data ကို ယူပြမည်၊ မရှိပါက fallback ယူမည်
+      transit_date: activeLeg ? activeLeg.transit_date : (orderData.transit_date || ''),
+      transit_to: activeLeg ? activeLeg.transit_to : (orderData.transit_to || ''),
+      transit: transitList // Array မူရင်းကို သိမ်းထားမည်
+    })
+
+    setIsBarcodeLocked(true)
+
+    if (orderData.fee_type === 'Bill') {
+      setOriginalCod((orderData.cod_amount || 0) + (orderData.deli_fee || 0))
+    } else {
+      setOriginalCod(orderData.cod_amount || 0)
     }
-  }, [orderData, isOpen])
+    setResetKey(Date.now())
+  }
+}, [orderData, isOpen])
 
   // 2. Senders, Cities နှင့် Riders အချက်အလက်များ ဆွဲထုတ်ခြင်း
   useEffect(() => {
@@ -198,125 +209,101 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
   }
 
   // 6. Update Submission & History Log Generator
-  const handleUpdateSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (!formData.sender_name || !formData.receiver_name || !formData.receiver_phone) {
-        alert("လိုအပ်သောအချက်အလက်များ ပြည့်စုံစွာဖြည့်ပါ!")
-        return;
-    }
+const handleUpdateSubmit = async (e: React.FormEvent) => {
+  e.preventDefault()
 
-    if (!formData.sender_id) {
-        alert("ကျေးဇူးပြု၍ ပေးပို့သူ (Sender) ကို List ကျလာသည့်အထဲမှ သေချာစွာ နှိပ်၍ရွေးချယ်ပေးပါ!")
-        return;
-    }
+  if (!formData.sender_name || !formData.receiver_name || !formData.receiver_phone) {
+    alert("လိုအပ်သောအချက်အလက်များ ပြည့်စုံစွာဖြည့်ပါ!")
+    return;
+  }
 
-    setLoading(true)
+  if (!formData.sender_id) {
+    alert("ကျေးဇူးပြု၍ ပေးပို့သူ (Sender) ကို List ကျလာသည့်အထဲမှ သေချာစွာ နှိပ်၍ရွေးချယ်ပေးပါ!")
+    return;
+  }
 
-    let changes: string[] = [];
-    const fmtKg = (val: any) => `${(Number(val) || 0).toLocaleString()} Ks`;
+  setLoading(true)
 
-    // ✨ Barcode ပြောင်းလဲမှု မှတ်တမ်းယူခြင်း (barcode column)
-    const oldBarcode = orderData.barcode || '';
-    if (oldBarcode !== formData.barcode) {
-      changes.push(`🏷️ Barcode: "${oldBarcode}" ➔ "${formData.barcode}"`);
-    }
+  // 🌟 Current Branch ကို ယူခြင်း
+  const currentBranch = localStorage.getItem('user_branch') || formData.branch || 'MDY';
 
-    if (orderData.received_date !== formData.received_date) {
-      changes.push(`📅 Arrival Date: "${orderData.received_date || 'N/A'}" ➔ "${formData.received_date}"`);
-    }
-    if (orderData.branch !== formData.branch) {
-      changes.push(`🏢 Branch: "${orderData.branch || 'N/A'}" ➔ "${formData.branch}"`);
-    }
-    if (orderData.pickup_rider_id !== formData.pickup_rider_id) {
-      const oldRider = riders.find(r => r.id === orderData.pickup_rider_id)?.name || 'N/A';
-      const newRider = riders.find(r => r.id === formData.pickup_rider_id)?.name || 'Removed';
-      changes.push(`🚴 Pick Up Rider: "${oldRider}" ➔ "${newRider}"`);
-    }
-    if (orderData.deliver_rider_id !== formData.deliver_rider_id) {
-      const oldRider = riders.find(r => r.id === orderData.deliver_rider_id)?.name || 'N/A';
-      const newRider = riders.find(r => r.id === formData.deliver_rider_id)?.name || 'Removed';
-      changes.push(`🚴 Delivery Rider: "${oldRider}" ➔ "${newRider}"`);
-    }
-    if (orderData.sender_id !== formData.sender_id) {
-      changes.push(`📤 Sender Changed: "${orderData.sender_name || 'N/A'}" ➔ "${formData.sender_name}"`);
-    }
-    if (orderData.sender_phone !== formData.sender_phone) {
-      changes.push(`📞 Sender Phone: "${orderData.sender_phone || 'N/A'}" ➔ "${formData.sender_phone}"`);
-    }
-    if (orderData.sender_loc !== formData.sender_loc) {
-      changes.push(`📍 Sender Loc: "${orderData.sender_loc}" ➔ "${formData.sender_loc}"`);
-    }
-    if (orderData.receiver_name !== formData.receiver_name) {
-      changes.push(`📥 Receiver Name: "${orderData.receiver_name}" ➔ "${formData.receiver_name}"`);
-    }
-    if (orderData.receiver_phone !== formData.receiver_phone) {
-      changes.push(`📞 Receiver Phone: "${orderData.receiver_phone}" ➔ "${formData.receiver_phone}"`);
-    }
-    if ((orderData.receiver_address || '') !== (formData.receiver_address || '')) {
-      changes.push(`🏠 Address: "${orderData.receiver_address || 'N/A'}" ➔ "${formData.receiver_address || 'Deleted'}"`);
-    }
-    if (orderData.receiver_loc !== formData.receiver_loc) {
-      changes.push(`🏙️ Destination City: "${orderData.receiver_loc}" ➔ "${formData.receiver_loc}"`);
-    }
-    if (Number(orderData.cod_amount || 0) !== Number(formData.cod_amount || 0)) {
-      changes.push(`💰 COD Amount: ${fmtKg(orderData.cod_amount)} ➔ ${fmtKg(formData.cod_amount)}`);
-    }
-    if (Number(orderData.deli_fee || 0) !== Number(formData.deli_fee || 0)) {
-      changes.push(`💵 Deli Fee: ${fmtKg(orderData.deli_fee)} ➔ ${fmtKg(formData.deli_fee)}`);
-    }
-    if (orderData.fee_type !== formData.fee_type) {
-      changes.push(`💳 Pay Type: "${orderData.fee_type || 'Deli'}" ➔ "${formData.fee_type}"`);
-    }
-    if (orderData.status !== formData.status) {
-      changes.push(`📦 Status: "${orderData.status || 'At Office'}" ➔ "${formData.status}"`);
-    }
-    if ((orderData.deliver_date || '') !== (formData.deliver_date || '')) {
-      changes.push(`📆 Deliver Date: "${orderData.deliver_date || 'N/A'}" ➔ "${formData.deliver_date || 'Deleted'}"`);
-    }
-    if ((orderData.transit_date || '') !== (formData.transit_date || '')) {
-      changes.push(`🚚 Transit Date: "${orderData.transit_date || 'N/A'}" ➔ "${formData.transit_date || 'Deleted'}"`);
-    }
-    if ((orderData.transit_to || '') !== (formData.transit_to || '')) {
-      changes.push(`🚛 Transit To: "${orderData.transit_to || 'N/A'}" ➔ "${formData.transit_to || 'Deleted'}"`);
-    }
-    if ((orderData.note || '') !== (formData.note || '')) {
-      const oldNote = orderData.note === 'RT' ? 'Return (RT)' : (orderData.note || 'Normal');
-      const newNote = formData.note === 'RT' ? 'Return (RT)' : (formData.note || 'Normal');
-      changes.push(`⚠️ Note Utility: "${oldNote}" ➔ "${newNote}"`);
-    }
-    if ((orderData.cleared_date || '') !== (formData.cleared_date || '')) {
-      const oldClear = orderData.cleared_date ? `Cleared (${orderData.cleared_date})` : 'Uncleared';
-      const newClear = formData.cleared_date ? `Cleared (${formData.cleared_date})` : 'Uncleared';
-      changes.push(`💸 Cash Event: "${oldClear}" ➔ "${newClear}"`);
-    }
-    if (orderData.image_url !== formData.image_url) {
-      const imgStatus = !formData.image_url ? 'Voucher image removed' : 'New voucher image uploaded';
-      changes.push(`🖼️ Attachment: "${imgStatus}"`);
-    }
-    if ((orderData.remark || '') !== (formData.remark || '')) {
-      changes.push(`📝 Remark: "${orderData.remark || 'N/A'}" ➔ "${formData.remark || 'Deleted'}"`);
-    }
+  // 🌟 Active Branch Leg တစ်ခုတည်းကိုပဲ Target ထား၍ Update/Insert လုပ်ခြင်း
+  let updatedTransitList = [...(formData.transit || [])];
+  const legIndex = updatedTransitList.findIndex((t: any) => t.transit_from === currentBranch);
 
-    if (changes.length === 0) {
-      changes.push("ℹ️ No fields were modified (Re-saved)");
-    }
-
-    const logNote = changes.join("\n");
-    const operatorName = localStorage.getItem('user_branch') || formData.branch || 'Unknown Office';
-
-    const newLogEntry = {
-      timestamp: new Date().toISOString(),
-      action: "Order Updated",
-      operator: operatorName,
-      note: logNote
+  if (legIndex >= 0) {
+    // Leg ရှိပြီးသားဖြစ်ပါက အဆိုပါ Leg ၏ transit_to / transit_date ကိုပဲ Update လုပ်မည်
+    updatedTransitList[legIndex] = {
+      ...updatedTransitList[legIndex],
+      transit_to: formData.transit_to || null,
+      transit_date: formData.transit_date || null
     };
+  } else if (formData.transit_to || formData.transit_date) {
+    // Leg မရှိသေးပါက Leg အသစ်အဖြစ် Current Branch အတွက် Append လုပ်မည်
+    updatedTransitList.push({
+      transit_from: currentBranch,
+      transit_to: formData.transit_to || null,
+      transit_date: formData.transit_date || null
+    });
+  }
 
-    const updatedHistory = [...(orderData.history || []), newLogEntry];
+  // ==================== 🌟 HISTORY LOG CALCULATION (ပြောင်းလဲမှုများ မှတ်တမ်းတင်ခြင်း) ====================
+  let changes: string[] = [];
+  const fmtKg = (val: any) => `${(Number(val) || 0).toLocaleString()} Ks`;
 
-   const payload = {
+  if ((orderData?.barcode || '') !== (formData.barcode || '')) {
+    changes.push(`🏷️ Barcode: "${orderData?.barcode || ''}" ➔ "${formData.barcode}"`);
+  }
+  if ((orderData?.received_date || '') !== (formData.received_date || '')) {
+    changes.push(`📅 Arrival Date: "${orderData?.received_date || 'N/A'}" ➔ "${formData.received_date}"`);
+  }
+  if ((orderData?.branch || '') !== (formData.branch || '')) {
+    changes.push(`🏢 Branch: "${orderData?.branch || 'N/A'}" ➔ "${formData.branch}"`);
+  }
+  if ((orderData?.sender_name || '') !== (formData.sender_name || '')) {
+    changes.push(`📤 Sender: "${orderData?.sender_name || ''}" ➔ "${formData.sender_name}"`);
+  }
+  if ((orderData?.receiver_name || '') !== (formData.receiver_name || '')) {
+    changes.push(`📥 Receiver Name: "${orderData?.receiver_name || ''}" ➔ "${formData.receiver_name}"`);
+  }
+  if ((orderData?.receiver_phone || '') !== (formData.receiver_phone || '')) {
+    changes.push(`📞 Receiver Phone: "${orderData?.receiver_phone || ''}" ➔ "${formData.receiver_phone}"`);
+  }
+  if (Number(orderData?.cod_amount || 0) !== Number(formData.cod_amount || 0)) {
+    changes.push(`💰 COD Amount: ${fmtKg(orderData?.cod_amount)} ➔ ${fmtKg(formData.cod_amount)}`);
+  }
+  if (Number(orderData?.deli_fee || 0) !== Number(formData.deli_fee || 0)) {
+    changes.push(`💵 Deli Fee: ${fmtKg(orderData?.deli_fee)} ➔ ${fmtKg(formData.deli_fee)}`);
+  }
+  if ((orderData?.status || 'At Office') !== (formData.status || 'At Office')) {
+    changes.push(`📦 Status: "${orderData?.status || 'At Office'}" ➔ "${formData.status}"`);
+  }
+  if ((orderData?.transit_date || '') !== (formData.transit_date || '')) {
+    changes.push(`🚚 Transit Date: "${orderData?.transit_date || 'N/A'}" ➔ "${formData.transit_date || 'Cleared'}"`);
+  }
+  if ((orderData?.transit_to || '') !== (formData.transit_to || '')) {
+    changes.push(`🚛 Transit To: "${orderData?.transit_to || 'N/A'}" ➔ "${formData.transit_to || 'Cleared'}"`);
+  }
+
+  if (changes.length === 0) {
+    changes.push("ℹ️ No fields were modified (Re-saved)");
+  }
+
+  const logNote = changes.join("\n");
+  const operatorName = currentBranch || 'Unknown Office';
+
+  const newLogEntry = {
+    timestamp: new Date().toISOString(),
+    action: "Order Updated",
+    operator: operatorName,
+    note: logNote
+  };
+
+  const updatedHistory = [...(orderData?.history || []), newLogEntry];
+  // =====================================================================================================
+
+  const payload = {
     ...formData,
-    // Barcode အလွတ်ဖြစ်နေရင် သို့မဟုတ် Space ပဲပါရင် DB ကို '' အစား null ပို့ပေးမည်
     barcode: formData.barcode?.trim() ? formData.barcode.trim() : null, 
     pickup_rider_id: formData.pickup_rider_id || null,
     deliver_rider_id: formData.deliver_rider_id || null,
@@ -324,24 +311,25 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     cleared_date: formData.cleared_date || null,
     transit_date: formData.transit_date || null,
     transit_to: formData.transit_to || null,
-    history: updatedHistory
-}
-
-    const { error } = await supabase
-      .from('orders')
-      .update(payload)
-      .eq('id', orderData.id)
-
-    setLoading(false)
-
-    if (error) {
-      alert("ပြင်ဆင်မှု မအောင်မြင်ပါ- " + error.message)
-    } else {
-      alert("Order နှင့် လှုပ်ရှားမှုမှတ်တမ်းကို အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။")
-      onSaveSuccess()
-      onClose()
-    }
+    transit: updatedTransitList, // 🌟 Leg ပြင်ဆင်ပြီးသား JSONB Array
+    history: updatedHistory      // 🌟 History Array အသစ်
   }
+
+  const { error } = await supabase
+    .from('orders')
+    .update(payload)
+    .eq('id', orderData.id)
+
+  setLoading(false)
+
+  if (error) {
+    alert("ပြင်ဆင်မှု မအောင်မြင်ပါ- " + error.message)
+  } else {
+    alert("Order နှင့် လှုပ်ရှားမှုမှတ်တမ်းကို အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။")
+    onSaveSuccess()
+    onClose()
+  }
+}
 
   if (!isOpen) return null;
 

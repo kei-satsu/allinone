@@ -16,7 +16,7 @@ const COLUMN_DEFS = [
   { key: 'receiver_name', label: 'Receiver', defaultVisible: true },
   { key: 'receiver_phone', label: 'Phone', defaultVisible: true },
   { key: 'receiver_loc', label: 'R. City', defaultVisible: false },
-  { key: 'receiver_address', label: 'Full Address', defaultVisible: true },
+  { key: 'receiver_address', label: 'Full Address', defaultVisible: false },
   { key: 'fee_type', label: 'Type', defaultVisible: true },
   { key: 'cod_amount', label: 'COD (Ks)', defaultVisible: true },
   { key: 'deli_fee', label: 'Deli Fee (Ks)', defaultVisible: true },
@@ -147,7 +147,7 @@ export default function DailyReport() {
     setLoading(true)
 
     try {
-      // ၁။ Orders များအားဆွဲထုတ်ခြင်း
+     // ၁။ Orders များအား Date ဖြင့် အကြမ်းဖျင်း ဆွဲထုတ်ခြင်း
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select(`
@@ -156,15 +156,62 @@ export default function DailyReport() {
           deliver_rider:riders!orders_deliver_rider_id_fkey(name)
         `)
         .eq('is_deleted', false)
-// ✨ Logic အသစ်အရ Master .or() တစ်ခုတည်းအောက်မှာ စုစည်းပေးလိုက်ပါပြီ
-.or(`and(deliver_date.eq."${activeDate}",or(and(branch.eq."${activeBranch}",transit_to.is.null),and(branch.neq."${activeBranch}",transit_to.eq."${activeBranch}"))),and(fee_type.in.(Cash,Kpay),received_date.eq."${activeDate}",or(branch.eq."${activeBranch}",transit_to.eq."${activeBranch}"))`)
-.order('created_at', { ascending: false })
+        .or(`deliver_date.eq."${activeDate}",received_date.eq."${activeDate}"`)
+        .order('created_at', { ascending: false });
 
       if (ordersError) {
-        console.error('Orders Error:', ordersError)
-        alert(`Orders fetch failed: ${ordersError.message || ordersError}`)
+        console.error('Orders Error:', ordersError);
+        alert(`Orders fetch failed: ${ordersError.message || ordersError}`);
       } else {
-        setReportData(ordersData || [])
+        
+        // 🌟 အစ်ကိုလိုချင်သည့် Rule များအတိုင်း အတိအကျ စစ်ထုတ်ပေးမည့် Logic
+        const filteredOrders = (ordersData || []).filter((order) => {
+          const transitList = Array.isArray(order.transit) ? order.transit : [];
+          const hasTransit = transitList.length > 0;
+          
+          // note column ထဲတွင် "RT" ပါမပါ စစ်ဆေးခြင်း (Case-insensitive)
+          const isRT = order.note ? String(order.note).toUpperCase().includes('RT') : false;
+
+          // ----------------------------------------------------
+          // 📍 STEP 1: Branch / Transit Location Logic
+          // ----------------------------------------------------
+          let isLocationValid = false;
+
+          // (A) အထုတ်၏ Branch နှင့် Current Branch တူပါက
+          if (order.branch === activeBranch) {
+            if (!hasTransit) {
+              isLocationValid = true; // 1. transit က null/empty ဖြစ်ရင် ယူမည်
+            } else if (isRT) {
+              isLocationValid = true; // 2. note မှာ RT ပါရင် transit null မဖြစ်လဲ ယူမည် (ချွင်းချက်)
+            }
+          } 
+          // (B) အထုတ်၏ Branch နှင့် Current Branch မတူပါက
+          else if (hasTransit) {
+            const hasTransitTo = transitList.some((leg: any) => leg.transit_to === activeBranch);
+            const hasTransitFrom = transitList.some((leg: any) => leg.transit_from === activeBranch);
+
+            // transit_to : activeBranch ပါပြီး transit_from : activeBranch မပါတဲ့ အကြောင်းများကို ယူမည်
+            if (hasTransitTo && !hasTransitFrom) {
+              isLocationValid = true;
+            }
+          }
+
+          // လက်ရှိ Branch နှင့် မကိုက်ညီပါက Report ထဲ မထည့်ပါ
+          if (!isLocationValid) return false;
+
+          // ----------------------------------------------------
+          // 📍 STEP 2: Date & Fee Type Logic (မူရင်းအတိုင်း)
+          // ----------------------------------------------------
+          // 1. Deliver Date ကိုက်ညီခြင်း
+          const isDeliverMatch = order.deliver_date === activeDate;
+
+          // 2. Cash / Kpay ဖြင့် activeDate တွင် ငွေဝင်ထားခြင်း
+          const isIncomeMatch = ['Cash', 'Kpay'].includes(order.fee_type) && order.received_date === activeDate;
+
+          return isDeliverMatch || isIncomeMatch;
+        });
+
+        setReportData(filteredOrders);
       }
 
       // ၂။ Handovers စာရင်းဆွဲထုတ်ခြင်း (.eq မှာတော့ "" ထည့်စရာမလိုပါ)

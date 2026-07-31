@@ -185,26 +185,46 @@ useEffect(() => {
 
 
   const fetchData = async (branchCode?: string) => {
-    const activeBranch = branchCode || userBranch;
-    if (!activeBranch) return;
+  const activeBranch = branchCode || userBranch;
+  if (!activeBranch) return;
 
-    setLoading(true)
-    const { data, error } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        pickup_rider:riders!orders_pickup_rider_id_fkey(name),
-        deliver_rider:riders!orders_deliver_rider_id_fkey(name)
-      `)
-      .eq('is_deleted', false)
-      .eq('transit_to', activeBranch)
-      .eq('status', 'In-Transit')
-      .order('created_at', { ascending: false })
+  setLoading(true);
+  const { data, error } = await supabase
+    .from('orders')
+    .select(`
+      *,
+      pickup_rider:riders!orders_pickup_rider_id_fkey(name),
+      deliver_rider:riders!orders_deliver_rider_id_fkey(name)
+    `)
+    .eq('is_deleted', false)
+    .filter('transit', 'cs', JSON.stringify([{ transit_to: activeBranch }]))
+    .eq('status', 'In-Transit')
+    .order('created_at', { ascending: false });
 
-    if (error) console.error(error)
-    else setOrders(data || [])
-    setLoading(false)
+  if (error) {
+    console.error(error);
+    setOrders([]);
+  } else if (data) {
+    // data ထဲက transit array ထဲမှ activeBranch နဲ့ transit_to တူတဲ့ leg ကိုရှာပြီး လက်ရှိခြေလှမ်းအဖြစ် သတ်မှတ်
+    const formattedOrders = data.map((order: any) => {
+      const currentLeg = Array.isArray(order.transit)
+        ? order.transit.find((t: any) => t.transit_to === activeBranch)
+        : null;
+
+      return {
+        ...order,
+        transit_to: currentLeg ? currentLeg.transit_to : order.transit_to,
+        transit_date: currentLeg ? currentLeg.transit_date : order.transit_date,
+      };
+    });
+
+    setOrders(formattedOrders);
+  } else {
+    setOrders([]);
   }
+
+  setLoading(false);
+};
 
   const fetchRiders = async () => {
     const { data } = await supabase.from('riders').select('*')
@@ -320,6 +340,8 @@ async function handleQuickAtOffice(order: any) {
       .eq('id', order.id);
 
     if (error) throw error;
+
+    setOrders(prevOrders => prevOrders.filter(o => o.id !== order.id));
 
     alert('Status ကို "Arrived" သို့ အောင်မြင်စွာ ပြောင်းလဲပြီးပါပြီ။');
     setContextMenu(null); // Context menu ပိတ်ရန်
