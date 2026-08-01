@@ -148,71 +148,74 @@ export default function DailyReport() {
 
     try {
      // ၁။ Orders များအား Date ဖြင့် အကြမ်းဖျင်း ဆွဲထုတ်ခြင်း
-      const { data: ordersData, error: ordersError } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          pickup_rider:riders!orders_pickup_rider_id_fkey(name),
-          deliver_rider:riders!orders_deliver_rider_id_fkey(name)
-        `)
-        .eq('is_deleted', false)
-        .or(`deliver_date.eq."${activeDate}",received_date.eq."${activeDate}"`)
-        .order('created_at', { ascending: false });
+const { data: ordersData, error: ordersError } = await supabase
+  .from('orders')
+  .select(`
+    *,
+    pickup_rider:riders!orders_pickup_rider_id_fkey(name),
+    deliver_rider:riders!orders_deliver_rider_id_fkey(name)
+  `)
+  .eq('is_deleted', false)
+  .or(`deliver_date.eq."${activeDate}",received_date.eq."${activeDate}"`)
+  .order('created_at', { ascending: false });
 
-      if (ordersError) {
-        console.error('Orders Error:', ordersError);
-        alert(`Orders fetch failed: ${ordersError.message || ordersError}`);
-      } else {
-        
-        // 🌟 အစ်ကိုလိုချင်သည့် Rule များအတိုင်း အတိအကျ စစ်ထုတ်ပေးမည့် Logic
-        const filteredOrders = (ordersData || []).filter((order) => {
-          const transitList = Array.isArray(order.transit) ? order.transit : [];
-          const hasTransit = transitList.length > 0;
-          
-          // note column ထဲတွင် "RT" ပါမပါ စစ်ဆေးခြင်း (Case-insensitive)
-          const isRT = order.note ? String(order.note).toUpperCase().includes('RT') : false;
+if (ordersError) {
+  console.error('Orders Error:', ordersError);
+  alert(`Orders fetch failed: ${ordersError.message || ordersError}`);
+} else {
+  
+  // 🌟 ပြင်ဆင်ထားသည့် Logic အပြည့်အစုံ
+  const filteredOrders = (ordersData || []).filter((order) => {
+    const transitList = Array.isArray(order.transit) ? order.transit : [];
+    const hasTransit = transitList.length > 0;
+    
+    // note column ထဲတွင် "RT" ပါမပါ စစ်ဆေးခြင်း (Case-insensitive)
+    const isRT = order.note ? String(order.note).toUpperCase().includes('RT') : false;
 
-          // ----------------------------------------------------
-          // 📍 STEP 1: Branch / Transit Location Logic
-          // ----------------------------------------------------
-          let isLocationValid = false;
+    // ----------------------------------------------------
+    // 📍 STEP 1: Branch / Transit Location Logic (Deliver Date အတွက်)
+    // ----------------------------------------------------
+    let isLocationValid = false;
 
-          // (A) အထုတ်၏ Branch နှင့် Current Branch တူပါက
-          if (order.branch === activeBranch) {
-            if (!hasTransit) {
-              isLocationValid = true; // 1. transit က null/empty ဖြစ်ရင် ယူမည်
-            } else if (isRT) {
-              isLocationValid = true; // 2. note မှာ RT ပါရင် transit null မဖြစ်လဲ ယူမည် (ချွင်းချက်)
-            }
-          } 
-          // (B) အထုတ်၏ Branch နှင့် Current Branch မတူပါက
-          else if (hasTransit) {
-            const hasTransitTo = transitList.some((leg: any) => leg.transit_to === activeBranch);
-            const hasTransitFrom = transitList.some((leg: any) => leg.transit_from === activeBranch);
-
-            // transit_to : activeBranch ပါပြီး transit_from : activeBranch မပါတဲ့ အကြောင်းများကို ယူမည်
-            if (hasTransitTo && !hasTransitFrom) {
-              isLocationValid = true;
-            }
-          }
-
-          // လက်ရှိ Branch နှင့် မကိုက်ညီပါက Report ထဲ မထည့်ပါ
-          if (!isLocationValid) return false;
-
-          // ----------------------------------------------------
-          // 📍 STEP 2: Date & Fee Type Logic (မူရင်းအတိုင်း)
-          // ----------------------------------------------------
-          // 1. Deliver Date ကိုက်ညီခြင်း
-          const isDeliverMatch = order.deliver_date === activeDate;
-
-          // 2. Cash / Kpay ဖြင့် activeDate တွင် ငွေဝင်ထားခြင်း
-          const isIncomeMatch = ['Cash', 'Kpay'].includes(order.fee_type) && order.received_date === activeDate;
-
-          return isDeliverMatch || isIncomeMatch;
-        });
-
-        setReportData(filteredOrders);
+    // (A) အထုတ်၏ Branch နှင့် Current Branch တူပါက
+    if (order.branch === activeBranch) {
+      if (!hasTransit) {
+        isLocationValid = true; // 1. transit က null/empty ဖြစ်ရင် ယူမည်
+      } else if (isRT) {
+        isLocationValid = true; // 2. note မှာ RT ပါရင် transit null မဖြစ်လဲ ယူမည် (ချွင်းချက်)
       }
+    } 
+    // (B) အထုတ်၏ Branch နှင့် Current Branch မတူပါက
+    else if (hasTransit) {
+      const hasTransitTo = transitList.some((leg: any) => leg.transit_to === activeBranch);
+      const hasTransitFrom = transitList.some((leg: any) => leg.transit_from === activeBranch);
+
+      // transit_to : activeBranch ပါပြီး transit_from : activeBranch မပါတဲ့ အကြောင်းများကို ယူမည်
+      if (hasTransitTo && !hasTransitFrom) {
+        isLocationValid = true;
+      }
+    }
+
+    // 1. Deliver Date ကိုက်ညီခြင်း (Transit / Branch Logic မှန်မှ ယူမည်)
+    const isDeliverMatch = isLocationValid && order.deliver_date === activeDate;
+
+    // ----------------------------------------------------
+    // 📍 STEP 2: Cash / Kpay Income Logic (Transit မကြည့်ပါ)
+    // ----------------------------------------------------
+    // - Order ရဲ့ Branch က activeBranch ဖြစ်ရမည်
+    // - fee_type က Cash သို့မဟုတ် Kpay ဖြစ်ရမည်
+    // - received_date က activeDate ဖြစ်ရမည်
+    const isIncomeMatch = 
+      order.branch === activeBranch && 
+      ['Cash', 'Kpay'].includes(order.fee_type) && 
+      order.received_date === activeDate;
+
+    // 🎯 Deliver Match သို့မဟုတ် Income Match တစ်ခုခု မှန်ပါက Report ထဲ ပါမည်
+    return isDeliverMatch || isIncomeMatch;
+  });
+
+  setReportData(filteredOrders);
+}
 
       // ၂။ Handovers စာရင်းဆွဲထုတ်ခြင်း (.eq မှာတော့ "" ထည့်စရာမလိုပါ)
       const { data: handoversData, error: handoversError } = await supabase
