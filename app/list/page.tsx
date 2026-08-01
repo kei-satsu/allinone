@@ -746,24 +746,31 @@ useEffect(() => {
   )}
 </div>
 
-    <OrderTable
+     {/* ── Container Workspace Area (OrderTable Component) ── */}
+<OrderTable
   orders={filteredOrders}
   columnDefs={COLUMN_DEFS}
   visibleCols={visibleCols}
-  showFilterBar={true}
+  showFilterBar={showFilterBar}
   colFilters={colFilters}
   onFilterChange={handleFilterChange}
   riders={riders}
-  locationOptions={[]}
+  locationOptions={locationOptions}
   loading={loading}
-  loadingMore={false}
-  hasMore={false}
-  onLoadMore={() => {}}
+  loadingMore={loadingMore}
+  hasMore={hasMore}
+  onLoadMore={() => fetchData({ append: true })}
   
-  // 🟢 Hook မှ ထွက်လာသော Selection Props များနှင့် ချိတ်ဆက်ခြင်း
+  // Selection Props
   selectedOrders={selectedOrders}
   isAllSelected={selectAll}
-  onToggleSelectAll={() => selectAllFiltered(filteredOrders)}
+  onToggleSelectAll={() => {
+    if (selectAll) {
+      clearSelection();
+    } else {
+      selectAllFiltered();
+    }
+  }}
   onToggleOrderSelection={toggleOrderSelection}
   onRowMouseDown={handleRowMouseDown}
   onRowMouseEnter={handleRowMouseEnter}
@@ -773,7 +780,7 @@ useEffect(() => {
   onRowClick={(order) => setViewingDetailOrder(order)}
   onRowContextMenu={(e, order) => handleRowContextMenu(e, order)}
   onPreviewImage={(url) => setPreviewImage(url)}
-/> 
+/>  
       
      
 
@@ -1168,7 +1175,7 @@ useEffect(() => {
           </div>
           <div>
             <span className="text-[10px] text-gray-400 font-bold uppercase block mb-0.5">Cleared Date</span>
-            <span className="font-medium text-gray-700 font-mono break-words">{viewingDetailOrder.cleard_date || '-'}</span>
+            <span className="font-medium text-gray-700 font-mono break-words">{viewingDetailOrder.cleared_date || '-'}</span>
           </div>
           <div>
             <span className="text-[10px] text-gray-400 font-bold uppercase block mb-0.5">Created At</span>
