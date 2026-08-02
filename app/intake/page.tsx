@@ -877,15 +877,15 @@ const processSingleOfflineItem = async (item: any) => {
   }
 
  // ─── 🌟 STEP 3: Supabase သို့ ဒေတာ ထည့်သွင်းခြင်း (With JSON History) ───
-  const currentStatus = item.transit_to ? 'In-Transit' : 'Pending';
+ const currentStatus = (item.transit && item.transit.length > 0) ? 'In-Transit' : 'Pending';
 
   // 1. Initial History Object တစ်ခု တည်ဆောက်ခြင်း
   const initialHistory = [
     {
       status: currentStatus,
-      note: item.transit_to 
-        ? `Intake recorded - Initial Status: ${item.transit_to}${item.uploader_note ? ` (${item.uploader_note})` : ''}`
-        : item.uploader_note || 'Intake recorded',
+      note: (item.transit && item.transit.length > 0)
+  ? `Intake recorded - Initial Status: ${item.transit[0].transit_to}${item.uploader_note ? ` (${item.uploader_note})` : ''}`
+  : item.uploader_note || 'Intake recorded',
       branch: item.branch,
       date: item.received_date || new Date().toISOString(),
       created_at: new Date().toISOString(),
@@ -903,8 +903,7 @@ const processSingleOfflineItem = async (item: any) => {
         received_date: item.received_date,
         uploader_note: item.uploader_note || null,
         barcode: item.barcode || null,
-        transit_to: item.transit_to || null,      
-        transit_date: item.transit_date || null,
+        transit: item.transit || null,
         history: initialHistory, // 👈 JSON Array အဖြစ် တိုက်ရိုက် ထည့်သွင်းခြင်း
       },
     ]);
@@ -1043,9 +1042,14 @@ const maxDimension = img.quality === 'HD' ? 1920 : 1280;
         branch: userBranch,
         received_date: receivedDate,
         uploader_note: batchNote || null,
-        transit_to: isTransitYGN ? 'YGN' : null,        
-        transit_date: isTransitYGN ? receivedDate : null,
-        status: isTransitYGN ? 'In-Transit' : 'Pending'
+        transit: isTransitYGN ? [
+  {
+    transit_to: 'YGN',
+    transit_date: receivedDate,
+    transit_from: userBranch || 'MDY'
+  }
+] : null,
+status: isTransitYGN ? 'In-Transit' : 'Pending'
       };
 
       // Browser Storage ထဲသို့ သိမ်းဆည်းခြင်း
