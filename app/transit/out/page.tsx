@@ -149,13 +149,13 @@ useEffect(() => {
   const [colFilters, setColFilters] = useState<Record<string, string>>({})
 
 
- const fetchData = async (branchCode?: string) => {
-  const activeBranch = branchCode || userBranch;
+const fetchData = async (branchCode?: string) => {
+  const activeBranch = (branchCode || userBranch || '').trim();
   if (!activeBranch) return;
 
   setLoading(true);
 
-  // 🌟 Database ဘက်တွင်တင် activeBranch ပါသော transit များကို တိုက်ရိုက် Filter လုပ်ယူခြင်း
+  // 🌟 DB Query ဆွဲယူခြင်း
   const { data, error } = await supabase
     .from('orders')
     .select(`
@@ -168,24 +168,44 @@ useEffect(() => {
     .order('created_at', { ascending: false });
 
   if (!error && data) {
-    // DB က မိမိ Branch ဒေတာတွေကိုပဲ သီးသန့် ရွေးထုတ်ပေးလိုက်ပြီဖြစ်၍ .map() သာ လုပ်ရန်လိုတော့သည်
     const formattedOrders = data.map((order: any) => {
-      const currentLeg = Array.isArray(order.transit)
-        ? order.transit.find((t: any) => t.transit_from === activeBranch)
+      // 🌟 ၁။ order.transit က String ဖြစ်နေရင် JSON Parse လုပ်ပေးခြင်း
+      let transitArray = order.transit;
+      if (typeof transitArray === 'string') {
+        try {
+          transitArray = JSON.parse(transitArray);
+        } catch (e) {
+          transitArray = [];
+        }
+      }
+
+      // 🌟 ၂။ String Trim & Case Matching စစ်ပေးခြင်း (MDY vs mdy / Space အပိုမပါအောင်)
+      const currentLeg = Array.isArray(transitArray)
+        ? transitArray.find(
+            (t: any) =>
+              String(t.transit_from || '').trim().toUpperCase() ===
+              activeBranch.toUpperCase()
+          )
         : null;
+
+      // 🌟 ၃။ Fallback Logic (currentLeg မတွေ့ရင်တောင် Array ထဲက ပထမဆုံး element မှ transit_to ကို ယူပေးမည်)
+      const fallbackTransit = Array.isArray(transitArray) && transitArray.length > 0 ? transitArray[0] : null;
 
       return {
         ...order,
-        transit_to: currentLeg ? currentLeg.transit_to : order.transit_to,
-        transit_date: currentLeg ? currentLeg.transit_date : order.transit_date,
+        transit_to: currentLeg
+          ? currentLeg.transit_to
+          : (fallbackTransit ? fallbackTransit.transit_to : order.transit_to),
+        transit_date: currentLeg
+          ? currentLeg.transit_date
+          : (fallbackTransit ? fallbackTransit.transit_date : order.transit_date),
       };
     });
 
     setOrders(formattedOrders);
   } else if (error) {
-  // 🌟 error.message နှင့် error.details ကိုပါ ထုတ်ကြည့်ခြင်း
-  console.error("Fetch Error Message:", error.message, error.details, error.hint);
-}
+    console.error("Fetch Error Message:", error.message, error.details, error.hint);
+  }
 
   setLoading(false);
 };

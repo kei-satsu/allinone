@@ -411,8 +411,8 @@ const loadCities = async (targetBranch?: string) => {
     return () => clearTimeout(timer)
   }, [syncQueue, isOnline, syncing])
 
- const handleSelectItem = (item: any, shouldFocusInput = true, branchOverride?: string) => {
-  // state မရသေးရင် parameter သို့မဟုတ် localStorage မှ တိုက်ရိုက်ယူမည်
+// handleSelectItem function ကို ဒီလို ပြင်ကြည့်ပါ
+const handleSelectItem = (item: any, shouldFocusInput = true, branchOverride?: string) => {
   const activeBranch = branchOverride || userBranch || localStorage.getItem('user_branch') || ''
 
   setSelectedItem(item)
@@ -421,39 +421,39 @@ const loadCities = async (targetBranch?: string) => {
 
   setSelectedSenderId(item.sender_id ? String(item.sender_id) : '')
   setSearchQuery(item.sender_name || '')
+  
   setFormData(prev => ({
     received_date: item.received_date || today,
-    sender_id: persistSenderId ?? item.sender_id ?? null,
-    sender_name: persistSenderName || item.sender_name || '',
-    sender_phone: item.sender_phone || '',
-    sender_loc: persistSenderLoc || item.sender_loc || activeBranch,
+    // item မှာ data ရှိရင် အဲ့ဒါကိုပဲယူ၊ မရှိမှသာ persist လုပ်ထားတာကို ယူ
+    sender_id: item.sender_id || (item.receiver_name ? null : persistSenderId) || null,
+    sender_name: item.sender_name || (item.receiver_name ? '' : persistSenderName) || '',
+    sender_phone: item.sender_phone || (item.receiver_name ? '' : persistSenderPhone) || '',
+    sender_loc: item.sender_loc || (item.receiver_name ? activeBranch : persistSenderLoc) || activeBranch,
+    // ကျန်တဲ့ field တွေကတော့ item က လာတဲ့အတိုင်းပဲ ထားပါ
     receiver_name: item.receiver_name || '',
     receiver_phone: item.receiver_phone || '',
     receiver_address: item.receiver_address || '',
-    receiver_loc: item.receiver_loc || activeBranch, // 👈 userBranch အစား activeBranch သုံးပေးပါ
+    receiver_loc: item.receiver_loc || activeBranch,
     cod_amount: item.cod_amount || 0,
     deli_fee: item.deli_fee || 0,
     fee_type: item.fee_type || 'Deli',
     total_amount: item.total_amount || 0,
-    pickup_rider_id: persistPickupRiderId || item.pickup_rider_id || '',
+    pickup_rider_id: item.pickup_rider_id || persistPickupRiderId || '',
     status: item.status === 'Pending' ? 'At Office' : (item.status || 'At Office'),
     deliver_rider_id: item.deliver_rider_id || '',
     deliver_date: item.deliver_date || '',
     note: item.note || '',
     cleared_date: item.cleared_date || '',
-    branch: item.branch || activeBranch, // 👈 activeBranch သုံးပေးပါ
+    branch: item.branch || activeBranch,
     image_url: item.image_url || '',
     remark: item.remark || ''
   }))
 
   if (shouldFocusInput) {
     setTimeout(() => receiverNameRef.current?.focus(), 50)
-  } else {
-    if (document.activeElement instanceof HTMLElement) {
-      document.activeElement.blur()
-    }
   }
 }
+
 
   const handleUndo = async () => {
     if (processedStack.length === 0) return
