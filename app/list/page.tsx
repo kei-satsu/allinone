@@ -9,6 +9,7 @@ import { printVoucher } from "@/utils/print"
 import { useOrderSelection } from '@/hooks/useOrderSelection'
 import SelectionSummaryBar from '@/components/SelectionSummaryBar'
 import OrderTable from '@/components/OrderTable'
+import DailyOSreport from "@/components/DailyOSreport";
 
 const COLUMN_DEFS = [
   { key: 'image_url', label: 'Photo', defaultVisible: true }, 
@@ -114,7 +115,11 @@ function MultiSelectFilter({
   );
 }
 
+
+
 export default function OrderList() {
+  
+
   const router = useRouter()
   const [orders, setOrders] = useState<any[]>([])
   const filteredOrders = orders;
@@ -154,6 +159,7 @@ export default function OrderList() {
   const [viewingHistoryOrder, setViewingHistoryOrder] = useState<any | null>(null)
   const [viewingDetailOrder, setViewingDetailOrder] = useState<any | null>(null);
   const [showMobileFilters, setShowMobileFilters] = useState(false)
+  const [isReportOpen, setIsReportOpen] = useState(false);
   
   
 // Excel Export အတွက် State များ
@@ -566,6 +572,17 @@ useEffect(() => {
     onChange={(e) => setSelectedDate(e.target.value)}
     className="ml-2 text-sm font-medium border border-gray-300 rounded-md px-2 py-1 text-gray-700 bg-white focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 shadow-sm cursor-pointer"
   />
+
+  <button
+  type="button"
+  onClick={() => {
+    console.log("Daily OS Report Button Clicked!");
+    setIsReportOpen(true);
+  }}
+  className="px-3 py-1 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-lg transition-all shadow-sm flex items-center gap-1 active:scale-95 cursor-pointer"
+>
+  📊 Daily OS Report
+</button>
 </h1>
             <p className="text-[11px] text-gray-500 font-medium hidden sm:block">Order Management · Right-click row for actions</p>
             <p className="text-[11px] text-gray-500 font-medium sm:hidden">Order Management · Tap 3-dots for actions</p>
@@ -1336,7 +1353,13 @@ useEffect(() => {
     </div>
   </div>
 )}
-
+{/* ✨ DailyOSreport Component/Modal */}
+      {isReportOpen && (
+        <DailyOSreport 
+          isOpen={isReportOpen} 
+          onClose={() => setIsReportOpen(false)} 
+        />
+      )}
     </div>
   )
 }
