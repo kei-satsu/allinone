@@ -56,7 +56,13 @@ const COLUMN_DEFS = [
 ]
 
 
+
+
 export default function OrderList() {
+
+
+
+  
   const [loadingMore, setLoadingMore] = useState(false)
 const [hasMore, setHasMore] = useState(false)
   const router = useRouter()
@@ -81,6 +87,11 @@ const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
   const [editingOrder, setEditingOrder] = useState<any>(null)
   const [userBranch, setUserBranch] = useState<string>('')
+
+  const ordersRef = useRef(orders)
+useEffect(() => {
+  ordersRef.current = orders
+}, [orders])
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; order: any } | null>(null)
   const [previewImage, setPreviewImage] = useState<string | null>(null) 
@@ -158,7 +169,7 @@ const fetchData = useCallback(async ({ append = false } = {}) => {
   if (append) setLoadingMore(true);
   else setLoading(true);
 
-  const start = append ? orders.length : 0;
+const start = append ? ordersRef.current.length : 0;
   const end = start + 99;
 
   // 🌟 ၁။ transitFilterObj ကို တည်ဆောက်ခြင်း
@@ -218,37 +229,39 @@ const fetchData = useCallback(async ({ append = false } = {}) => {
     query = query.or(`item_id.ilike.%${searchValue}%,receiver_name.ilike.%${searchValue}%,receiver_phone.ilike.%${searchValue}%`);
   }
 
-  const { data, error, count } = await query;
+ const { data, error, count } = await query;
 
-    if (error) {
-      console.error("❌ Supabase DB Fetch Error:", error.message);
-    } else if (data) {
-      const formattedOrders = data.map((order: any) => {
-        let transitArray = order.transit;
-        if (typeof transitArray === 'string') {
-          try { transitArray = JSON.parse(transitArray); } catch (e) { transitArray = []; }
-        }
-        const currentLeg = Array.isArray(transitArray)
-          ? transitArray.find((t: any) => String(t.transit_from || '').trim().toUpperCase() === activeBranch.toUpperCase())
-          : null;
-        const fallbackTransit = Array.isArray(transitArray) && transitArray.length > 0 ? transitArray[0] : null;
+  if (error) {
+    console.error("❌ Supabase DB Fetch Error:", error.message);
+  } else if (data) {
+    const formattedOrders = data.map((order: any) => {
+      let transitArray = order.transit;
+      if (typeof transitArray === 'string') {
+        try { transitArray = JSON.parse(transitArray); } catch (e) { transitArray = []; }
+      }
+      const currentLeg = Array.isArray(transitArray)
+        ? transitArray.find((t: any) => String(t.transit_from || '').trim().toUpperCase() === activeBranch.toUpperCase())
+        : null;
+      const fallbackTransit = Array.isArray(transitArray) && transitArray.length > 0 ? transitArray[0] : null;
 
-        return {
-          ...order,
-          transit_to: currentLeg ? currentLeg.transit_to : fallbackTransit ? fallbackTransit.transit_to : order.transit_to,
-          transit_date: currentLeg ? currentLeg.transit_date : fallbackTransit ? fallbackTransit.transit_date : order.transit_date,
-        };
-      });
+      return {
+        ...order,
+        transit_to: currentLeg ? currentLeg.transit_to : fallbackTransit ? fallbackTransit.transit_to : order.transit_to,
+        transit_date: currentLeg ? currentLeg.transit_date : fallbackTransit ? fallbackTransit.transit_date : order.transit_date,
+      };
+    });
 
-      if (append) setOrders(prev => [...prev, ...formattedOrders]);
-      else setOrders(formattedOrders);
-      
-      setHasMore((count ?? 0) > (append ? orders.length + data.length : data.length));
-    }
+    if (append) setOrders(prev => [...prev, ...formattedOrders]);
+    else setOrders(formattedOrders);
+    
+    // 🟢 ordersRef.current.length ကို သုံး၍ setHasMore စစ်ဆေးပါ
+    const currentLength = append ? ordersRef.current.length + data.length : data.length;
+    setHasMore((count ?? 0) > currentLength);
+  }
 
-    setLoading(false);
-    setLoadingMore(false);
-  }, [userBranch, colFilters, orders.length]);
+  setLoading(false);
+  setLoadingMore(false);
+}, [userBranch, colFilters]);
 
   // Filters ပြောင်းလဲမှုကို Debounce လုပ်၍ စောင့်ကြည့်ရန်
   const filterString = JSON.stringify(colFilters);
@@ -273,7 +286,7 @@ const fetchData = useCallback(async ({ append = false } = {}) => {
       router.push('/login')
     } else {
       setUserBranch(storedBranch)
-     fetchData()
+     
       fetchRiders()
     }
   }, [router])
