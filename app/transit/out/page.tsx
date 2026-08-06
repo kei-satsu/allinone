@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -57,6 +57,8 @@ const COLUMN_DEFS = [
 
 
 export default function OrderList() {
+  const [loadingMore, setLoadingMore] = useState(false)
+const [hasMore, setHasMore] = useState(false)
   const router = useRouter()
   const [orders, setOrders] = useState<any[]>([])
   // 🟢 Custom Hook ခေါ်ယူခြင်း
@@ -66,7 +68,7 @@ export default function OrderList() {
       selectedCodTotal,
       selectedDeliTotal,
       selectedGrandTotal,
-      isAllSelected: selectAll, // isAllSelected ကို selectAll နာမည်ဖြင့် အစားထိုးသုံးပါသည်
+      isAllSelected, // isAllSelected ကို selectAll နာမည်ဖြင့် အစားထိုးသုံးပါသည်
       isDraggingSelection,
       setIsDraggingSelection,
       toggleOrderSelection,
@@ -149,66 +151,116 @@ useEffect(() => {
   const [colFilters, setColFilters] = useState<Record<string, string>>({})
 
 
-const fetchData = async (branchCode?: string) => {
-  const activeBranch = (branchCode || userBranch || '').trim();
+const fetchData = useCallback(async ({ append = false } = {}) => {
+  const activeBranch = (userBranch || '').trim();
   if (!activeBranch) return;
 
-  setLoading(true);
+  if (append) setLoadingMore(true);
+  else setLoading(true);
 
-  // 🌟 DB Query ဆွဲယူခြင်း
-  const { data, error } = await supabase
+  const start = append ? orders.length : 0;
+  const end = start + 99;
+
+  // 🌟 ၁။ transitFilterObj ကို တည်ဆောက်ခြင်း
+  const transitFilterObj: any = { transit_from: activeBranch.toUpperCase() };
+
+  if (colFilters['transit_to'] && String(colFilters['transit_to']).trim()) {
+    transitFilterObj.transit_to = String(colFilters['transit_to']).trim();
+  }
+  if (colFilters['transit_date'] && String(colFilters['transit_date']).trim()) {
+    transitFilterObj.transit_date = String(colFilters['transit_date']).trim();
+  }
+
+  // ✅ ပြင်ဆင်ချက် ၁: transitFilterObj ကို JSON.stringify ထဲ ထည့်ပေးပါ
+  const transitSearchFilter = JSON.stringify([transitFilterObj]);
+
+  let query = supabase
     .from('orders')
     .select(`
       *,
       pickup_rider:riders!orders_pickup_rider_id_fkey(name),
       deliver_rider:riders!orders_deliver_rider_id_fkey(name)
-    `)
+    `, { count: 'exact' })
     .eq('is_deleted', false)
-    .filter('transit', 'cs', JSON.stringify([{ transit_from: activeBranch }]))
-    .order('created_at', { ascending: false });
+    .filter('transit', 'cs', transitSearchFilter)
+    .order('created_at', { ascending: false })
+    .range(start, end);
 
-  if (!error && data) {
-    const formattedOrders = data.map((order: any) => {
-      // 🌟 ၁။ order.transit က String ဖြစ်နေရင် JSON Parse လုပ်ပေးခြင်း
-      let transitArray = order.transit;
-      if (typeof transitArray === 'string') {
-        try {
-          transitArray = JSON.parse(transitArray);
-        } catch (e) {
-          transitArray = [];
-        }
-      }
+  // Dynamic Filters
+  Object.entries(colFilters).forEach(([key, value]) => {
+    if (!value || (Array.isArray(value) && value.length === 0)) return;
+    
+    // ✅ ပြင်ဆင်ချက် ၂: global_search ကိုပါ loop ထဲမှ ကျော်ပေးပါ (transit_to, transit_date နည်းတူ)
+    if (['transit_to', 'transit_date', 'global_search'].includes(key)) return;
 
-      // 🌟 ၂။ String Trim & Case Matching စစ်ပေးခြင်း (MDY vs mdy / Space အပိုမပါအောင်)
-      const currentLeg = Array.isArray(transitArray)
-        ? transitArray.find(
-            (t: any) =>
-              String(t.transit_from || '').trim().toUpperCase() ===
-              activeBranch.toUpperCase()
-          )
-        : null;
+    if (Array.isArray(value)) {
+      const values = value.filter(Boolean);
+      if (values.length > 0) query = query.in(key, values);
+      return;
+    }
+    const filterValue = String(value).trim();
+    if (!filterValue) return;
 
-      // 🌟 ၃။ Fallback Logic (currentLeg မတွေ့ရင်တောင် Array ထဲက ပထမဆုံး element မှ transit_to ကို ယူပေးမည်)
-      const fallbackTransit = Array.isArray(transitArray) && transitArray.length > 0 ? transitArray[0] : null;
+    if (['received_date', 'deliver_date', 'cleared_date', 'created_at'].includes(key)) {
+      query = query.eq(key, filterValue);
+    } else if (key === 'pickup_rider') {
+      query = query.ilike('pickup_rider.name', `%${filterValue}%`);
+    } else if (key === 'deliver_rider') {
+      query = query.ilike('deliver_rider.name', `%${filterValue}%`);
+    } else {
+      query = query.ilike(key, `%${filterValue}%`);
+    }
+  });
 
-      return {
-        ...order,
-        transit_to: currentLeg
-          ? currentLeg.transit_to
-          : (fallbackTransit ? fallbackTransit.transit_to : order.transit_to),
-        transit_date: currentLeg
-          ? currentLeg.transit_date
-          : (fallbackTransit ? fallbackTransit.transit_date : order.transit_date),
-      };
-    });
-
-    setOrders(formattedOrders);
-  } else if (error) {
-    console.error("Fetch Error Message:", error.message, error.details, error.hint);
+  // ✅ ပြင်ဆင်ချက် ၃: Mobile global_search အတွက် multi-column search filter သီးသန့် ချိတ်ပေးပါ
+  if (colFilters['global_search'] && String(colFilters['global_search']).trim()) {
+    const searchValue = String(colFilters['global_search']).trim();
+    query = query.or(`item_id.ilike.%${searchValue}%,receiver_name.ilike.%${searchValue}%,receiver_phone.ilike.%${searchValue}%`);
   }
 
-  setLoading(false);
-};
+  const { data, error, count } = await query;
+
+    if (error) {
+      console.error("❌ Supabase DB Fetch Error:", error.message);
+    } else if (data) {
+      const formattedOrders = data.map((order: any) => {
+        let transitArray = order.transit;
+        if (typeof transitArray === 'string') {
+          try { transitArray = JSON.parse(transitArray); } catch (e) { transitArray = []; }
+        }
+        const currentLeg = Array.isArray(transitArray)
+          ? transitArray.find((t: any) => String(t.transit_from || '').trim().toUpperCase() === activeBranch.toUpperCase())
+          : null;
+        const fallbackTransit = Array.isArray(transitArray) && transitArray.length > 0 ? transitArray[0] : null;
+
+        return {
+          ...order,
+          transit_to: currentLeg ? currentLeg.transit_to : fallbackTransit ? fallbackTransit.transit_to : order.transit_to,
+          transit_date: currentLeg ? currentLeg.transit_date : fallbackTransit ? fallbackTransit.transit_date : order.transit_date,
+        };
+      });
+
+      if (append) setOrders(prev => [...prev, ...formattedOrders]);
+      else setOrders(formattedOrders);
+      
+      setHasMore((count ?? 0) > (append ? orders.length + data.length : data.length));
+    }
+
+    setLoading(false);
+    setLoadingMore(false);
+  }, [userBranch, colFilters, orders.length]);
+
+  // Filters ပြောင်းလဲမှုကို Debounce လုပ်၍ စောင့်ကြည့်ရန်
+  const filterString = JSON.stringify(colFilters);
+
+  useEffect(() => {
+    if (userBranch) {
+      const timer = setTimeout(() => {
+        fetchData();
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+  }, [userBranch, filterString, fetchData]);
 
   const fetchRiders = async () => {
     const { data } = await supabase.from('riders').select('*')
@@ -221,7 +273,7 @@ const fetchData = async (branchCode?: string) => {
       router.push('/login')
     } else {
       setUserBranch(storedBranch)
-      fetchData(storedBranch)
+     fetchData()
       fetchRiders()
     }
   }, [router])
@@ -232,56 +284,10 @@ const fetchData = async (branchCode?: string) => {
     return () => window.removeEventListener('click', handleCloseMenu)
   }, [])
 
-  // 🌟 Transit City မရွေးရသေးပါက Data မပြဘဲ Empty Array [] သာ Return ပြန်မည်
-// 🌟 Transit City မရွေးရသေးပါက Data မပြဘဲ Empty Array [] သာ Return ပြန်မည်
-const filteredOrders = !colFilters['transit_to'] 
-  ? [] 
-  : orders.filter(o => {
-      // 📱 Mobile Global Search Logics
-      if (colFilters['global_search']) {
-        const query = colFilters['global_search'].trim().toLowerCase();
-        if (query) {
-          const isMatch = 
-            String(o.item_id || '').toLowerCase().includes(query) ||
-            String(o.receiver_phone || '').toLowerCase().includes(query) ||
-            String(o.receiver_name || '').toLowerCase().includes(query) ||
-            String(o.sender_name || '').toLowerCase().includes(query);
-          if (!isMatch) return false;
-        }
-      }
 
-      // 💻 Desktop Grid Filter Logics
-      return Object.keys(colFilters).every(key => {
-        if (key === 'global_search') return true;
-        const rawFilter = colFilters[key];
-        if (!rawFilter || !rawFilter.trim()) return true;
 
-        const filterValue = rawFilter.trim().toLowerCase();
-
-        // 🌟 Smart Transit To Matching (City ID 'MDY' သို့မဟုတ် City Name 'မန္တလေး' ၂ မျိုးလုံး စစ်ပေးခြင်း)
-        if (key === 'transit_to') {
-          const cityObj = MANUAL_CITIES.find(
-            c => c.id.toLowerCase() === filterValue || c.name.toLowerCase() === filterValue
-          );
-          const orderTransitTo = String(o.transit_to || '').trim().toLowerCase();
-
-          if (cityObj) {
-            return (
-              orderTransitTo.includes(cityObj.id.toLowerCase()) ||
-              orderTransitTo.includes(cityObj.name.toLowerCase())
-            );
-          }
-          return orderTransitTo.includes(filterValue);
-        }
-
-        let cellValue = "";
-        if (key === 'pickup_rider') cellValue = o.pickup_rider?.name || "";
-        else if (key === 'deliver_rider') cellValue = o.deliver_rider?.name || "";
-        else cellValue = String(o[key] ?? "");
-
-        return cellValue.toLowerCase().includes(filterValue);
-      });
-    });
+ 
+ 
 
   const handleFilterChange = (col: string, val: string) => {
     setColFilters(prev => ({ ...prev, [col]: val }))
@@ -580,34 +586,30 @@ const filteredOrders = !colFilters['transit_to']
 </div>
 
       {/* ── Container Workspace Area (OrderTable Component ဖြင့် အစားထိုးခြင်း) ── */}
-     <OrderTable
-       orders={filteredOrders}
-       columnDefs={COLUMN_DEFS}
-       visibleCols={visibleCols}
-       showFilterBar={true}
-       colFilters={colFilters}
-       onFilterChange={handleFilterChange}
-       riders={riders}
-       locationOptions={[]}
-       loading={loading}
-       loadingMore={false}
-       hasMore={false}
-       onLoadMore={() => {}}
-       
-       // 🟢 Hook မှ ထွက်လာသော Selection Props များနှင့် ချိတ်ဆက်ခြင်း
-       selectedOrders={selectedOrders}
-       isAllSelected={selectAll}
-       onToggleSelectAll={() => selectAllFiltered(filteredOrders)}
-       onToggleOrderSelection={toggleOrderSelection}
-       onRowMouseDown={handleRowMouseDown}
-       onRowMouseEnter={handleRowMouseEnter}
-       onStopDragging={() => setIsDraggingSelection(false)}
-     
-       // Event Callbacks
-       onRowClick={(order) => setViewingDetailOrder(order)}
-       onRowContextMenu={(e, order) => handleRowContextMenu(e, order)}
-       onPreviewImage={(url) => setPreviewImage(url)}
-     />
+    <OrderTable
+            orders={orders}
+            columnDefs={COLUMN_DEFS}
+           visibleCols={visibleCols}
+            showFilterBar={true}
+            colFilters={colFilters}
+            onFilterChange={handleFilterChange}
+            riders={riders}
+            locationOptions={[]}
+            loading={loading}
+            loadingMore={loadingMore}
+            hasMore={hasMore}
+            onLoadMore={() => fetchData({ append: true })}
+            selectedOrders={selectedOrders}
+            isAllSelected={isAllSelected}
+            onToggleSelectAll={() => isAllSelected ? clearSelection() : selectAllFiltered(orders)}
+            onToggleOrderSelection={toggleOrderSelection}
+            onRowMouseDown={handleRowMouseDown}
+            onRowMouseEnter={handleRowMouseEnter}
+            onStopDragging={() => setIsDraggingSelection(false)}
+            onRowClick={(order) => setEditingOrder(order)}
+            onRowContextMenu={() => {}}
+            onPreviewImage={setPreviewImage}
+          />
       
      
 

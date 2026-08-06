@@ -295,6 +295,9 @@ const compressImage = (file: File, quality: number = 0.88, maxDimension: number 
 
 
 export default function IntakePage() {
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+const isSubmittingRef = useRef(false);
   const router = useRouter();
   const [isThumbExpanded, setIsThumbExpanded] = useState(true);
   const [isTransitYGN, setIsTransitYGN] = useState<boolean>(false);
@@ -998,39 +1001,35 @@ const processSingleOfflineItem = async (item: any) => {
   };
 
 const handleFinalSubmit = async () => {
-    if (capturedImages.length === 0) return alert('ဓာတ်ပုံ အနည်းဆုံး ၁ ပုံ ရိုက်ပေးပါဗျာ');
-    
-    // 🟢 ၁။ အတည်ပြုချက် (Confirmation) တောင်းခံသည့် အပိုင်း ထည့်သွင်းထားပါသည်
-    const isConfirmed = window.confirm('ပါဆယ်မှတ်တမ်းများကို Queue ထဲသို့ သိမ်းဆည်းပြီး တင်ပို့ရန် သေချာပါသလားဗျာ။');
-    
-    // User က Cancel နှိပ်လိုက်ပါက ရှေ့ဆက်မလုပ်ဘဲ ရပ်တန့်မည်
-    if (!isConfirmed) return;
+  // ၁။ Double-click / Multi-click တားဆီးခြင်း
+  if (isSubmittingRef.current || isSubmitting) return;
+  if (capturedImages.length === 0) return alert('ဓာတ်ပုံ အနည်းဆုံး ၁ ပုံ ရိုက်ပေးပါဗျာ');
 
+  // ၂။ အတည်ပြုချက် တောင်းခံခြင်း
+  const isConfirmed = window.confirm('ပါဆယ်မှတ်တမ်းများကို Queue ထဲသို့ သိမ်းဆည်းပြီး တင်ပို့ရန် သေချာပါသလားဗျာ။');
+  if (!isConfirmed) return;
+
+  // ၃။ Synchronous Lock ခတ်ခြင်း
+  isSubmittingRef.current = true;
+  setIsSubmitting(true);
+
+  try {
     for (const img of capturedImages) {
       const queueItemId = `queue_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       
       const targetQuality = img.quality === 'HD' ? 0.92 : 0.88;
-const maxDimension = img.quality === 'HD' ? 1920 : 1280;
+      const maxDimension = img.quality === 'HD' ? 1920 : 1280;
 
-      // 🔍 ၁။ မူရင်း File Size ကို KB ဖြင့် တွက်ထုတ်ခြင်း
       const originalKB = (img.file.size / 1024).toFixed(2);
-
-      // Compress ပြုလုပ်ခြင်း
       const compressedFile = await compressImage(img.file, targetQuality, maxDimension);
-
-      // 🔍 ၂။ Compress လုပ်ပြီးသား File Size ကို KB ဖြင့် တွက်ထုတ်ခြင်း
       const compressedKB = (compressedFile.size / 1024).toFixed(2);
-      
-      // 🔍 ၃။ ရာခိုင်နှုန်းမည်မျှ လျော့သွားသည်ကို တွက်ထုတ်ခြင်း
       const reductionPercent = ((1 - compressedFile.size / img.file.size) * 100).toFixed(1);
 
-      // Console မှာ ပုံအသေးစိတ် လော့ဂ်ထုတ်ကြည့်ခြင်း
       console.log(`📸 File Name: ${img.file.name} (${img.quality || 'SD'})`);
       console.log(`- Original Size: ${originalKB} KB`);
       console.log(`- Compressed Size: ${compressedKB} KB`);
       console.log(`- Size Reduced by: ${reductionPercent}%`);
 
-      // 💡 ၃။ Compress လုပ်ပြီးသား File ကိုမှ Base64 သို့ ပြောင်းပါမည်
       const base64Data = await fileToBase64(compressedFile);
       
       const offlineItem = {
@@ -1043,20 +1042,19 @@ const maxDimension = img.quality === 'HD' ? 1920 : 1280;
         received_date: receivedDate,
         uploader_note: batchNote || null,
         transit: isTransitYGN ? [
-  {
-    transit_to: 'YGN',
-    transit_date: receivedDate,
-    transit_from: userBranch || 'MDY'
-  }
-] : null,
-status: isTransitYGN ? 'In-Transit' : 'Pending'
+          {
+            transit_to: 'YGN',
+            transit_date: receivedDate,
+            transit_from: userBranch || 'MDY'
+          }
+        ] : null,
+        status: isTransitYGN ? 'In-Transit' : 'Pending'
       };
 
-      // Browser Storage ထဲသို့ သိမ်းဆည်းခြင်း
       await saveToOfflineQueue(offlineItem);
     }
 
-    // UI & State အားလုံးကို ဒုတိယအကြိမ် ထပ်မံရိုက်ကူးနိုင်ရန် ချက်ချင်း Clear လုပ်ပါသည်
+    // UI & State Reset
     setCapturedImages([]); 
     setBatchNote('');
     setIsTransitYGN(false);
@@ -1064,10 +1062,18 @@ status: isTransitYGN ? 'In-Transit' : 'Pending'
     setFlowMode('camera');
     setIntakeMethod('choose');
 
-    // နောက်ကွယ်မှ စတင်တင်ပေးမည့် စနစ်ကို လှမ်းခေါ်ခြင်း
     processOfflineQueue();
     alert('ပါဆယ်မှတ်တမ်းများကို Queue ထဲသို့ စိတ်ချစွာသိမ်းဆည်းပြီး၊ နောက်ကွယ်မှ စတင်တင်နေပါပြီဗျာ။');
-  };
+
+  } catch (error) {
+    console.error('Submit Error:', error);
+    alert('သိမ်းဆည်းစဉ် အမှားတစ်ခု ဖြစ်ပေါ်ခဲ့ပါသည်။ ထပ်မံကြိုးစားကြည့်ပါ။');
+  } finally {
+    // ၄။ လုပ်ငန်းစဉ် ပြီးဆုံးပါက (သို့မဟုတ် Error တက်ပါက) Lock ပြန်ဖြုတ်ခြင်း
+    isSubmittingRef.current = false;
+    setIsSubmitting(false);
+  }
+};
 
   return (
     <div className="flex flex-col h-screen bg-neutral-950 text-white select-none overflow-hidden max-w-md mx-auto relative font-sans antialiased">
@@ -1902,19 +1908,27 @@ status: isTransitYGN ? 'In-Transit' : 'Pending'
 
 
 
-            <div className="mt-3 relative flex items-center w-full">
+          <div className="mt-3 relative flex items-center w-full">
   <input
-  type="text"
-  value={batchNote}
-  onChange={(e) => setBatchNote(e.target.value)}
-  placeholder="Add a caption..."
-  className="w-full rounded-full border border-white/10 bg-neutral-950/80 pl-4 pr-12 py-3 text-[16px] md:text-[13px] text-neutral-100 outline-none placeholder:text-neutral-600 focus:border-orange-500/40"
-/>
+    type="text"
+    value={batchNote}
+    onChange={(e) => setBatchNote(e.target.value)}
+    disabled={isSubmitting}
+    placeholder="Add a caption..."
+    className="w-full rounded-full border border-white/10 bg-neutral-950/80 pl-4 pr-12 py-3 text-[16px] md:text-[13px] text-neutral-100 outline-none placeholder:text-neutral-600 focus:border-orange-500/40 disabled:opacity-50"
+  />
   <button
     onClick={handleFinalSubmit}
-    className="absolute right-1.5 flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-amber-400 text-neutral-950 shadow-[0_0_12px_rgba(249,115,22,0.2)] active:scale-95 transition-all"
+    disabled={isSubmitting}
+    className={`absolute right-1.5 flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-amber-400 text-neutral-950 shadow-[0_0_12px_rgba(249,115,22,0.2)] transition-all ${
+      isSubmitting ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'active:scale-95'
+    }`}
   >
-    <IconArrowRight className="h-4 w-4" />
+    {isSubmitting ? (
+      <span className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-950 border-t-transparent" />
+    ) : (
+      <IconArrowRight className="h-4 w-4" />
+    )}
   </button>
 </div>
           </div>
