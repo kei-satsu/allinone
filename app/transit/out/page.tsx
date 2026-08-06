@@ -212,7 +212,7 @@ const fetchData = useCallback(async ({ append = false } = {}) => {
     }
   });
 
-  // ✅ ပြင်ဆင်ချက် ၃: Mobile global_search အတွက် multi-column search filter သီးသန့် ချိတ်ပေးပါ
+  
   if (colFilters['global_search'] && String(colFilters['global_search']).trim()) {
     const searchValue = String(colFilters['global_search']).trim();
     query = query.or(`item_id.ilike.%${searchValue}%,receiver_name.ilike.%${searchValue}%,receiver_phone.ilike.%${searchValue}%`);
