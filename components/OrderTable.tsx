@@ -63,6 +63,14 @@ export default function OrderTable({
   onPreviewImage,
 }: OrderTableProps) {
 
+  const dynamicStatusOptions = Array.from(
+    new Set(orders.map((o) => o.status).filter(Boolean))
+  ).map((status) => ({
+    label: String(status),
+    value: String(status),
+  }));
+
+
   const filterInputCls = "w-full bg-transparent border-b border-gray-300 focus:border-orange-500 focus:outline-none py-1 text-[11px] text-gray-700 placeholder:text-gray-400 font-medium transition-colors";
 
   // Table Cell တစ်ခုချင်းစီ၏ Render Logic
@@ -158,12 +166,7 @@ export default function OrderTable({
                           col.key === 'branch'
                             ? [{ label: 'MDY', value: 'MDY' }, { label: 'YGN', value: 'YGN' }]
                             : col.key === 'status'
-                              ? [
-                                  { label: 'At Office', value: 'At Office' },
-                                  { label: 'On Way', value: 'On Way' },
-                                  { label: 'Delivered', value: 'Delivered' },
-                                  { label: 'In-Transit', value: 'In-Transit' },
-                                ]
+                              ? dynamicStatusOptions
                               : col.key === 'fee_type'
                                 ? [
                                     { label: 'Deli', value: 'Deli' },
@@ -178,7 +181,7 @@ export default function OrderTable({
                         selectedValues={Array.isArray(colFilters[col.key]) ? colFilters[col.key] : []}
                         onChange={(values) => onFilterChange(col.key, values)}
                       />
-                    ) : ['received_date', 'deliver_date', 'cleared_date', 'created_at', 'transit_date'].includes(col.key) ? (
+                    ) : ['received_date', 'deliver_date', 'cleared_date', 'created_at', 'transit_date','arrival_date'].includes(col.key) ? (
                       <input
                         type="date"
                         className={filterInputCls}

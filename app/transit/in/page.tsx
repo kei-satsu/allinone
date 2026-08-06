@@ -8,6 +8,7 @@ import OrderTable from '@/components/OrderTable'
 import { printVoucher } from "@/utils/print"
 import { useOrderSelection } from '@/hooks/useOrderSelection'
 import SelectionSummaryBar from '@/components/SelectionSummaryBar'
+import * as XLSX from 'xlsx'
 
 const COLUMN_DEFS = [
   { key: 'image_url', label: 'Photo', defaultVisible: false }, 
@@ -41,6 +42,8 @@ const COLUMN_DEFS = [
 
 
 export default function OrderList() {
+  const [showExcelModal, setShowExcelModal] = useState(false);
+const [excelCols, setExcelCols] = useState<Record<string, boolean>>({});
   const router = useRouter()
   const [orders, setOrders] = useState<any[]>([])
    // 🟢 Custom Hook ခေါ်ယူခြင်း
@@ -75,6 +78,8 @@ export default function OrderList() {
   const [viewingDetailOrder, setViewingDetailOrder] = useState<any | null>(null);
   const [showMobileFilters, setShowMobileFilters] = useState(false)
   const [expandedMobileCards, setExpandedMobileCards] = useState<Record<string, boolean>>({})
+
+  
 
   
 
@@ -134,15 +139,70 @@ useEffect(() => {
   const [showColDropdown, setShowColDropdown] = useState(false)
   const [colFilters, setColFilters] = useState<Record<string, string>>({})
 
+  const handleExportExcel = () => {
+  // ၁။ ရွေးထားသောအော်ဒါရှိပါက ၎င်းတို့ကိုယူမည်၊ မရှိပါက စစ်ထုတ်ထားသော Filtered Data ယူမည်
+  const dataToExport = selectedOrders.size > 0 
+    ? orders.filter(o => selectedOrders.has(o.id)) 
+    : filteredOrders;
 
-  const fetchData = async (branchCode?: string) => {
+  if (dataToExport.length === 0) {
+    alert("Export ထုတ်ရန် မှတ်တမ်းမရှိပါ။");
+    return;
+  }
+
+  // ၂။ ရွေးချယ်ထားသော Column Header အလိုက် Data Format ပြင်ဆင်ခြင်း
+  const excelRows = dataToExport.map(order => {
+    const rowData: Record<string, any> = {};
+    
+    COLUMN_DEFS.forEach(col => {
+      if (excelCols[col.key]) {
+        if (col.key === 'pickup_rider') {
+          rowData[col.label] = order.pickup_rider?.name || '-';
+        } else if (col.key === 'deliver_rider') {
+          rowData[col.label] = order.deliver_rider?.name || '-';
+        } else if (['created_at', 'transit_date', 'received_date', 'deliver_date', 'cleard_date', 'arrival_date'].includes(col.key)) {
+          rowData[col.label] = order[col.key] ? new Date(order[col.key]).toLocaleDateString() : '-';
+        } else if (col.key === 'image_url') {
+          rowData[col.label] = order.image_url ? 'Has Photo' : '-';
+        } else if (col.key === 'branch') {
+          rowData[col.label] = order.branch === 'MDY' ? 'MANDALAY' : order.branch === 'YGN' ? 'YANGON' : order.branch;
+        } else {
+          rowData[col.label] = order[col.key] ?? '-';
+        }
+      }
+    });
+    return rowData;
+  });
+
+  // ၃။ SheetJS ဖြင့် Excel File ဖန်တီး၍ ဒေါင်းလုဒ်ဆွဲခြင်း
+  const worksheet = XLSX.utils.json_to_sheet(excelRows);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Transit_In_Items");
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  XLSX.writeFile(workbook, `Transit_In_Report_${todayStr}.xlsx`);
+  
+  setShowExcelModal(false);
+};
+
+// colFilters ပြောင်းလဲမှုကို စောင့်ကြည့်ပြီး 400ms ကြာမှ DBQuery သို့ ပြန်ဆွဲမည်
+useEffect(() => {
+  if (!userBranch) return;
+
+  const timer = setTimeout(() => {
+    fetchData(userBranch, colFilters);
+  }, 400);
+
+  return () => clearTimeout(timer);
+}, [colFilters, userBranch]);
+  const fetchData = async (branchCode?: string, filtersToApply: Record<string, string> = colFilters) => {
   const activeBranch = branchCode || userBranch;
   if (!activeBranch) return;
 
   setLoading(true);
 
-  // 🌟 Supabase Query: Active Branch သို့ ရောက်ရှိခဲ့ပြီး In-Transit မဟုတ်တော့သော အော်ဒါများ
-  const { data, error } = await supabase
+  // 🌟 ၁။ Base Query တည်ဆောက်ခြင်း
+  let query = supabase
     .from('orders')
     .select(`
       *,
@@ -150,14 +210,46 @@ useEffect(() => {
       deliver_rider:riders!orders_deliver_rider_id_fkey(name)
     `)
     .eq('is_deleted', false)
-    .filter('transit', 'cs', JSON.stringify([{ transit_to: activeBranch }])) // ✨ JSON Array ထဲတွင် activeBranch ပါသမျှ ရှာမည်
-    .neq('status', 'In-Transit') // Confirm လုပ်ပြီးသား (Arrived / At Office / Delivered စသဖြင့်)
-    .order('created_at', { ascending: false });
+    .filter('transit', 'cs', JSON.stringify([{ transit_to: activeBranch }]))
+    .neq('status', 'In-Transit');
+
+  // 🌟 ၂။ Global Search (OR Logic) ပါဝင်ပါက DB level တွင် တိုက်ရိုက်ရှာခြင်း
+  if (filtersToApply['global_search'] && String(filtersToApply['global_search']).trim() !== '') {
+    const searchValue = String(filtersToApply['global_search']).trim();
+    query = query.or(`item_id.ilike.%${searchValue}%,receiver_phone.ilike.%${searchValue}%,receiver_name.ilike.%${searchValue}%,sender_name.ilike.%${searchValue}%`);
+  }
+
+  // 🌟 ၃။ Column Filters (AND Logic) အလိုက် DB Query Dynamic ပေါင်းထည့်ခြင်း
+ // 🌟 ၃။ Column Filters (AND Logic) အလိုက် DB Query Dynamic ပေါင်းထည့်ခြင်း
+  Object.entries(filtersToApply).forEach(([key, value]) => {
+    if (!value || String(value).trim() === '') return;
+    if (['global_search', 'transit_to', 'transit_date'].includes(key)) return;
+
+    const val = String(value).trim();
+
+    // Exact Match / Multi-select ပြုလုပ်ချင်သော Status / Branch / Fee Type များအတွက် ပြင်ဆင်ချက်
+    if (['status', 'branch', 'fee_type'].includes(key)) {
+      // Comma (,) ပါဝင်ပါက Array ခွဲထုတ်ခြင်း (ဥပမာ- ["On Way", "Delivered"])
+      const valArray = val.split(',').map(s => s.trim()).filter(Boolean);
+
+      if (valArray.length > 1) {
+        query = query.in(key, valArray); // နှစ်ခု သို့မဟုတ် နှစ်ခုထက်ပိုပါက .in() သုံးမည်
+      } else if (valArray.length === 1) {
+        query = query.eq(key, valArray[0]); // တစ်ခုတည်းဆိုပါက .eq() သုံးမည်
+      }
+    } 
+    // ကျန်သော စာသား Column များအတွက် Case-insensitive (.ilike) သုံးပါ
+    else if (!['pickup_rider', 'deliver_rider'].includes(key)) {
+      query = query.ilike(key, `%${val}%`);
+    }
+  });
+
+  // 🌟 ၄။ Order By ဖြင့် Data ဆွဲထုတ်ခြင်း
+  const { data, error } = await query.order('created_at', { ascending: false });
 
   if (error) {
     console.error("Fetch Error:", error.message, error.details);
   } else if (data) {
-    // 🌟 Map လုပ်ပြီး မိမိ Branch နှင့် သက်ဆိုင်သော Leg ၏ transit_to / transit_date ကို ယူပေးခြင်း
     const formattedOrders = data.map((order: any) => {
       const currentLeg = Array.isArray(order.transit)
         ? order.transit.find((t: any) => t.transit_to === activeBranch)
@@ -198,27 +290,58 @@ useEffect(() => {
     return () => window.removeEventListener('click', handleCloseMenu)
   }, [])
 
-  const filteredOrders = orders.filter(o => {
-    // 📱 Mobile Global Search Logics
+const filteredOrders = orders.filter(o => {
+    // 📱 ၁။ Mobile Global Search Logic
     if (colFilters['global_search']) {
-      const query = colFilters['global_search'].toLowerCase()
-      const isMatch = 
-        String(o.item_id || '').toLowerCase().includes(query) ||
-        String(o.receiver_phone || '').toLowerCase().includes(query) ||
-        String(o.receiver_name || '').toLowerCase().includes(query) ||
-        String(o.sender_name || '').toLowerCase().includes(query)
-      if (!isMatch) return false
+      const query = String(colFilters['global_search']).trim().toLowerCase()
+      if (query !== '') {
+        const isMatch = 
+          String(o.item_id ?? '').toLowerCase().includes(query) ||
+          String(o.receiver_phone ?? '').toLowerCase().includes(query) ||
+          String(o.receiver_name ?? '').toLowerCase().includes(query) ||
+          String(o.sender_name ?? '').toLowerCase().includes(query)
+        if (!isMatch) return false
+      }
     }
 
-    // 💻 Desktop Grid Filter Logics
-    return Object.keys(colFilters).every(key => {
-      if (key === 'global_search') return true
-      const filterValue = colFilters[key]?.toLowerCase()
-      if (!filterValue) return true
+    // 💻 ၂။ Column Filter Logics (AND Logic)
+    // တန်ဖိုးဖြည့်သွင်းထားသော Filter Key များကို သီးသန့်စစ်ထုတ်ခြင်း
+    const activeFilterKeys = Object.keys(colFilters).filter(
+      key => key !== 'global_search' && colFilters[key] !== undefined && String(colFilters[key]).trim() !== ''
+    )
+
+    // Filter ရွေးထားခြင်း မရှိပါက အော်ဒါအားလုံးကို ပြမည်
+    if (activeFilterKeys.length === 0) return true
+
+    // ရွေးချယ်ထားသော Filter အားလုံးနှင့် ကိုက်ညီမှသာ ပြသမည် (.every() ဖြင့် AND Logic ပြန်ပြောင်းထားသည်)
+   // ရွေးချယ်ထားသော Filter အားလုံးနှင့် ကိုက်ညီမှသာ ပြသမည်
+    return activeFilterKeys.every(key => {
+      const filterValue = String(colFilters[key]).trim().toLowerCase()
+
       let cellValue = ""
-      if (key === 'pickup_rider') cellValue = o.pickup_rider?.name || ""
-      else if (key === 'deliver_rider') cellValue = o.deliver_rider?.name || ""
-      else cellValue = String(o[key] || "")
+
+      if (key === 'pickup_rider') {
+        cellValue = o.pickup_rider?.name || ""
+      } else if (key === 'deliver_rider') {
+        cellValue = o.deliver_rider?.name || ""
+      } else if (key === 'branch') {
+        const branchRaw = String(o.branch || "")
+        const branchFull = branchRaw === 'MDY' ? 'mandalay' : branchRaw === 'YGN' ? 'yangon' : branchRaw
+        cellValue = `${branchRaw} ${branchFull}`
+      } else if (['created_at', 'transit_date', 'received_date', 'deliver_date', 'cleard_date','arrival_date'].includes(key)) {
+        const rawDate = o[key] ? String(o[key]) : ""
+        const formattedDate = o[key] ? new Date(o[key]).toLocaleDateString() : ""
+        cellValue = `${rawDate} ${formattedDate}`
+      } else {
+        cellValue = o[key] !== null && o[key] !== undefined ? String(o[key]) : ""
+      }
+
+      // 🌟 Multi-select (Comma separated) ပါဝင်ပါက ခွဲထုတ်၍ တိုက်စစ်ခြင်း
+      const selectedList = filterValue.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+      if (selectedList.length > 1) {
+        return selectedList.includes(cellValue.toLowerCase());
+      }
+
       return cellValue.toLowerCase().includes(filterValue)
     })
   })
@@ -368,6 +491,21 @@ useEffect(() => {
   selectedGrandTotal={selectedGrandTotal}
   onClear={clearSelection}
 />
+
+<button 
+  onClick={() => {
+    const currentVisible: Record<string, boolean> = {};
+    COLUMN_DEFS.forEach(col => { currentVisible[col.key] = visibleCols[col.key]; });
+    setExcelCols(currentVisible);
+    setShowExcelModal(true);
+  }} 
+  className="bg-green-600 hover:bg-green-700 text-white font-medium px-3 py-1.5 rounded-md transition-all text-xs flex items-center gap-1.5 shadow-sm"
+>
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+  </svg>
+  Excel Export
+</button>
 
 
           <div className="relative">
@@ -957,6 +1095,78 @@ useEffect(() => {
         </button>
       </div>
 
+    </div>
+  </div>
+)}
+
+{/* ── 📊 EXCEL EXPORT COLUMN SELECTOR MODAL ── */}
+{showExcelModal && (
+  <div 
+    className="fixed inset-0 bg-gray-900/60 backdrop-blur-[3px] flex items-end sm:items-center justify-center z-50 p-0 sm:p-4 animate-in fade-in duration-200"
+    onClick={() => setShowExcelModal(false)}
+  >
+    <div className="absolute inset-0" />
+    <div 
+      className="relative bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-xl max-h-[85vh] flex flex-col overflow-hidden border border-gray-100"
+      onClick={e => e.stopPropagation()}
+    >
+      {/* Modal Header */}
+      <div className="px-5 py-4 bg-green-50 border-b border-green-100 flex justify-between items-center shrink-0">
+        <div>
+          <h3 className="text-sm font-extrabold text-green-900 uppercase tracking-wider">📊 Export to Excel (.xlsx)</h3>
+          <p className="text-[11px] text-green-700 font-medium mt-0.5">
+            {selectedOrders.size > 0 
+              ? `ရွေးချယ်ထားသော အော်ဒါ (${selectedOrders.size}) စောင်ကို ထုတ်ယူပါမည်။` 
+              : `လက်ရှိ စစ်ထုတ်ထားသော အော်ဒါ (${filteredOrders.length}) စောင်လုံးကို ထုတ်ယူပါမည်။`}
+          </p>
+        </div>
+        <button onClick={() => setShowExcelModal(false)} className="text-gray-400 hover:text-gray-700 w-7 h-7 flex items-center justify-center">✕</button>
+      </div>
+
+      {/* Column Selection Checkboxes */}
+      <div className="p-5 overflow-y-auto flex-1 bg-slate-50/50">
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-[10px] font-bold text-gray-400 uppercase">Excel တွင် ပါဝင်မည့် Column များ ရွေးရန်</span>
+          <div className="flex gap-2 text-[10px] font-bold">
+            <button type="button" onClick={() => {
+              const allTrue: Record<string, boolean> = {};
+              COLUMN_DEFS.forEach(c => allTrue[c.key] = true);
+              setExcelCols(allTrue);
+            }} className="text-green-600 hover:underline">Select All</button>
+            <span className="text-gray-300">|</span>
+            <button type="button" onClick={() => {
+              const allFalse: Record<string, boolean> = {};
+              COLUMN_DEFS.forEach(c => allFalse[c.key] = c.key === 'item_id');
+              setExcelCols(allFalse);
+            }} className="text-red-500 hover:underline">Clear All</button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          {COLUMN_DEFS.map(col => (
+            <label key={`excel-${col.key}`} className="flex items-center p-2 hover:bg-slate-50 cursor-pointer text-xs text-gray-700 font-medium rounded-lg">
+              <input 
+                type="checkbox" 
+                className="mr-2.5 w-4 h-4 text-green-600 rounded accent-green-600"
+                checked={excelCols[col.key] || false}  
+                onChange={() => setExcelCols(prev => ({ ...prev, [col.key]: !prev[col.key] }))}
+                disabled={col.key === 'item_id'}
+              />
+              <span className="truncate">{col.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Modal Footer */}
+      <div className="p-4 bg-gray-50 border-t border-gray-200 flex items-center gap-3 shrink-0">
+        <button onClick={handleExportExcel} className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 rounded-xl text-xs">
+          📂 Excel ဖိုင်ထုတ်မည် (Confirm)
+        </button>
+        <button onClick={() => setShowExcelModal(false)} className="px-5 py-2.5 bg-white border border-gray-300 text-gray-700 font-medium rounded-xl text-xs">
+          မလုပ်တော့ပါ
+        </button>
+      </div>
     </div>
   </div>
 )}
