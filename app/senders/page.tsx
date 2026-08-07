@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import SenderModal from "@/components/SenderModal"; 
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
+import Link from "next/link";
 
 export default function SendersDashboard() {
   // ─── States ───
@@ -260,9 +261,15 @@ const filteredOrders = orders.filter((order) => {
               <h1 className="text-xl font-bold text-slate-800">Senders Finance Dashboard</h1>
               <p className="text-xs text-slate-500">ပို့ဆောင်သူများ၏ စစာရင်းရှင်းလင်းမှု အခြေအနေများကို စီမံခန့်ခွဲရန်</p>
             </div>
+             <Link href="/senders/pickup-list" className="bg-orange-500 hover:bg-orange-600 text-white font-medium px-4 py-1.5 rounded-md shadow-sm transition-all flex items-center gap-1.5 text-xs">
+                     Pickup Report
+                    </Link>
           </div>
 
+         
+
           <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 self-start sm:self-center">
+            
             <button
               onClick={() => { setActiveBranch("MDY"); setSelectedSender(null); setOrders([]); }}
               className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${

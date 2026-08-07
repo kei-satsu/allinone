@@ -1,7 +1,7 @@
 "use client"
 
-import React from 'react'
-import MultiSelectFilter from '@/components/MultiSelectFilter' // MultiSelectFilter သီးသန့် Component ခွဲထားပါက Import လုပ်ပေးပါ
+import React, { forwardRef } from 'react'
+import MultiSelectFilter from '@/components/MultiSelectFilter'
 
 export interface ColumnDef {
   key: string;
@@ -38,7 +38,8 @@ interface OrderTableProps {
   onPreviewImage: (url: string) => void;
 }
 
-export default function OrderTable({
+// forwardRef ဖြင့် Component ကို ပတ်ပေးပါ
+const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
   orders,
   columnDefs,
   visibleCols,
@@ -61,7 +62,7 @@ export default function OrderTable({
   onRowClick,
   onRowContextMenu,
   onPreviewImage,
-}: OrderTableProps) {
+}, ref) => {
 
   const dynamicStatusOptions = Array.from(
     new Set(orders.map((o) => o.status).filter(Boolean))
@@ -69,7 +70,6 @@ export default function OrderTable({
     label: String(status),
     value: String(status),
   }));
-
 
   const filterInputCls = "w-full bg-transparent border-b border-gray-300 focus:border-orange-500 focus:outline-none py-1 text-[11px] text-gray-700 placeholder:text-gray-400 font-medium transition-colors";
 
@@ -130,7 +130,8 @@ export default function OrderTable({
   };
 
   return (
-    <div className="flex-1 overflow-auto bg-white sm:mx-5 sm:my-3 sm:rounded-lg sm:border sm:border-gray-200 sm:shadow-sm">
+    // Parent မှ ရောက်လာသော ref ကို ဒီနေရာတွင် တပ်ဆင်ပေးပါ
+    <div ref={ref} className="flex-1 overflow-auto bg-white sm:mx-5 sm:my-3 sm:rounded-lg sm:border sm:border-gray-200 sm:shadow-sm">
       
       {/* 💻 Desktop Table View */}
       <div className="hidden sm:block min-w-[800px] lg:min-w-0">
@@ -380,4 +381,8 @@ export default function OrderTable({
       )}
     </div>
   );
-}
+});
+
+OrderTable.displayName = 'OrderTable';
+
+export default OrderTable;
