@@ -1,6 +1,6 @@
 "use client"
 
-import React, { forwardRef } from 'react'
+import React, { forwardRef, useEffect, useRef, useState } from 'react'
 import MultiSelectFilter from '@/components/MultiSelectFilter'
 
 export interface ColumnDef {
@@ -63,6 +63,31 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
   onRowContextMenu,
   onPreviewImage,
 }, ref) => {
+
+  const horizontalScrollRef = useRef<HTMLDivElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const [tableWidth, setTableWidth] = useState(0);
+
+  useEffect(() => {
+    const scrollElement = tableScrollRef.current;
+    if (!scrollElement) return;
+
+    const updateTableWidth = () => setTableWidth(scrollElement.scrollWidth);
+    updateTableWidth();
+
+    const resizeObserver = new ResizeObserver(updateTableWidth);
+    resizeObserver.observe(scrollElement);
+    return () => resizeObserver.disconnect();
+  }, [columnDefs, visibleCols, orders.length]);
+
+  const syncTableScroll = (scrollLeft: number) => {
+    if (tableScrollRef.current && tableScrollRef.current.scrollLeft !== scrollLeft) {
+      tableScrollRef.current.scrollLeft = scrollLeft;
+    }
+    if (horizontalScrollRef.current && horizontalScrollRef.current.scrollLeft !== scrollLeft) {
+      horizontalScrollRef.current.scrollLeft = scrollLeft;
+    }
+  };
 
   const dynamicStatusOptions = Array.from(
     new Set(orders.map((o) => o.status).filter(Boolean))
@@ -131,14 +156,18 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
 
   return (
     // Parent မှ ရောက်လာသော ref ကို ဒီနေရာတွင် တပ်ဆင်ပေးပါ
-    <div ref={ref} className="flex-1 overflow-auto bg-white sm:mx-5 sm:my-3 sm:rounded-lg sm:border sm:border-gray-200 sm:shadow-sm">
+    <div ref={ref} className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-white sm:mx-5 sm:my-3 sm:rounded-xl sm:border sm:border-gray-400 sm:shadow-sm">
       
       {/* 💻 Desktop Table View */}
-      <div className="hidden sm:block min-w-[800px] lg:min-w-0">
-        <table className="w-full text-left whitespace-nowrap text-[12px]">
-          <thead className="sticky top-0 z-20 bg-white shadow-[0_1px_0_0_rgba(229,231,235,1)]">
-            <tr className="text-gray-400 border-b border-gray-200 font-semibold uppercase tracking-wider text-[10px]">
-              <th className="py-2.5 px-2 text-center w-10">
+      <div
+        ref={tableScrollRef}
+        onScroll={(e) => syncTableScroll(e.currentTarget.scrollLeft)}
+        className="hidden min-h-0 min-w-[800px] flex-1 overflow-x-hidden overflow-y-auto sm:block lg:min-w-0"
+      >
+        <table className="w-full border-collapse text-left whitespace-nowrap text-[13px] text-gray-800">
+          <thead className="sticky top-0 z-20 bg-white shadow-[0_2px_0_0_rgba(203,213,225,1)]">
+            <tr className="border-b-2 border-orange-300 bg-orange-100 text-[12px] font-extrabold uppercase tracking-wider text-orange-900">
+              <th className="w-10 border-r border-orange-300 px-1.5 py-2 text-center align-middle">
                 <input
                   type="checkbox"
                   className="w-4 h-4 text-orange-500 rounded border-gray-300 accent-orange-500 cursor-pointer"
@@ -147,17 +176,17 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
                 />
               </th>
               {columnDefs.map(col => visibleCols[col.key] && (
-                <th key={col.key} className={`py-2.5 px-3 ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right' : ''} ${col.key === 'image_url' ? 'text-center' : ''}`}>
+                <th key={col.key} className={`border-l border-orange-200 px-2 py-2 align-middle ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right' : ''} ${col.key === 'image_url' ? 'text-center' : ''}`}>
                   {col.label}
                 </th>
               ))}
             </tr>
 
             {showFilterBar && (
-              <tr className="bg-gray-50/80 border-b border-gray-200">
-                <th className="w-10 px-2 py-1.5" />
+              <tr className="border-b border-orange-200 bg-orange-50/60">
+                <th className="w-10 border-r border-orange-200 px-1.5 py-1.5" />
                 {columnDefs.map(col => visibleCols[col.key] && (
-                  <th key={`filter-${col.key}`} className="px-2 py-1.5 font-normal">
+                  <th key={`filter-${col.key}`} className="border-l border-orange-200 px-1.5 py-1.5 font-normal">
                     {col.key === 'image_url' ? (
                       <div className="h-5" />
                     ) : ['branch', 'status', 'fee_type', 'pickup_rider', 'deliver_rider', 'sender_loc', 'receiver_loc'].includes(col.key) ? (
@@ -203,7 +232,7 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
             )}
           </thead>
 
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-slate-300">
             {loading ? (
               <tr>
                 <td colSpan={columnDefs.length + 1} className="p-20 text-center">
@@ -226,9 +255,9 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
                     }}
                     onMouseEnter={() => onRowMouseEnter(o.id)}
                     onMouseUp={onStopDragging}
-                    className="hover:bg-gray-50/80 transition-colors cursor-context-menu select-none"
+                    className="cursor-context-menu select-none border-b border-slate-300 transition-colors odd:bg-white even:bg-slate-50/40 hover:bg-orange-50/60"
                   >
-                    <td className="py-2.5 px-2 text-center" onClick={(e) => e.stopPropagation()}>
+                    <td className="w-10 border-r border-slate-300 px-2 py-3 text-center align-middle" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         className="w-4 h-4 text-orange-500 rounded border-gray-300 accent-orange-500 cursor-pointer"
@@ -238,7 +267,7 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
                       />
                     </td>
                     {columnDefs.map(col => visibleCols[col.key] && (
-                      <td key={`${o.id}-${col.key}`} className={`py-2.5 px-3 text-gray-700 ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right' : ''}`}>
+                      <td key={`${o.id}-${col.key}`} className={`border-l border-slate-300 px-2 py-2 align-middle text-[13px] font-semibold text-slate-700 ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right tabular-nums' : ''}`}>
                         {renderCell(o, col.key)}
                       </td>
                     ))}
@@ -263,8 +292,17 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
         </table>
       </div>
 
+      <div
+        ref={horizontalScrollRef}
+        onScroll={(e) => syncTableScroll(e.currentTarget.scrollLeft)}
+        className="pointer-events-auto relative z-30 hidden h-4 w-full flex-none overflow-x-scroll overflow-y-hidden border-t border-orange-200 bg-orange-50 sm:block"
+        aria-label="Horizontal table scrollbar"
+      >
+        <div style={{ width: `${tableWidth}px`, height: '1px' }} />
+      </div>
+
       {/* 📱 Mobile Optimized Card List */}
-      <div className="sm:hidden flex flex-col divide-y divide-gray-100 h-full overflow-y-auto bg-gray-50 pb-20">
+      <div className="sm:hidden min-h-0 flex flex-1 flex-col divide-y divide-gray-100 overflow-y-auto bg-gray-50 pb-20">
         {loading ? (
           <div className="p-12 text-center text-gray-400 text-xs flex flex-col items-center gap-2 justify-center">
             <span className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
@@ -280,7 +318,7 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
               <div 
                 key={o.id} 
                 onClick={() => onRowClick(o)}
-                className="bg-white p-3.5 flex flex-col gap-2.5 shadow-sm border-b border-gray-100 active:bg-gray-50/80 transition-colors"
+                className="flex flex-col gap-2.5 border-b border-slate-300 bg-white p-3.5 shadow-sm transition-colors active:bg-slate-50/80"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -307,14 +345,14 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs border-y border-gray-50 py-2 bg-gray-50/40 rounded-md px-2">
+                <div className="grid grid-cols-2 gap-2 rounded-md border border-slate-300 bg-slate-50/70 px-2 py-2 text-xs">
                   <div>
-                    <span className="text-[10px] text-gray-400 font-bold uppercase block">Sender</span>
-                    <span className="font-medium text-gray-800 truncate block">{o.sender_name || '-'} ({o.sender_loc || '-'})</span>
+                    <span className="mb-0.5 block text-[11px] font-extrabold uppercase tracking-wide text-slate-600">Sender</span>
+                    <span className="block truncate text-[13px] font-bold text-slate-800">{o.sender_name || '-'} ({o.sender_loc || '-'})</span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-gray-400 font-bold uppercase block">Receiver</span>
-                    <span className="font-medium text-gray-800 truncate block">{o.receiver_name || '-'} ({o.receiver_loc || '-'})</span>
+                    <span className="mb-0.5 block text-[11px] font-extrabold uppercase tracking-wide text-slate-600">Receiver</span>
+                    <span className="block truncate text-[13px] font-bold text-slate-800">{o.receiver_name || '-'} ({o.receiver_loc || '-'})</span>
                   </div>
                   {o.receiver_phone && (
                     <div className="col-span-2 pt-0.5">
@@ -329,7 +367,7 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
                   )}
                 </div>
 
-                <div className="flex items-center justify-between text-xs pt-1">
+                <div className="flex items-center justify-between pt-1 text-[13px] font-medium">
                   <div className="flex gap-4 text-gray-500 text-[11px]">
                     <span>COD: <strong className="text-gray-700">{o.cod_amount?.toLocaleString() || 0} Ks</strong></span>
                     <span>Deli: <strong className="text-gray-700">{o.deli_fee?.toLocaleString() || 0} Ks</strong></span>

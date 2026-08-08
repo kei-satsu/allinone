@@ -670,7 +670,7 @@ useEffect(() => {
   const filterInputCls = "w-full bg-transparent border-b border-gray-300 focus:border-orange-500 focus:outline-none py-1 text-[11px] text-gray-700 placeholder:text-gray-400 font-medium transition-colors"
 
   return (
-    <div className="w-full h-full flex flex-col bg-[#f3f3f3] font-[system-ui,-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif] overflow-hidden select-none">
+    <div className="flex h-[100dvh] min-h-0 w-full flex-col overflow-hidden bg-[#f3f3f3] font-[system-ui,-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif] select-none">
       
       {/* ── Title Bar ── */}
       <div className="px-4 py-3 bg-white border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 flex-shrink-0 shadow-sm">
@@ -877,7 +877,7 @@ useEffect(() => {
 
      {/* ── Container Workspace Area (OrderTable Component) ── */}
 
-<div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+<div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
   
   {/* 👈 ဘယ်ဘက် Sender List Panel (Sidebar) */}
   <div className="w-full md:w-64 bg-white border-r border-gray-200 p-3 overflow-y-auto shrink-0 max-h-48 md:max-h-full">
@@ -915,7 +915,7 @@ useEffect(() => {
   </div>
 
 
-     <div className="flex-1 h-full min-h-0 overflow-auto">
+     <div className="flex min-h-0 flex-1 overflow-hidden">
 <OrderTable
 ref={tableRef}
   orders={filteredOrders}

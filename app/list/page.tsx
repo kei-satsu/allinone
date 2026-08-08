@@ -315,7 +315,12 @@ useEffect(() => {
     const { data, error, count } = await query;
 
     if (error) {
-      console.error(error);
+      console.error("Supabase Fetch Error Details:", {
+  message: error.message,
+  code: error.code,
+  details: error.details,
+  hint: error.hint,
+});
       setOrders([]);
       setHasMore(false);
     } else {
