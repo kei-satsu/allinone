@@ -162,7 +162,7 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
       <div
         ref={tableScrollRef}
         onScroll={(e) => syncTableScroll(e.currentTarget.scrollLeft)}
-        className="hidden min-h-0 min-w-[800px] flex-1 overflow-x-hidden overflow-y-auto sm:block lg:min-w-0"
+        className="hidden min-h-0 min-w-[800px] flex-1 overflow-x-auto overflow-y-auto sm:block lg:min-w-0 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-slate-300 [scrollbar-color:transparent_transparent] hover:[scrollbar-color:#cbd5e1_transparent]"
       >
         <table className="w-full border-collapse text-left whitespace-nowrap text-[13px] text-gray-800">
           <thead className="sticky top-0 z-20 bg-white shadow-[0_2px_0_0_rgba(203,213,225,1)]">
@@ -247,15 +247,14 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
                 {orders.map((o) => (
                   <tr 
                     key={o.id} 
-                    onClick={() => onRowClick(o)}
+                    onDoubleClick={() => onRowClick(o)}
                     onContextMenu={(e) => onRowContextMenu(e, o)} 
-                    onMouseDown={(e) => {
-                      e.preventDefault();
+                    onMouseDown={() => {
                       onRowMouseDown(o.id);
                     }}
                     onMouseEnter={() => onRowMouseEnter(o.id)}
                     onMouseUp={onStopDragging}
-                    className="cursor-context-menu select-none border-b border-slate-300 transition-colors odd:bg-white even:bg-slate-50/40 hover:bg-orange-50/60"
+                    className="cursor-default select-text border-b border-slate-300 transition-colors odd:bg-white even:bg-slate-50/40 hover:bg-orange-50/60"
                   >
                     <td className="w-10 border-r border-slate-300 px-2 py-3 text-center align-middle" onClick={(e) => e.stopPropagation()}>
                       <input
@@ -292,14 +291,6 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
         </table>
       </div>
 
-      <div
-        ref={horizontalScrollRef}
-        onScroll={(e) => syncTableScroll(e.currentTarget.scrollLeft)}
-        className="pointer-events-auto relative z-30 hidden h-4 w-full flex-none overflow-x-scroll overflow-y-hidden border-t border-orange-200 bg-orange-50 sm:block"
-        aria-label="Horizontal table scrollbar"
-      >
-        <div style={{ width: `${tableWidth}px`, height: '1px' }} />
-      </div>
 
       {/* 📱 Mobile Optimized Card List */}
       <div className="sm:hidden min-h-0 flex flex-1 flex-col divide-y divide-gray-100 overflow-y-auto bg-gray-50 pb-20">

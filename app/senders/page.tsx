@@ -28,9 +28,9 @@ export default function SendersDashboard() {
   // Search & Filter States
   const [searchTerm, setSearchTerm] = useState("");
   const [activeBranch, setActiveBranch] = useState("MDY");
-  const [activeTab, setActiveTab] = useState<
-    "all" | "uncleared" | "cleared" | "not_delivered"
-  >("uncleared");
+ const [activeTab, setActiveTab] = useState<
+  "all" | "uncleared" | "cleared" | "not_delivered" | "returned"
+>("uncleared");
   const [hideClearedInAll, setHideClearedInAll] = useState(true);
 
   // Modal States
@@ -76,11 +76,13 @@ export default function SendersDashboard() {
               !o.cleared_date
           ).length || 0;
 
-        const notDeliveredCount =
-          sender.orders?.filter(
-            (o: any) =>
-              o.status !== "Delivered" && o.status !== "Settled"
-          ).length || 0;
+       const notDeliveredCount =
+  sender.orders?.filter(
+    (o: any) =>
+      o.status !== "Delivered" &&
+      o.status !== "Settled" &&
+      o.status !== "Returned"
+  ).length || 0;
 
         return {
           ...sender,
@@ -195,20 +197,24 @@ export default function SendersDashboard() {
     );
   });
 
-  const unclearedOrders = filteredOrders.filter(
-    (o) =>
-      (o.status === "Delivered" || o.status === "Settled") &&
-      !o.cleared_date
-  );
-  const clearedOrders = filteredOrders.filter((o) => o.cleared_date);
-  const notDeliveredOrders = filteredOrders.filter(
-    (o) => o.status !== "Delivered" && o.status !== "Settled"
-  );
+ const unclearedOrders = filteredOrders.filter(
+  (o) =>
+    (o.status === "Delivered" || o.status === "Settled") &&
+    !o.cleared_date
+);
+const clearedOrders = filteredOrders.filter((o) => o.cleared_date);
+const returnedOrders = filteredOrders.filter((o) => o.status === "Returned");
+const notDeliveredOrders = filteredOrders.filter(
+  (o) =>
+    o.status !== "Delivered" &&
+    o.status !== "Settled" &&
+    o.status !== "Returned"
+);
   const allOrders = hideClearedInAll
     ? filteredOrders.filter((o) => !o.cleared_date)
     : filteredOrders;
 
-  const handleBulkClear = async () => {
+ const handleBulkClear = async () => {
     if (selectedOrderIds.length === 0) return;
     if (!clearedDateInput) {
       alert("ကျေးဇူးပြု၍ ရက်စွဲရွေးချယ်ပေးပါရန်။");
@@ -216,17 +222,42 @@ export default function SendersDashboard() {
     }
 
     setClearing(true);
-    const { error } = await supabase
-      .from("orders")
-      .update({ cleared_date: clearedDateInput })
-      .in("id", selectedOrderIds);
+
+    // ရွေးချယ်ထားသော orders များထဲမှ Returned status နှင့် အခြား status များကို ခွဲထုတ်ခြင်း
+    const selectedOrders = orders.filter((o) => selectedOrderIds.includes(o.id));
+    const returnedIds = selectedOrders
+      .filter((o) => o.status === "Returned")
+      .map((o) => o.id);
+    const otherIds = selectedOrders
+      .filter((o) => o.status !== "Returned")
+      .map((o) => o.id);
+
+    let updateError: any = null;
+
+    // Returned မဟုတ်သော အော်ဒါများကို cleared_date သို့ ထည့်မည်
+    if (otherIds.length > 0) {
+      const { error } = await supabase
+        .from("orders")
+        .update({ cleared_date: clearedDateInput })
+        .in("id", otherIds);
+      if (error) updateError = error;
+    }
+
+    // Returned အော်ဒါများကို cleared_date ကို မထိဘဲ refund_date သို့သာ ထည့်မည်
+    if (returnedIds.length > 0) {
+      const { error } = await supabase
+        .from("orders")
+        .update({ refund_date: clearedDateInput })
+        .in("id", returnedIds);
+      if (error) updateError = error;
+    }
 
     setClearing(false);
 
-    if (error) {
-      console.error("Error clearing orders:", error);
+    if (updateError) {
+      console.error("Error clearing orders:", updateError);
       alert(
-        "စာရင်းရှင်းရာတွင် အမှားအယွင်းရှိခဲ့ပါသည်: " + error.message
+        "စာရင်းရှင်းရာတွင် အမှားအယွင်းရှိခဲ့ပါသည်: " + updateError.message
       );
     } else {
       setSelectedOrderIds([]);
@@ -238,11 +269,12 @@ export default function SendersDashboard() {
   };
 
   const getDisplayOrders = () => {
-    if (activeTab === "all") return allOrders;
-    if (activeTab === "uncleared") return unclearedOrders;
-    if (activeTab === "cleared") return clearedOrders;
-    return notDeliveredOrders;
-  };
+  if (activeTab === "all") return allOrders;
+  if (activeTab === "uncleared") return unclearedOrders;
+  if (activeTab === "cleared") return clearedOrders;
+  if (activeTab === "returned") return returnedOrders;
+  return notDeliveredOrders;
+};
 
   const selectableOrders = getDisplayOrders().filter((o) => !o.cleared_date);
   const canSelectOrders = activeTab !== "cleared";
@@ -501,60 +533,72 @@ export default function SendersDashboard() {
                   {/* Tabs Row */}
                   <div className="flex items-center overflow-x-auto px-3 gap-0.5">
                     {[
-                      {
-                        key: "all",
-                        label: "All",
-                        count: allOrders.length,
-                        color: "slate",
-                      },
-                      {
-                        key: "uncleared",
-                        label: "Uncleared",
-                        count: unclearedOrders.length,
-                        color: "orange",
-                      },
-                      {
-                        key: "cleared",
-                        label: "Cleared",
-                        count: clearedOrders.length,
-                        color: "emerald",
-                      },
-                      {
-                        key: "not_delivered",
-                        label: "Not Delivered",
-                        count: notDeliveredOrders.length,
-                        color: "amber",
-                      },
-                    ].map((tab) => {
-                      const isActive = activeTab === tab.key;
-                      const colorMap: Record<string, string> = {
-                        slate: isActive
-                          ? "border-slate-700 text-slate-800 bg-slate-50"
-                          : "border-transparent text-slate-500 hover:text-slate-700",
-                        orange: isActive
-                          ? "border-orange-500 text-orange-600 bg-orange-50/50"
-                          : "border-transparent text-slate-500 hover:text-slate-700",
-                        emerald: isActive
-                          ? "border-emerald-500 text-emerald-600 bg-emerald-50/50"
-                          : "border-transparent text-slate-500 hover:text-slate-700",
-                        amber: isActive
-                          ? "border-amber-500 text-amber-600 bg-amber-50/50"
-                          : "border-transparent text-slate-500 hover:text-slate-700",
-                      };
-                      const badgeColorMap: Record<string, string> = {
-                        slate: isActive
-                          ? "bg-slate-200 text-slate-700"
-                          : "bg-slate-100 text-slate-500",
-                        orange: isActive
-                          ? "bg-orange-100 text-orange-600"
-                          : "bg-slate-100 text-slate-500",
-                        emerald: isActive
-                          ? "bg-emerald-100 text-emerald-600"
-                          : "bg-slate-100 text-slate-500",
-                        amber: isActive
-                          ? "bg-amber-100 text-amber-600"
-                          : "bg-slate-100 text-slate-500",
-                      };
+  {
+    key: "all",
+    label: "All",
+    count: allOrders.length,
+    color: "slate",
+  },
+  {
+    key: "uncleared",
+    label: "Uncleared",
+    count: unclearedOrders.length,
+    color: "orange",
+  },
+  {
+    key: "cleared",
+    label: "Cleared",
+    count: clearedOrders.length,
+    color: "emerald",
+  },
+  {
+    key: "returned",
+    label: "Returned",
+    count: returnedOrders.length,
+    color: "rose",
+  },
+  {
+    key: "not_delivered",
+    label: "Not Delivered",
+    count: notDeliveredOrders.length,
+    color: "amber",
+  },
+].map((tab) => {
+  const isActive = activeTab === tab.key;
+  const colorMap: Record<string, string> = {
+    slate: isActive
+      ? "border-slate-700 text-slate-800 bg-slate-50"
+      : "border-transparent text-slate-500 hover:text-slate-700",
+    orange: isActive
+      ? "border-orange-500 text-orange-600 bg-orange-50/50"
+      : "border-transparent text-slate-500 hover:text-slate-700",
+    emerald: isActive
+      ? "border-emerald-500 text-emerald-600 bg-emerald-50/50"
+      : "border-transparent text-slate-500 hover:text-slate-700",
+    rose: isActive
+      ? "border-rose-500 text-rose-600 bg-rose-50/50"
+      : "border-transparent text-slate-500 hover:text-slate-700",
+    amber: isActive
+      ? "border-amber-500 text-amber-600 bg-amber-50/50"
+      : "border-transparent text-slate-500 hover:text-slate-700",
+  };
+  const badgeColorMap: Record<string, string> = {
+    slate: isActive
+      ? "bg-slate-200 text-slate-700"
+      : "bg-slate-100 text-slate-500",
+    orange: isActive
+      ? "bg-orange-100 text-orange-600"
+      : "bg-slate-100 text-slate-500",
+    emerald: isActive
+      ? "bg-emerald-100 text-emerald-600"
+      : "bg-slate-100 text-slate-500",
+    rose: isActive
+      ? "bg-rose-100 text-rose-600"
+      : "bg-slate-100 text-slate-500",
+    amber: isActive
+      ? "bg-amber-100 text-amber-600"
+      : "bg-slate-100 text-slate-500",
+  };
                       return (
                         <button
                           key={tab.key}
@@ -806,6 +850,12 @@ export default function SendersDashboard() {
                               Cleared Date
                             </th>
                           )}
+                          {activeTab === "returned" && (
+                            <th className="px-3 py-2 text-left font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300">
+                              Refund Date
+                            </th>
+                          )}
+                          
                         </tr>
                       </thead>
                       <tbody>
@@ -909,6 +959,15 @@ export default function SendersDashboard() {
                                 {order.cleared_date
                                   ? `📅 ${new Date(
                                       order.cleared_date
+                                    ).toLocaleDateString()}`
+                                  : "—"}
+                              </td>
+                            )}
+                            {activeTab === "returned" && (
+                              <td className="px-3 py-2 font-mono text-rose-600 font-semibold border-b border-slate-200 text-sm">
+                                {order.refund_date
+                                  ? `📅 ${new Date(
+                                      order.refund_date
                                     ).toLocaleDateString()}`
                                   : "—"}
                               </td>
