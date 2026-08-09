@@ -108,17 +108,50 @@ const appendLog = (currentHistory: any[], action: string, note: string) => {
     remark: ''
   })
 
-  // 💡 Cloudinary URL ထဲသို့ Transformation parameters များ ထည့်ပေးသည့် function
-const getCloudinaryUrl = (url: string, transform = 'w_150,q_auto,f_auto') => {
-  if (!url || typeof url !== 'string') return '';
-  
-  // Cloudinary URL ဖြစ်ပါက /upload/ ၏ နောက်တွင် transform လာထည့်ပေးမည်
-  if (url.includes('/upload/')) {
-    return url.replace('/upload/', `/upload/${transform}/`);
-  }
-  
-  return url; // Cloudinary URL မဟုတ်ပါက မူလအတိုင်း ပြန်ပေးမည်
-};
+  // Keep a small, predictable set of Cloudinary delivery variants.
+  // These values are intentionally independent of viewport size, DPR, or zoom state.
+  const CLOUDINARY_TRANSFORMS = {
+    main: 'w_1200,q_auto,f_auto',
+    thumbnail: 'w_120,q_auto,f_auto',
+    grid: 'w_150,q_auto,f_auto'
+  } as const
+
+  // Add or replace only the delivery transformation segment. Stored image_url
+  // values are never changed, and non-Cloudinary URLs pass through unchanged.
+  const getCloudinaryUrl = (url: string, transform: string = CLOUDINARY_TRANSFORMS.thumbnail) => {
+    if (!url || typeof url !== 'string') return ''
+
+    const sourceUrl = url.trim()
+    let parsedUrl: URL
+
+    try {
+      parsedUrl = new URL(sourceUrl)
+    } catch {
+      return sourceUrl
+    }
+
+    const isCloudinaryHost = /(^|\.)res\.cloudinary\.com$/i.test(parsedUrl.hostname) || /(^|\.)cloudinary\.com$/i.test(parsedUrl.hostname)
+    const uploadMarker = '/upload/'
+    const uploadIndex = parsedUrl.pathname.indexOf(uploadMarker)
+
+    if (!isCloudinaryHost || uploadIndex === -1) return sourceUrl
+
+    const pathPrefix = parsedUrl.pathname.slice(0, uploadIndex + uploadMarker.length)
+    const pathAfterUpload = parsedUrl.pathname.slice(uploadIndex + uploadMarker.length)
+    const pathSegments = pathAfterUpload.split('/')
+    const firstSegment = pathSegments[0] || ''
+
+    // Cloudinary transformations are the path segment immediately after
+    // /upload/. Remove an existing one before applying our stable variant so
+    // repeated renders cannot produce malformed or stacked transformations.
+    const transformationSegmentPattern = /^(?:w_|h_|c_|q_|f_|dpr_|g_|ar_|fl_|e_|o_|r_|x_|y_|z_|u_|l_|so_|du_|vc_|af_|ki_|pg_|dn_|bo_|co_|cs_|d_)/
+    if (firstSegment.includes(',') || transformationSegmentPattern.test(firstSegment)) {
+      pathSegments.shift()
+    }
+
+    parsedUrl.pathname = `${pathPrefix}${transform}/${pathSegments.join('/')}`
+    return parsedUrl.toString()
+  };
 
   // ၁။ City Interface
 interface City {
@@ -821,7 +854,7 @@ if (updatedPending.length > 0) {
         `}
       >
   <img 
-  src={getCloudinaryUrl(item.image_url, 'w_250,q_auto,f_auto')} 
+  src={getCloudinaryUrl(item.image_url, CLOUDINARY_TRANSFORMS.grid)} 
   loading="lazy"
   decoding="async"
   className="w-full h-full object-cover select-none pointer-events-none" 
@@ -916,7 +949,7 @@ if (updatedPending.length > 0) {
 
                 <div className="w-full h-full flex items-center justify-center overflow-hidden pointer-events-none">
                  <img 
-  src={getCloudinaryUrl(selectedItem.image_url, 'q_auto,f_auto')} 
+  src={getCloudinaryUrl(selectedItem.image_url, CLOUDINARY_TRANSFORMS.main)} 
   alt="Voucher" 
   draggable={false} 
   style={{ 
@@ -971,7 +1004,7 @@ if (updatedPending.length > 0) {
       >
 
         <img 
-        src={getCloudinaryUrl(item.image_url, 'w_100,q_auto,f_auto')} 
+        src={getCloudinaryUrl(item.image_url, CLOUDINARY_TRANSFORMS.thumbnail)} 
         loading="lazy"
         decoding="async"
         alt="thumb" 
