@@ -13,6 +13,136 @@ export default function VoucherTemplate() {
   const [loading, setLoading] = useState(true);
   const [printTrigger, setPrintTrigger] = useState(false);
 
+  const [pcIp, setPcIp] = useState<string>("192.168.1.100:5000"); // PC ရဲ့ Local IP
+const [selectedPrinter, setSelectedPrinter] = useState<string>("");
+const [printersList, setPrintersList] = useState<string[]>([]);
+const [isSendingToPc, setIsSendingToPc] = useState<boolean>(false);
+const [showPcSetupModal, setShowPcSetupModal] = useState<boolean>(false);
+const [isScanning, setIsScanning] = useState<boolean>(false);
+const [discoveredServers, setDiscoveredServers] = useState<string[]>([]);
+
+
+// ─── ၂။ Saved IP ကို LocalStorage မှ ဆွဲထုတ်ခြင်း ───
+useEffect(() => {
+  const savedIp = localStorage.getItem("pc_print_server_ip");
+  if (savedIp) setPcIp(savedIp);
+}, []);
+
+// ─── ၃။ PC Server ထံမှ Printer List သွားတောင်းသည့် Function ───
+const fetchPCPrinters = useCallback(async (targetIp: string) => {
+  try {
+    const res = await fetch(`http://${targetIp}/api/printers`);
+    const data = await res.json();
+    if (data.success) {
+      setPrintersList(data.printers);
+      if (data.printers.length > 0) setSelectedPrinter(data.printers[0]);
+    }
+  } catch (err) {
+    alert("PC Server ကို ချိတ်ဆက်၍ မရပါ! IP Address မှန်သလား သို့မဟုတ် PC တွင် Server Run ထားသလား စစ်ပေးပါ။");
+  }
+}, []);
+
+// ─── Local Network ထဲရှိ Print Server များကို အလိုအလျောက် ရှာဖွေပေးသည့် Function ───
+const scanLocalServers = useCallback(async () => {
+  setIsScanning(true);
+  setDiscoveredServers([]);
+  
+  // လက်ရှိ pcIp ထဲမှ Prefix (ဥပမာ "192.168.1") နှင့် Port (ဥပမာ "5000") ကို ယူခြင်း
+  const ipParts = pcIp.split(":")[0].split(".");
+  const basePrefix = ipParts.length === 4 ? ipParts.slice(0, 3).join(".") : "192.168.1";
+  const port = pcIp.split(":")[1] || "5000";
+
+  const foundServers: string[] = [];
+  const scanPromises = [];
+
+  // IP Range 1 မှ 254 အထိ တစ်ပြိုင်နက်တည်း Scan ဖတ်ခြင်း
+  for (let i = 1; i <= 254; i++) {
+    const target = `${basePrefix}.${i}:${port}`;
+    
+    // တစ်ခုချင်းစီကို 700ms ထက် ပိုမစောင့်စေရန် Timeout သတ်မှတ်ခြင်း
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 700);
+
+    const promise = fetch(`http://${target}/api/printers`, { signal: controller.signal })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          foundServers.push(target);
+        }
+      })
+      .catch(() => {
+        // Response မလာသော IP များကို လျစ်လျူရှုမည်
+      })
+      .finally(() => clearTimeout(timeoutId));
+
+    scanPromises.push(promise);
+  }
+
+  // Scanning ပြီးသည်အထိ စောင့်ခြင်း
+  await Promise.all(scanPromises);
+
+  setDiscoveredServers(foundServers);
+  setIsScanning(false);
+
+  if (foundServers.length > 0) {
+    // ရှာတွေ့ပါက ပထမဆုံးတွေ့သော Server IP ကို အလိုအလျောက် ရွေးပေးပြီး Printer များဆွဲယူမည်
+    const firstFound = foundServers[0];
+    setPcIp(firstFound);
+    localStorage.setItem("pc_print_server_ip", firstFound);
+    fetchPCPrinters(firstFound);
+  } else {
+    alert("Local Network (Wi-Fi) ထဲတွင် မည်သည့် Print Server မှ ရှာမတွေ့ပါ။ PC Server run ထားကြောင်းနှင့် Wi-Fi တူမတူ စစ်ဆေးပေးပါ။");
+  }
+}, [pcIp, fetchPCPrinters]);
+
+// Server IP ပြောင်းသွားတိုင်း ထို PC ထဲရှိ Printer များကို တောင်းမည့် Function
+const handleServerChange = useCallback((targetIp: string) => {
+  setPcIp(targetIp);
+  localStorage.setItem("pc_print_server_ip", targetIp);
+  setPrintersList([]); // အရင် Printer စာရင်းခဏရှင်းမည်
+  fetchPCPrinters(targetIp); // Printer စာရင်းအသစ်ပြန်ဆွဲမည်
+}, [fetchPCPrinters]);
+
+// ─── ၄။ PC Server ထံသို့ Print Data ပို့မည့် Function ───
+const handleSendToPCPrint = useCallback(async () => {
+  if (!voucherRef.current) return;
+  setIsSendingToPc(true);
+
+  // fields အစား displayData / voucherData မှ မရှိမဖြစ် itemId ကို တိုက်ရိုက်ယူသုံးခြင်း
+  const currentItemId = voucherData?.item_id || voucherData?.itemId || "---";
+
+  try {
+    // Voucher ကို high-res PNG image အဖြစ် ပြောင်းခြင်း
+    const imageBase64 = await toPng(voucherRef.current, { cacheBust: true, pixelRatio: 3 });
+
+    // PC Server ထံ HTTP POST ဖြင့် ပို့ခြင်း
+    const res = await fetch(`http://${pcIp}/api/print`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        image: imageBase64,
+        printer: selectedPrinter,
+        paperSize: "4in 6in", // သို့မဟုတ် thermal 80mm
+        copies: 1,
+        itemId: currentItemId,
+      }),
+    });
+
+    const result = await res.json();
+    if (result.success) {
+      alert("PC Server သို့ Print Data အောင်မြင်စွာ ပို့ပြီးပါပြီ။");
+      setShowDialog(false);
+    } else {
+      alert("Print ထုတ်ရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ခဲ့သည်: " + result.error);
+    }
+  } catch (err) {
+    console.error("PC Print error:", err);
+    alert("PC Server ထံ ပို့၍ မရပါ။ Wi-Fi Network တစ်ခုတည်း ချိတ်ထားကြောင်း စစ်ဆေးပါ။");
+  } finally {
+    setIsSendingToPc(false);
+  }
+}, [pcIp, selectedPrinter, voucherData]);
+
   // ─── Fetch Order from Supabase ────────────────
   useEffect(() => {
     async function loadVoucherData() {
@@ -230,6 +360,19 @@ const handleSaveAsImage = useCallback(() => {
           </svg>
           တိုက်ရိုက် Print ထုတ်မည် (Print Now)
         </button>
+      <button
+  onClick={() => {
+    setShowPcSetupModal(true);
+    scanLocalServers(); // <--- Modal ပွင့်တာနဲ့ Scan တန်းဖတ်ခိုင်းရန်
+  }}
+  
+  className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 active:scale-[0.98] shadow-sm"
+>
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25A2.25 2.25 0 015.25 3h13.5A2.25 2.25 0 0121 5.25z" />
+  </svg>
+  PC တွင် Print ထုတ်မည် (Print via PC)
+</button>
 
         {/* ၂။ ပုံအဖြစ်သိမ်းမည့်ခလုတ် */}
         <button
@@ -760,6 +903,107 @@ const handleSaveAsImage = useCallback(() => {
   Voucher Options ခေါ်ရန်
 </button>
 </div>
+
+{/* ── PC CONNECT MODAL ── */}
+{showPcSetupModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <div className="bg-white rounded-2xl p-5 max-w-sm w-full text-slate-800 shadow-xl space-y-4">
+      <h3 className="font-bold text-sm border-b pb-2">PC Print Server ချိတ်ဆက်ရန်</h3>
+      
+      {/* STEP 1: Server ရှာခြင်းနှင့် ရွေးချယ်ခြင်း */}
+      <div>
+        <div className="flex justify-between items-center mb-1">
+          <label className="text-xs font-bold text-slate-700">၁။ Server ရွေးပါ:</label>
+          <button
+            onClick={scanLocalServers}
+            disabled={isScanning}
+            className="text-[11px] text-indigo-600 font-bold hover:underline"
+          >
+            {isScanning ? "Scanning..." : "🔄 ပြန်ရှာမည်"}
+          </button>
+        </div>
+
+        {/* Scan ဖတ်နေစဉ် Loading ပြမည် */}
+        {isScanning ? (
+          <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-center text-xs text-indigo-600 font-medium">
+            <span className="inline-block animate-spin mr-1">⏳</span> Local Network ထဲတွင် Server ရှာနေသည်...
+          </div>
+        ) : discoveredServers.length > 0 ? (
+          /* ရှာတွေ့သော Server စာရင်း ရွေးရန် Dropdown */
+          <select
+            value={pcIp}
+            onChange={(e) => handleServerChange(e.target.value)}
+            className="w-full px-3 py-2 bg-slate-50 border rounded-lg text-xs font-mono font-bold"
+          >
+            {discoveredServers.map((srv, idx) => (
+              <option key={idx} value={srv}>
+                🖥️ Server: {srv}
+              </option>
+            ))}
+          </select>
+        ) : (
+          /* Server မတွေ့ပါက Manual ရိုက်ထည့်နိုင်သော Input Box */
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={pcIp}
+              onChange={(e) => setPcIp(e.target.value)}
+              placeholder="192.168.1.100:5000"
+              className="flex-1 px-3 py-1.5 border rounded-lg text-xs font-mono"
+            />
+            <button
+              onClick={() => fetchPCPrinters(pcIp)}
+              className="px-3 py-1.5 bg-slate-800 text-white text-xs font-bold rounded-lg"
+            >
+              ချိတ်မည်
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* STEP 2: Printer ရွေးချယ်ခြင်း (ပျောက်မသွားအောင် အခြေအနေအလိုက်ပြမည်) */}
+      <div className="border-t pt-3">
+        <label className="text-xs font-bold text-slate-700 block mb-1">၂။ Printer ရွေးပါ:</label>
+        
+        {printersList.length > 0 ? (
+          <select
+            value={selectedPrinter}
+            onChange={(e) => setSelectedPrinter(e.target.value)}
+            className="w-full px-3 py-2 bg-slate-50 border rounded-lg text-xs font-medium"
+          >
+            {printersList.map((p, idx) => (
+              <option key={idx} value={p}>
+                🖨️ {p}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded-md">
+            ⚠️ ဒီ Server ထဲတွင် Printer စာရင်း ရှာမတွေ့ပါ။ Server မရွေးရသေးပါက အပေါ်တွင် Server ရွေးပေးပါ။
+          </p>
+        )}
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex gap-2 pt-2 border-t">
+        <button
+          onClick={() => setShowPcSetupModal(false)}
+          className="flex-1 py-2 bg-gray-200 text-gray-700 text-xs font-bold rounded-lg"
+        >
+          မလုပ်တော့ပါ
+        </button>
+        <button
+          disabled={isSendingToPc || !selectedPrinter}
+          onClick={handleSendToPCPrint}
+          className="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg disabled:opacity-50"
+        >
+          {isSendingToPc ? "Sending..." : "🖨️ Print ထုတ်မည်"}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
     </div>
   );
 }
