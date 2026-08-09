@@ -917,9 +917,9 @@ const handleSaveAsImage = useCallback(() => {
           <button
             onClick={scanLocalServers}
             disabled={isScanning}
-            className="text-[11px] text-indigo-600 font-bold hover:underline"
+            className="text-[11px] text-indigo-600 font-bold hover:underline" 
           >
-            {isScanning ? "Scanning..." : "🔄 ပြန်ရှာမည်"}
+            {isScanning ? "Scanning..." : "🔄 ပြန်ရှာမည်။"}
           </button>
         </div>
 
