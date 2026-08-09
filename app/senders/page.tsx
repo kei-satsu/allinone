@@ -24,6 +24,9 @@ export default function SendersDashboard() {
   const [receivedEndDate, setReceivedEndDate] = useState("");
   const [loadingSenders, setLoadingSenders] = useState(true);
   const [loadingOrders, setLoadingOrders] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+const [itemsPerPage, setItemsPerPage] = useState(50);
+const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
 
   // Search & Filter States
   const [searchTerm, setSearchTerm] = useState("");
@@ -43,6 +46,21 @@ export default function SendersDashboard() {
     new Date().toISOString().split("T")[0]
   );
   const [clearing, setClearing] = useState(false);
+
+  useEffect(() => {
+  setCurrentPage(1);
+}, [
+  activeTab,
+  orderSearchTerm,
+  filterFeeType,
+  filterLoc,
+  startDate,
+  endDate,
+  receivedStartDate,
+  receivedEndDate,
+  selectedSender,
+  itemsPerPage
+]);
 
   useEffect(() => {
     setSelectedOrderIds([]);
@@ -145,29 +163,46 @@ export default function SendersDashboard() {
     setReceivedStartDate("");
     setReceivedEndDate("");
 
-    const { data, error } = await supabase
-      .from("orders")
-      .select("*")
-      .eq("sender_id", sender.id)
-      .order("created_at", { ascending: false });
+ let allSenderOrders: any[] = [];
+    let from = 0;
+    const step = 1000;
+    let hasMore = true;
 
-    if (error) {
-      console.error("Error fetching orders:", error);
-    } else {
-      setOrders(data || []);
+    // Data ၁၀၀၀ ထက်ပိုပါက Loop တ်ုင်း ဆွဲယူခြင်းဖြင့် 1000 Limit ကျော်လွန်စေသည်
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from("orders")
+        .select("*")
+        .eq("sender_id", sender.id)
+        .order("created_at", { ascending: false })
+        .range(from, from + step - 1);
+
+      if (error) {
+        console.error("Error fetching orders:", error);
+        break;
+      }
+
+      if (data && data.length > 0) {
+        allSenderOrders = [...allSenderOrders, ...data];
+        if (data.length < step) hasMore = false;
+        else from += step;
+      } else {
+        hasMore = false;
+      }
     }
-    setLoadingOrders(false);
-  };
+
+    setOrders(allSenderOrders); };
 
   const filteredOrders = orders.filter((order) => {
     const searchLower = orderSearchTerm.toLowerCase();
-    const matchesSearch =
+   const matchesSearch =
       !orderSearchTerm.trim() ||
       (order.item_id || "").toLowerCase().includes(searchLower) ||
       (order.id || "").toLowerCase().includes(searchLower) ||
       (order.receiver_name || "").toLowerCase().includes(searchLower) ||
       (order.receiver_phone || "").toLowerCase().includes(searchLower) ||
-      (order.receiver_loc || "").toLowerCase().includes(searchLower);
+      (order.receiver_loc || "").toLowerCase().includes(searchLower) ||
+      (order.receiver_address || "").toLowerCase().includes(searchLower);
 
     const matchesFeeType =
       filterFeeType === "All" || order.fee_type === filterFeeType;
@@ -214,59 +249,252 @@ const notDeliveredOrders = filteredOrders.filter(
     ? filteredOrders.filter((o) => !o.cleared_date)
     : filteredOrders;
 
- const handleBulkClear = async () => {
-    if (selectedOrderIds.length === 0) return;
-    if (!clearedDateInput) {
-      alert("ကျေးဇူးပြု၍ ရက်စွဲရွေးချယ်ပေးပါရန်။");
-      return;
+    // Select လုပ်ထားသော Way များ၏ အချက်အလက်နှင့် ငွေပမာဏ တွက်ချက်မှုများ
+const selectedOrdersList = orders.filter((o) => selectedOrderIds.includes(o.id));
+const normalOrders = selectedOrdersList.filter((o) => o.status !== "Returned");
+const returnedOrdersList = selectedOrdersList.filter((o) => o.status === "Returned");
+
+const normalCodTotal = normalOrders.reduce((sum, o) => sum + (Number(o.cod_amount) || 0), 0);
+const returnedCodTotal = returnedOrdersList.reduce((sum, o) => sum + (Number(o.cod_amount) || 0), 0);
+const netPayableAmount = normalCodTotal - returnedCodTotal; // OS သို့ ရှင်းရမည့် ငွေ
+
+ // ၁။ "Clear Selected" Button နိပ်လျှင် Modal ကို မူလအတိုင်း တန်းမရှင်းဘဲ Pop-up ဖွင့်ပေးမည်
+const handleOpenSummaryModal = () => {
+  if (selectedOrderIds.length === 0) return;
+  if (!clearedDateInput) {
+    alert("ကျေးဇူးပြု၍ ရက်စွဲရွေးချယ်ပေးပါရန်။");
+    return;
+  }
+  setIsSummaryModalOpen(true);
+};
+
+// ၂။ Pop-up Modal ထဲမှ "အတည်ပြုပြီး စာရင်းရှင်းမည်" ကို နိပ်မှ Database ထဲ အချက်အလက် သွားသိမ်းမည်
+const executeBulkClear = async () => {
+  setClearing(true);
+
+  const returnedIds = returnedOrdersList.map((o) => o.id);
+  const otherIds = normalOrders.map((o) => o.id);
+
+  let updateError: any = null;
+
+  if (otherIds.length > 0) {
+    const { error } = await supabase
+      .from("orders")
+      .update({ cleared_date: clearedDateInput })
+      .in("id", otherIds);
+    if (error) updateError = error;
+  }
+
+  if (returnedIds.length > 0) {
+    const { error } = await supabase
+      .from("orders")
+      .update({ refund_date: clearedDateInput })
+      .in("id", returnedIds);
+    if (error) updateError = error;
+  }
+
+  setClearing(false);
+
+  if (updateError) {
+    console.error("Error clearing orders:", updateError);
+    alert("စာရင်းရှင်းရာတွင် အမှားအယွင်းရှိခဲ့ပါသည်: " + updateError.message);
+  } else {
+    setSelectedOrderIds([]);
+    setIsSummaryModalOpen(false);
+    await fetchSenders();
+    if (selectedSender) {
+      handleSenderClick(selectedSender);
     }
+  }
+};
 
-    setClearing(true);
+// Cleared ဖြစ်ပြီးသား Way များကို Uncleared သို့ ပြန်ပြောင်းမည့် Function
+const executeBulkUnclear = async () => {
+  if (selectedOrderIds.length === 0) return;
+  if (!confirm("ရွေးချယ်ထားသော Way များကို Uncleared သို့ ပြန်ပြောင်းမှာ သေချာပါသလား။")) return;
 
-    // ရွေးချယ်ထားသော orders များထဲမှ Returned status နှင့် အခြား status များကို ခွဲထုတ်ခြင်း
-    const selectedOrders = orders.filter((o) => selectedOrderIds.includes(o.id));
-    const returnedIds = selectedOrders
-      .filter((o) => o.status === "Returned")
-      .map((o) => o.id);
-    const otherIds = selectedOrders
-      .filter((o) => o.status !== "Returned")
-      .map((o) => o.id);
+  setClearing(true);
 
-    let updateError: any = null;
+  const { error } = await supabase
+    .from("orders")
+    .update({ cleared_date: null })
+    .in("id", selectedOrderIds);
 
-    // Returned မဟုတ်သော အော်ဒါများကို cleared_date သို့ ထည့်မည်
-    if (otherIds.length > 0) {
-      const { error } = await supabase
-        .from("orders")
-        .update({ cleared_date: clearedDateInput })
-        .in("id", otherIds);
-      if (error) updateError = error;
+  setClearing(false);
+
+  if (error) {
+    console.error("Error unclearing orders:", error);
+    alert("Uncleared ပြုလုပ်ရာတွင် အမှားအယွင်းရှိခဲ့ပါသည်: " + error.message);
+  } else {
+    setSelectedOrderIds([]);
+    await fetchSenders();
+    if (selectedSender) {
+      handleSenderClick(selectedSender);
     }
+  }
+};
 
-    // Returned အော်ဒါများကို cleared_date ကို မထိဘဲ refund_date သို့သာ ထည့်မည်
-    if (returnedIds.length > 0) {
-      const { error } = await supabase
-        .from("orders")
-        .update({ refund_date: clearedDateInput })
-        .in("id", returnedIds);
-      if (error) updateError = error;
-    }
+// ၃။ Pop-up ထဲမှ "Excel ထုတ်မည်" ခလုတ်အတွက် Excel Export Function (Styled Version)
+const handleExportExcel = async () => {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Statement Summary");
 
-    setClearing(false);
+  // Excel Gridlines များကို ပိတ်ထားခြင်း
+  worksheet.views = [{ showGridLines: false }];
 
-    if (updateError) {
-      console.error("Error clearing orders:", updateError);
-      alert(
-        "စာရင်းရှင်းရာတွင် အမှားအယွင်းရှိခဲ့ပါသည်: " + updateError.message
-      );
-    } else {
-      setSelectedOrderIds([]);
-      await fetchSenders();
-      if (selectedSender) {
-        handleSenderClick(selectedSender);
-      }
-    }
+  // Color & Style Palette သတ်မှတ်ခြင်း (ARGB Color Code)
+  const colors = {
+    titleBg: "1E293B",      // Dark Slate Blue
+    headerBg: "1E40AF",     // Primary Blue
+    retHeaderBg: "991B1B",  // Deep Red for Returned Table
+    sectionBg: "E2E8F0",    // Light Gray Slate
+    retSectionBg: "FFE4E6", // Light Pink/Rose
+    accentGreen: "DCFCE7",  // Light Emerald for Net Payable
+    border: "CBD5E1",       // Slate Border Color
   };
+
+  const fontTitle = { name: "Calibri", size: 12, bold: true, color: { argb: "FFFFFF" } };
+  const fontHeader = { name: "Calibri", size: 11, bold: true, color: { argb: "FFFFFF" } };
+  const fontSection = { name: "Calibri", size: 11, bold: true, color: { argb: "0F172A" } };
+  const fontBold = { name: "Calibri", size: 11, bold: true };
+  const fontNormal = { name: "Calibri", size: 11 };
+
+  const thinBorder = {
+    top: { style: "thin" as const, color: { argb: colors.border } },
+    left: { style: "thin" as const, color: { argb: colors.border } },
+    bottom: { style: "thin" as const, color: { argb: colors.border } },
+    right: { style: "thin" as const, color: { argb: colors.border } },
+  };
+
+  // ─── Header Section (Title & Date) ───
+  const titleRow = worksheet.addRow([`ငွေရှင်းစရင်း - ${selectedSender?.name || ""}`]);
+  worksheet.mergeCells("A1:H1");
+  titleRow.getCell(1).font = fontTitle;
+  titleRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: colors.titleBg } };
+  titleRow.getCell(1).alignment = { vertical: "middle", horizontal: "center" };
+
+  const subTitleRow = worksheet.addRow([`Date: ${clearedDateInput}`]);
+  subTitleRow.getCell(1).font = fontBold;
+  worksheet.addRow([]);
+
+  // ─── Summary Table Section ───
+  const sumHeaderRow = worksheet.addRow(["ငွေရှင်းစရင်း အကျဉ်းချုပ်", ""]);
+  worksheet.mergeCells(`A${sumHeaderRow.number}:B${sumHeaderRow.number}`);
+  sumHeaderRow.getCell(1).font = fontSection;
+  sumHeaderRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: colors.sectionBg } };
+
+  const r1 = worksheet.addRow(["COD Total", normalCodTotal]);
+  const r2 = worksheet.addRow(["Returned ", returnedCodTotal]);
+  const r3 = worksheet.addRow(["ရှင်းငွေ ", netPayableAmount]);
+
+  [r1, r2, r3].forEach((r) => {
+    r.getCell(1).font = fontBold;
+    r.getCell(2).font = fontBold;
+    r.getCell(2).numFmt = '#,##0 "Ks"'; // Currency Format
+    r.getCell(1).border = thinBorder;
+    r.getCell(2).border = thinBorder;
+  });
+
+  // Highlight Net Payable Amount in Green
+  r3.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: colors.accentGreen } };
+  r3.getCell(2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: colors.accentGreen } };
+
+  worksheet.addRow([]);
+
+  // ─── Helper Function: Render Dynamic Tables with Custom Colors ───
+  const renderTable = (sectionTitle: string, ordersList: any[], isReturned = false) => {
+    // Section Title Banner
+    const secRow = worksheet.addRow([sectionTitle]);
+    worksheet.mergeCells(`A${secRow.number}:H${secRow.number}`);
+    secRow.getCell(1).font = fontSection;
+    secRow.getCell(1).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: isReturned ? colors.retSectionBg : colors.sectionBg },
+    };
+
+    // Table Header
+    const headRow = worksheet.addRow([
+      "Way ID",
+      "Receiver Name",
+      "Phone",
+      "Location",
+      "Address",
+      "COD (Ks)",
+      "Deli Fee",
+      "Status",
+    ]);
+    headRow.eachCell((cell) => {
+      cell.font = fontHeader;
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: isReturned ? colors.retHeaderBg : colors.headerBg },
+      };
+      cell.alignment = { vertical: "middle", horizontal: "center" };
+      cell.border = thinBorder;
+    });
+
+    // Table Data Rows
+    ordersList.forEach((o, idx) => {
+      const row = worksheet.addRow([
+        o.item_id || o.id,
+        o.receiver_name || "",
+        o.receiver_phone || "",
+        o.receiver_loc || "",
+        o.receiver_address || "",
+        Number(o.cod_amount) || 0,
+        Number(o.deli_fee) || 0,
+        o.status,
+      ]);
+
+      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        cell.font = fontNormal;
+        cell.border = thinBorder;
+
+        // Alternating Row Colors (Zebra Striping)
+        if (idx % 2 === 1) {
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "F8FAFC" } };
+        }
+
+        // Alignments & Number Formatting (#,##0)
+        if (colNumber === 6 || colNumber === 7) {
+          cell.numFmt = "#,##0";
+          cell.alignment = { horizontal: "right", vertical: "middle" };
+        } else if (colNumber === 1 || colNumber === 3 || colNumber === 8) {
+          cell.alignment = { horizontal: "center", vertical: "middle" };
+        } else {
+          cell.alignment = { horizontal: "left", vertical: "middle" };
+        }
+      });
+    });
+
+    worksheet.addRow([]);
+  };
+
+  // Render Both Tables
+  renderTable(`ရိုးရိုး Way များ (${normalOrders.length} ခု)`, normalOrders, false);
+  renderTable(`Returned Way များ (${returnedOrdersList.length} ခု)`, returnedOrdersList, true);
+
+  // ─── Row Height အားလုံး 20 သို့ သတ်မှတ်ခြင်း ───
+  worksheet.eachRow({ includeEmpty: true }, (row) => {
+    row.height = 20;
+  });
+
+  // ─── Column Widths စိတ်ကြိုက် သတ်မှတ်ခြင်း ───
+  const columnWidths = [15, 22, 16, 18, 32, 15, 15, 14];
+
+  columnWidths.forEach((width, index) => {
+    worksheet.getColumn(index + 1).width = width;
+  });
+
+  // Download Output File
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  saveAs(blob, `Statement_${selectedSender?.name || "Sender"}_${clearedDateInput}.xlsx`);
+};
 
   const getDisplayOrders = () => {
   if (activeTab === "all") return allOrders;
@@ -276,12 +504,30 @@ const notDeliveredOrders = filteredOrders.filter(
   return notDeliveredOrders;
 };
 
-  const selectableOrders = getDisplayOrders().filter((o) => !o.cleared_date);
-  const canSelectOrders = activeTab !== "cleared";
+const selectableOrders =
+  activeTab === "cleared"
+    ? clearedOrders
+    : getDisplayOrders().filter((o) => !o.cleared_date);
 
-  const totalSelectedCod = getDisplayOrders()
-    .filter((o) => selectedOrderIds.includes(o.id))
-    .reduce((sum, o) => sum + (Number(o.cod_amount) || 0), 0);
+const canSelectOrders = true;
+
+  const totalDisplayOrders = getDisplayOrders();
+  const totalPages = Math.ceil(totalDisplayOrders.length / itemsPerPage) || 1;
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentPaginatedOrders = totalDisplayOrders.slice(
+    indexOfFirstItem,
+    indexOfLastItem
+  );
+
+
+// ရွေးချယ်ထားသော အော်ဒါများ၏ COD စုစုပေါင်း (Returned ပါပါက Minus အနေဖြင့် တွက်မည်)
+const totalSelectedCod = getDisplayOrders()
+  .filter((o) => selectedOrderIds.includes(o.id))
+  .reduce((sum, o) => {
+    const amount = Number(o.cod_amount) || 0;
+    return o.status === "Returned" ? sum - amount : sum + amount;
+  }, 0);
 
   const handleModalSuccess = () => {
     setIsModalOpen(false);
@@ -752,230 +998,287 @@ const notDeliveredOrders = filteredOrders.filter(
                   </div>
                 </div>
 
-                {/* Bulk Clear Action Bar */}
-                {canSelectOrders && selectedOrderIds.length > 0 && (
-                  <div className="bg-orange-50/80 border-b border-orange-100 px-3 py-1.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 animate-fadeIn">
-                    <div className="text-sm font-semibold text-orange-800">
-                      <span className="font-mono bg-orange-200/60 px-1.5 py-0.5 rounded text-orange-700">
-                        {selectedOrderIds.length}
-                      </span>{" "}
-                      selected · COD:{" "}
-                      <span className="font-mono text-orange-600 font-bold">
-                        {totalSelectedCod.toLocaleString()} Ks
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="date"
-                        value={clearedDateInput}
-                        onChange={(e) =>
-                          setClearedDateInput(e.target.value)
-                        }
-                        className="px-2 py-1 bg-white border border-orange-200 rounded-md text-sm font-semibold text-slate-800"
-                      />
-                      <button
-                        onClick={handleBulkClear}
-                        disabled={clearing}
-                        className="px-3 py-1 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-md text-sm font-bold transition-all shadow-sm"
-                      >
-                        {clearing ? "Saving..." : "Clear Selected"}
-                      </button>
-                    </div>
-                  </div>
-                )}
+     {/* Bulk Clear / Unclear Action Bar */}
+               {canSelectOrders && selectedOrderIds.length > 0 && (
+  <div className="bg-orange-50/80 border-b border-orange-100 px-3 py-1.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 animate-fadeIn">
+    <div className="text-sm font-semibold text-orange-800">
+      <span className="font-mono bg-orange-200/60 px-1.5 py-0.5 rounded text-orange-700 font-bold">
+        {selectedOrderIds.length}
+      </span>{" "}
+      selected · COD Total:{" "}
+      <span className="font-mono text-orange-600 font-bold">
+        {totalSelectedCod.toLocaleString()} Ks
+      </span>
+    </div>
+
+    <div className="flex items-center gap-2">
+      {activeTab === "cleared" ? (
+        <button
+          onClick={executeBulkUnclear}
+          disabled={clearing}
+          className="px-3 py-1 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white rounded-md text-sm font-bold transition-all shadow-sm"
+        >
+          {clearing ? "လုပ်ဆောင်နေသည်..." : "Uncleared"}
+        </button>
+      ) : (
+        <>
+          <input
+            type="date"
+            value={clearedDateInput}
+            onChange={(e) => setClearedDateInput(e.target.value)}
+            className="px-2 py-1 bg-white border border-orange-200 rounded-md text-sm font-semibold text-slate-800 focus:outline-none"
+          />
+          <button
+            onClick={handleOpenSummaryModal}
+            className="px-3 py-1 bg-orange-500 hover:bg-orange-600 text-white rounded-md text-sm font-bold transition-all shadow-sm"
+          >
+            Clear Selected
+          </button>
+        </>
+      )}
+    </div>
+  </div>
+)}
 
                 {/* ─── EXCEL-STYLE TABLE ─── */}
                 <div className="flex-1 overflow-auto custom-scrollbar">
                   {getDisplayOrders().length > 0 ? (
-                    <table className="min-w-[1180px] w-full border-collapse text-sm">
-                      <thead>
-                        <tr className="bg-slate-100 sticky top-0 z-10">
-                          {canSelectOrders && (
-                            <th className="px-2 py-2 text-center border-b-2 border-slate-300 w-8">
-                              <input
-                                type="checkbox"
-                                checked={
-                                  selectableOrders.length > 0 &&
-                                  selectableOrders.every((o) =>
-                                    selectedOrderIds.includes(o.id)
-                                  )
-                                }
-                                onChange={(e) => {
-                                  if (e.target.checked)
-                                    setSelectedOrderIds(
-                                      selectableOrders.map((o) => o.id)
-                                    );
-                                  else setSelectedOrderIds([]);
-                                }}
-                                className="rounded border-slate-400 text-orange-500 focus:ring-orange-500 cursor-pointer w-3.5 h-3.5"
-                              />
-                            </th>
-                          )}
-                          <th className="sticky left-0 bg-slate-100 px-3 py-2 text-left font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300 border-r border-slate-200">
-                            Way ID
-                          </th>
-                          <th className="px-3 py-2 text-left font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300 border-r border-slate-200">
-                            Rcvd Date
-                          </th>
-                          <th className="px-3 py-2 text-left font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300 border-r border-slate-200">
-                            Receiver Name
-                          </th>
-                          <th className="px-3 py-2 text-left font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300 border-r border-slate-200">
-                            Phone
-                          </th>
-                          <th className="px-3 py-2 text-left font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300 border-r border-slate-200">
-                            Location
-                          </th>
-                          <th className="px-3 py-2 text-right font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300 border-r border-slate-200">
-                            COD (Ks)
-                          </th>
-                          <th className="px-3 py-2 text-right font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300 border-r border-slate-200">
-                            Deli Fee
-                          </th>
-                          <th className="px-3 py-2 text-center font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300 border-r border-slate-200">
-                            Fee Type
-                          </th>
-                          <th className="px-3 py-2 text-right font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300 border-r border-slate-200">
-                            Total
-                          </th>
-                          <th className="px-3 py-2 text-left font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300 border-r border-slate-200">
-                            Deli Date
-                          </th>
-                          <th className="px-3 py-2 text-center font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300 border-r border-slate-200">
-                            Status
-                          </th>
-                          {(activeTab === "cleared" ||
-                            activeTab === "all") && (
-                            <th className="px-3 py-2 text-left font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300">
-                              Cleared Date
-                            </th>
-                          )}
-                          {activeTab === "returned" && (
-                            <th className="px-3 py-2 text-left font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300">
-                              Refund Date
-                            </th>
-                          )}
-                          
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {getDisplayOrders().map((order, index) => (
-                          <tr
-                            key={order.id || index}
-                            className={`transition-colors ${
-                              index % 2 === 0
-                                ? "bg-white"
-                                : "bg-slate-50/50"
-                            } hover:bg-blue-50/60`}
-                          >
+                    <>
+                      <table className="min-w-[1180px] w-full border-collapse text-sm">
+                        <thead>
+                          <tr className="bg-slate-100 sticky top-0 z-10">
                             {canSelectOrders && (
-                              <td className="px-2 py-2 text-center border-b border-slate-200 border-r border-slate-100">
-                                {!order.cleared_date && (
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedOrderIds.includes(
-                                      order.id
-                                    )}
-                                    onChange={() => {
-                                      if (
-                                        selectedOrderIds.includes(
-                                          order.id
-                                        )
-                                      ) {
-                                        setSelectedOrderIds(
-                                          selectedOrderIds.filter(
-                                            (id) => id !== order.id
-                                          )
-                                        );
-                                      } else {
-                                        setSelectedOrderIds([
-                                          ...selectedOrderIds,
-                                          order.id,
-                                        ]);
-                                      }
-                                    }}
-                                    className="rounded border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer w-3.5 h-3.5"
-                                  />
-                                )}
-                              </td>
+                              <th className="px-2 py-2 text-center border-b-2 border-slate-300 w-8">
+                                <input
+                                  type="checkbox"
+                                  checked={
+                                    selectableOrders.length > 0 &&
+                                    selectableOrders.every((o) =>
+                                      selectedOrderIds.includes(o.id)
+                                    )
+                                  }
+                                  onChange={(e) => {
+                                    if (e.target.checked)
+                                      setSelectedOrderIds(
+                                        selectableOrders.map((o) => o.id)
+                                      );
+                                    else setSelectedOrderIds([]);
+                                  }}
+                                  className="rounded border-slate-400 text-orange-500 focus:ring-orange-500 cursor-pointer w-3.5 h-3.5"
+                                />
+                              </th>
                             )}
-                            <td className="sticky left-0 bg-inherit px-3 py-2 font-mono font-bold text-slate-800 border-b border-slate-200 border-r border-slate-100 text-sm">
-                              {order.item_id || order.id}
-                            </td>
-                            <td className="px-3 py-2 font-mono text-slate-500 border-b border-slate-200 border-r border-slate-100 text-sm">
-                              {order.received_date
-                                ? String(order.received_date).split(
-                                    "T"
-                                  )[0]
-                                : "—"}
-                            </td>
-                            <td className="px-3 py-2 font-semibold text-slate-700 border-b border-slate-200 border-r border-slate-100 text-sm">
-                              {order.receiver_name || "Unknown"}
-                            </td>
-                            <td className="px-3 py-2 font-mono text-slate-500 border-b border-slate-200 border-r border-slate-100 text-sm">
-                              {order.receiver_phone || "—"}
-                            </td>
-                            <td className="px-3 py-2 font-mono text-slate-500 border-b border-slate-200 border-r border-slate-100 text-sm">
-                              {order.receiver_loc || "—"}
-                            </td>
-                            <td className="px-3 py-2 text-right font-mono font-semibold text-slate-700 border-b border-slate-200 border-r border-slate-100">
-                              {order.cod_amount
-                                ? Number(
-                                    order.cod_amount
-                                  ).toLocaleString()
-                                : "0"}
-                            </td>
-                            <td className="px-3 py-2 text-right font-mono text-slate-500 border-b border-slate-200 border-r border-slate-100">
-                              {order.deli_fee
-                                ? Number(
-                                    order.deli_fee
-                                  ).toLocaleString()
-                                : "0"}
-                            </td>
-                            <td className="px-3 py-2 text-center border-b border-slate-200 border-r border-slate-100">
-                              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs font-bold">
-                                {order.fee_type || "—"}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 text-right font-mono font-bold text-slate-800 border-b border-slate-200 border-r border-slate-100">
-                              {order.total_amount
-                                ? Number(
-                                    order.total_amount
-                                  ).toLocaleString()
-                                : "0"}
-                            </td>
-                            <td className="px-3 py-2 font-mono text-slate-500 border-b border-slate-200 border-r border-slate-100 text-sm">
-                              {order.deliver_date ||
-                                new Date(
-                                  order.created_at
-                                ).toLocaleDateString()}
-                            </td>
-                            <td className="px-3 py-2 text-center border-b border-slate-200 border-r border-slate-100">
-                              {getStatusBadge(order.status)}
-                            </td>
+                            <th className="sticky left-0 bg-slate-100 px-3 py-2 text-left font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300 border-r border-slate-200">
+                              Way ID
+                            </th>
+                            <th className="px-3 py-2 text-left font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300 border-r border-slate-200">
+                              Rcvd Date
+                            </th>
+                            <th className="px-3 py-2 text-left font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300 border-r border-slate-200">
+                              Receiver Name
+                            </th>
+                            <th className="px-3 py-2 text-left font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300 border-r border-slate-200">
+                              Phone
+                            </th>
+                           
+                            <th className="px-3 py-2 text-left font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300 border-r border-slate-200">
+        Address
+      </th>
+                            <th className="px-3 py-2 text-right font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300 border-r border-slate-200">
+                              COD (Ks)
+                            </th>
+                            <th className="px-3 py-2 text-right font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300 border-r border-slate-200">
+                              Deli Fee
+                            </th>
+                            <th className="px-3 py-2 text-center font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300 border-r border-slate-200">
+                              Fee Type
+                            </th>
+                            <th className="px-3 py-2 text-right font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300 border-r border-slate-200">
+                              Total
+                            </th>
+                            <th className="px-3 py-2 text-left font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300 border-r border-slate-200">
+                              Deli Date
+                            </th>
+                            <th className="px-3 py-2 text-center font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300 border-r border-slate-200">
+                              Status
+                            </th>
                             {(activeTab === "cleared" ||
                               activeTab === "all") && (
-                              <td className="px-3 py-2 font-mono text-emerald-600 font-semibold border-b border-slate-200 text-sm">
-                                {order.cleared_date
-                                  ? `📅 ${new Date(
-                                      order.cleared_date
-                                    ).toLocaleDateString()}`
-                                  : "—"}
-                              </td>
+                              <th className="px-3 py-2 text-left font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300">
+                                Cleared Date
+                              </th>
                             )}
                             {activeTab === "returned" && (
-                              <td className="px-3 py-2 font-mono text-rose-600 font-semibold border-b border-slate-200 text-sm">
-                                {order.refund_date
-                                  ? `📅 ${new Date(
-                                      order.refund_date
-                                    ).toLocaleDateString()}`
+                              <th className="px-3 py-2 text-left font-bold text-slate-600 uppercase tracking-wider text-sm border-b-2 border-slate-300">
+                                Refund Date
+                              </th>
+                            )}
+                            
+                          </tr>
+                        </thead>
+                        <tbody>
+                         {currentPaginatedOrders.map((order, index) => (
+                            <tr
+                              key={order.id || index}
+                              className={`transition-colors ${
+                                index % 2 === 0
+                                  ? "bg-white"
+                                  : "bg-slate-50/50"
+                              } hover:bg-blue-50/60`}
+                            >
+                             {canSelectOrders && (
+                                <td className="px-2 py-2 text-center border-b border-slate-200 border-r border-slate-100">
+                                  {(activeTab === "cleared" || !order.cleared_date) && (
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedOrderIds.includes(
+                                        order.id
+                                      )}
+                                      onChange={() => {
+                                        if (
+                                          selectedOrderIds.includes(
+                                            order.id
+                                          )
+                                        ) {
+                                          setSelectedOrderIds(
+                                            selectedOrderIds.filter(
+                                              (id) => id !== order.id
+                                            )
+                                          );
+                                        } else {
+                                          setSelectedOrderIds([
+                                            ...selectedOrderIds,
+                                            order.id,
+                                          ]);
+                                        }
+                                      }}
+                                      className="rounded border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer w-3.5 h-3.5"
+                                    />
+                                  )}
+                                </td>
+                              )}
+                              <td className="sticky left-0 bg-inherit px-3 py-2 font-mono font-bold text-slate-800 border-b border-slate-200 border-r border-slate-100 text-sm">
+                                {order.item_id || order.id}
+                              </td>
+                              <td className="px-3 py-2 font-mono text-slate-500 border-b border-slate-200 border-r border-slate-100 text-sm">
+                                {order.received_date
+                                  ? String(order.received_date).split(
+                                      "T"
+                                    )[0]
                                   : "—"}
                               </td>
-                            )}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                              <td className="px-3 py-2 font-semibold text-slate-700 border-b border-slate-200 border-r border-slate-100 text-sm">
+                                {order.receiver_name || "Unknown"}
+                              </td>
+                              <td className="px-3 py-2 font-mono text-slate-500 border-b border-slate-200 border-r border-slate-100 text-sm">
+                                {order.receiver_phone || "—"}
+                              </td>
+                             
+                              <td className="px-3 py-2 text-slate-600 border-b border-slate-200 border-r border-slate-100 text-sm max-w-[200px] truncate" title={order.receiver_address || ""}>
+  {order.receiver_address || "—"}
+</td>
+                              <td className="px-3 py-2 text-right font-mono font-semibold text-slate-700 border-b border-slate-200 border-r border-slate-100">
+                                {order.cod_amount
+                                  ? Number(
+                                      order.cod_amount
+                                    ).toLocaleString()
+                                  : "0"}
+                              </td>
+                              <td className="px-3 py-2 text-right font-mono text-slate-500 border-b border-slate-200 border-r border-slate-100">
+                                {order.deli_fee
+                                  ? Number(
+                                      order.deli_fee
+                                    ).toLocaleString()
+                                  : "0"}
+                              </td>
+                              <td className="px-3 py-2 text-center border-b border-slate-200 border-r border-slate-100">
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs font-bold">
+                                  {order.fee_type || "—"}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-right font-mono font-bold text-slate-800 border-b border-slate-200 border-r border-slate-100">
+                                {order.total_amount
+                                  ? Number(
+                                      order.total_amount
+                                    ).toLocaleString()
+                                  : "0"}
+                              </td>
+                              <td className="px-3 py-2 font-mono text-slate-500 border-b border-slate-200 border-r border-slate-100 text-sm">
+                                {order.deliver_date ||
+                                  new Date(
+                                    order.created_at
+                                  ).toLocaleDateString()}
+                              </td>
+                              <td className="px-3 py-2 text-center border-b border-slate-200 border-r border-slate-100">
+                                {getStatusBadge(order.status)}
+                              </td>
+                              {(activeTab === "cleared" ||
+                                activeTab === "all") && (
+                                <td className="px-3 py-2 font-mono text-emerald-600 font-semibold border-b border-slate-200 text-sm">
+                                  {order.cleared_date
+                                    ? `📅 ${new Date(
+                                        order.cleared_date
+                                      ).toLocaleDateString()}`
+                                    : "—"}
+                                </td>
+                              )}
+                              {activeTab === "returned" && (
+                                <td className="px-3 py-2 font-mono text-rose-600 font-semibold border-b border-slate-200 text-sm">
+                                  {order.refund_date
+                                    ? `📅 ${new Date(
+                                        order.refund_date
+                                      ).toLocaleDateString()}`
+                                    : "—"}
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {/* ─── PAGINATION CONTROLS ─── */}
+                      {getDisplayOrders().length > 0 && (
+                        <div className="px-4 py-2 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-2 shrink-0">
+                          <div className="flex items-center gap-2 text-xs text-slate-600">
+                            <span>Show:</span>
+                            <select
+                              value={itemsPerPage}
+                              onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                              className="px-2 py-1 bg-white border border-slate-200 rounded text-xs focus:outline-none"
+                            >
+                              <option value={25}>25</option>
+                              <option value={50}>50</option>
+                              <option value={100}>100</option>
+                              <option value={200}>200</option>
+                            </select>
+                            <span>
+                              Showing {indexOfFirstItem + 1} -{" "}
+                              {Math.min(indexOfLastItem, getDisplayOrders().length)} of{" "}
+                              {getDisplayOrders().length} items
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                              disabled={currentPage === 1}
+                              className="px-2.5 py-1 bg-white border border-slate-200 rounded text-xs font-semibold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors"
+                            >
+                              ← Prev
+                            </button>
+                            <span className="text-xs font-semibold text-slate-700 px-2">
+                              Page {currentPage} of {totalPages}
+                            </span>
+                            <button
+                              onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                              disabled={currentPage === totalPages}
+                              className="px-2.5 py-1 bg-white border border-slate-200 rounded text-xs font-semibold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors"
+                            >
+                              Next →
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <div className="flex flex-col items-center justify-center h-full text-slate-400 py-12 space-y-2">
                       <svg
@@ -1030,6 +1333,116 @@ const notDeliveredOrders = filteredOrders.filter(
         editData={modalMode === "edit" ? selectedSender : null}
         activeBranch={activeBranch}
       />
+
+      {/* ─── SUMMARY & EXPORT POP-UP MODAL ─── */}
+{isSummaryModalOpen && (
+  <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-fadeIn max-h-[90vh] overflow-y-auto custom-scrollbar">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b pb-3">
+        <div>
+          <h3 className="text-lg font-bold text-slate-800">
+            ငွေရှင်းစရင်း -- ({selectedSender?.name})
+          </h3>
+          <p className="text-xs text-slate-500">ရက်စွဲ: {clearedDateInput}</p>
+        </div>
+        <button
+          onClick={() => setIsSummaryModalOpen(false)}
+          className="text-slate-400 hover:text-slate-600 font-bold text-lg"
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl">
+          <p className="text-xs font-semibold text-emerald-600">
+            ရိုးရိုး Way COD ({normalOrders.length} ခု)
+          </p>
+          <p className="text-lg font-mono font-bold text-emerald-700">
+            +{normalCodTotal.toLocaleString()} Ks
+          </p>
+        </div>
+
+        <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl">
+          <p className="text-xs font-semibold text-rose-600">
+            Returned Way COD ({returnedOrdersList.length} ခု)
+          </p>
+          <p className="text-lg font-mono font-bold text-rose-700">
+            -{returnedCodTotal.toLocaleString()} Ks
+          </p>
+        </div>
+
+        <div className="bg-orange-50 border border-orange-200 p-3 rounded-xl">
+          <p className="text-xs font-semibold text-orange-600">
+            OS သို့ ရှင်းပေးရန် ငွေ
+          </p>
+          <p className="text-xl font-mono font-bold text-orange-700">
+            {netPayableAmount.toLocaleString()} Ks
+          </p>
+        </div>
+      </div>
+
+      {/* Item List Preview */}
+      <div className="space-y-3">
+        <div>
+          <h4 className="text-xs font-bold text-slate-700 mb-1">
+            📦 ရိုးရိုး Way များ ({normalOrders.length})
+          </h4>
+          <div className="max-h-32 overflow-y-auto border rounded-lg bg-slate-50 p-2 text-xs space-y-1 custom-scrollbar">
+            {normalOrders.length > 0 ? (
+              normalOrders.map((o) => (
+                <div key={o.id} className="flex justify-between font-mono text-slate-600">
+                  <span>{o.item_id || o.id} ({o.receiver_name})</span>
+                  <span>{Number(o.cod_amount || 0).toLocaleString()} Ks</span>
+                </div>
+              ))
+            ) : (
+              <p className="text-slate-400 italic">ရိုးရိုး Way မရှိပါ</p>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <h4 className="text-xs font-bold text-rose-700 mb-1">
+            ↩️ Returned Way များ ({returnedOrdersList.length})
+          </h4>
+          <div className="max-h-32 overflow-y-auto border border-rose-100 rounded-lg bg-rose-50/30 p-2 text-xs space-y-1 custom-scrollbar">
+            {returnedOrdersList.length > 0 ? (
+              returnedOrdersList.map((o) => (
+                <div key={o.id} className="flex justify-between font-mono text-rose-600">
+                  <span>{o.item_id || o.id} ({o.receiver_name})</span>
+                  <span>-{Number(o.cod_amount || 0).toLocaleString()} Ks</span>
+                </div>
+              ))
+            ) : (
+              <p className="text-slate-400 italic">Returned Way မရှိပါ</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex flex-col sm:flex-row items-center justify-end gap-2 border-t pt-4">
+        <button
+          onClick={handleExportExcel}
+          className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm"
+        >
+          📊 Excel ထုတ်ယူမည်
+        </button>
+
+        <button
+          onClick={executeBulkClear}
+          disabled={clearing}
+          className="w-full sm:w-auto px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
+        >
+          {clearing ? "သိမ်းဆည်းနေသည်..." : "အတည်ပြုပြီး စာရင်းရှင်းမည်"}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar {
