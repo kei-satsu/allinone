@@ -28,10 +28,13 @@ useEffect(() => {
   if (savedIp) setPcIp(savedIp);
 }, []);
 
-// ─── ၃။ PC Server ထံမှ Printer List သွားတောင်းသည့် Function ───
+const PROTOCOL = "http";
+
+// 1. fetchPCPrinters ပြင်ဆင်ရန်
 const fetchPCPrinters = useCallback(async (targetIp: string) => {
   try {
-    const res = await fetch(`https://${targetIp}/api/printers`);
+    const cleanIp = targetIp.replace(/^https?:\/\//, ""); // Protocol အပိုပါလာပါက ရှင်းထုတ်ခြင်း
+    const res = await fetch(`${PROTOCOL}://${cleanIp}/api/printers`);
     const data = await res.json();
     if (data.success) {
       setPrintersList(data.printers);
@@ -42,17 +45,18 @@ const fetchPCPrinters = useCallback(async (targetIp: string) => {
   }
 }, []);
 
-// ခပ်သွက်သွက် စစ်နိုင်ရန် IP များအား Chunk 30 စီ ခွဲ၍ Scan ဖတ်သည့် နည်းလမ်း
+// 2. scanLocalServers ပြင်ဆင်ရန်
 const scanLocalServers = useCallback(async () => {
   setIsScanning(true);
   setDiscoveredServers([]);
 
-  const ipParts = pcIp.split(":")[0].split(".");
+  const cleanIp = pcIp.replace(/^https?:\/\//, "");
+  const ipParts = cleanIp.split(":")[0].split(".");
   const basePrefix = ipParts.length === 4 ? ipParts.slice(0, 3).join(".") : "192.168.1";
-  const port = pcIp.split(":")[1] || "5000";
+  const port = cleanIp.split(":")[1] || "5000";
 
   const foundServers: string[] = [];
-  const chunkSize = 30; // တစ်ခါ Scan ရင် IP ၃၀ စီ ခွဲဖတ်မည်
+  const chunkSize = 30;
 
   for (let i = 1; i <= 254; i += chunkSize) {
     const chunkPromises = [];
@@ -61,7 +65,7 @@ const scanLocalServers = useCallback(async () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 600);
 
-      const p = fetch(`https://${target}/api/printers`, { signal: controller.signal })
+      const p = fetch(`${PROTOCOL}://${target}/api/printers`, { signal: controller.signal })
         .then((res) => res.json())
         .then((data) => {
           if (data.success) foundServers.push(target);
@@ -71,7 +75,7 @@ const scanLocalServers = useCallback(async () => {
 
       chunkPromises.push(p);
     }
-    await Promise.all(chunkPromises); // Chunk တစ်ခုပြီးမှ နောက်တစ်ခုသွားမည်
+    await Promise.all(chunkPromises);
   }
 
   setDiscoveredServers(foundServers);
@@ -95,26 +99,24 @@ const handleServerChange = useCallback((targetIp: string) => {
   fetchPCPrinters(targetIp); // Printer စာရင်းအသစ်ပြန်ဆွဲမည်
 }, [fetchPCPrinters]);
 
-// ─── ၄။ PC Server ထံသို့ Print Data ပို့မည့် Function ───
+// 3. handleSendToPCPrint ပြင်ဆင်ရန်
 const handleSendToPCPrint = useCallback(async () => {
   if (!voucherRef.current) return;
   setIsSendingToPc(true);
 
-  // fields အစား displayData / voucherData မှ မရှိမဖြစ် itemId ကို တိုက်ရိုက်ယူသုံးခြင်း
   const currentItemId = voucherData?.item_id || voucherData?.itemId || "---";
+  const cleanIp = pcIp.replace(/^https?:\/\//, "");
 
   try {
-    // Voucher ကို high-res PNG image အဖြစ် ပြောင်းခြင်း
     const imageBase64 = await toPng(voucherRef.current, { cacheBust: true, pixelRatio: 3 });
 
-    // PC Server ထံ HTTP POST ဖြင့် ပို့ခြင်း
-    const res = await fetch(`https://${pcIp}/api/print`, {
+    const res = await fetch(`${PROTOCOL}://${cleanIp}/api/print`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         image: imageBase64,
         printer: selectedPrinter,
-        paperSize: "4in 6in", // သို့မဟုတ် thermal 80mm
+        paperSize: "4in 6in",
         copies: 1,
         itemId: currentItemId,
       }),
@@ -124,6 +126,7 @@ const handleSendToPCPrint = useCallback(async () => {
     if (result.success) {
       alert("PC Server သို့ Print Data အောင်မြင်စွာ ပို့ပြီးပါပြီ။");
       setShowDialog(false);
+      setShowPcSetupModal(false);
     } else {
       alert("Print ထုတ်ရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ခဲ့သည်: " + result.error);
     }
