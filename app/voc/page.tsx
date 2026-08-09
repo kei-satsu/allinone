@@ -31,7 +31,7 @@ useEffect(() => {
 // ─── ၃။ PC Server ထံမှ Printer List သွားတောင်းသည့် Function ───
 const fetchPCPrinters = useCallback(async (targetIp: string) => {
   try {
-    const res = await fetch(`http://${targetIp}/api/printers`);
+    const res = await fetch(`https://${targetIp}/api/printers`);
     const data = await res.json();
     if (data.success) {
       setPrintersList(data.printers);
@@ -42,56 +42,48 @@ const fetchPCPrinters = useCallback(async (targetIp: string) => {
   }
 }, []);
 
-// ─── Local Network ထဲရှိ Print Server များကို အလိုအလျောက် ရှာဖွေပေးသည့် Function ───
+// ခပ်သွက်သွက် စစ်နိုင်ရန် IP များအား Chunk 30 စီ ခွဲ၍ Scan ဖတ်သည့် နည်းလမ်း
 const scanLocalServers = useCallback(async () => {
   setIsScanning(true);
   setDiscoveredServers([]);
-  
-  // လက်ရှိ pcIp ထဲမှ Prefix (ဥပမာ "192.168.1") နှင့် Port (ဥပမာ "5000") ကို ယူခြင်း
+
   const ipParts = pcIp.split(":")[0].split(".");
   const basePrefix = ipParts.length === 4 ? ipParts.slice(0, 3).join(".") : "192.168.1";
   const port = pcIp.split(":")[1] || "5000";
 
   const foundServers: string[] = [];
-  const scanPromises = [];
+  const chunkSize = 30; // တစ်ခါ Scan ရင် IP ၃၀ စီ ခွဲဖတ်မည်
 
-  // IP Range 1 မှ 254 အထိ တစ်ပြိုင်နက်တည်း Scan ဖတ်ခြင်း
-  for (let i = 1; i <= 254; i++) {
-    const target = `${basePrefix}.${i}:${port}`;
-    
-    // တစ်ခုချင်းစီကို 700ms ထက် ပိုမစောင့်စေရန် Timeout သတ်မှတ်ခြင်း
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 700);
+  for (let i = 1; i <= 254; i += chunkSize) {
+    const chunkPromises = [];
+    for (let j = i; j < i + chunkSize && j <= 254; j++) {
+      const target = `${basePrefix}.${j}:${port}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 600);
 
-    const promise = fetch(`http://${target}/api/printers`, { signal: controller.signal })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          foundServers.push(target);
-        }
-      })
-      .catch(() => {
-        // Response မလာသော IP များကို လျစ်လျူရှုမည်
-      })
-      .finally(() => clearTimeout(timeoutId));
+      const p = fetch(`https://${target}/api/printers`, { signal: controller.signal })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success) foundServers.push(target);
+        })
+        .catch(() => {})
+        .finally(() => clearTimeout(timeoutId));
 
-    scanPromises.push(promise);
+      chunkPromises.push(p);
+    }
+    await Promise.all(chunkPromises); // Chunk တစ်ခုပြီးမှ နောက်တစ်ခုသွားမည်
   }
-
-  // Scanning ပြီးသည်အထိ စောင့်ခြင်း
-  await Promise.all(scanPromises);
 
   setDiscoveredServers(foundServers);
   setIsScanning(false);
 
   if (foundServers.length > 0) {
-    // ရှာတွေ့ပါက ပထမဆုံးတွေ့သော Server IP ကို အလိုအလျောက် ရွေးပေးပြီး Printer များဆွဲယူမည်
     const firstFound = foundServers[0];
     setPcIp(firstFound);
     localStorage.setItem("pc_print_server_ip", firstFound);
     fetchPCPrinters(firstFound);
   } else {
-    alert("Local Network (Wi-Fi) ထဲတွင် မည်သည့် Print Server မှ ရှာမတွေ့ပါ။ PC Server run ထားကြောင်းနှင့် Wi-Fi တူမတူ စစ်ဆေးပေးပါ။");
+    alert("Local Network ထဲတွင် Print Server ရှာမတွေ့ပါ။");
   }
 }, [pcIp, fetchPCPrinters]);
 
@@ -116,7 +108,7 @@ const handleSendToPCPrint = useCallback(async () => {
     const imageBase64 = await toPng(voucherRef.current, { cacheBust: true, pixelRatio: 3 });
 
     // PC Server ထံ HTTP POST ဖြင့် ပို့ခြင်း
-    const res = await fetch(`http://${pcIp}/api/print`, {
+    const res = await fetch(`https://${pcIp}/api/print`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
