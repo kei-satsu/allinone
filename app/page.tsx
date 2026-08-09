@@ -454,19 +454,23 @@ const handleExportExcel = async () => {
                 </div>
               </Link>
 
-              {/* Riders */}
-              <Link href="/riders" className="group relative bg-white border border-slate-200/40 rounded-[28px] p-5 hover:border-purple-300/60 hover:shadow-[0_16px_40px_rgba(147,51,234,0.1)] transition-all duration-500 flex flex-col items-center text-center gap-3 active:scale-[0.97] overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-b from-purple-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[28px]" />
-                <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-400 to-purple-600 text-white flex items-center justify-center shadow-lg shadow-purple-500/25 group-hover:shadow-purple-500/40 group-hover:scale-105 transition-all duration-300">
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                </div>
-                <div className="relative">
-                  <h3 className="text-sm font-bold text-slate-800 group-hover:text-purple-700 transition-colors">Riders</h3>
-                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">Rider များစီမံခန့်ခွဲရန်</p>
-                </div>
-              </Link>
+              {/* ကြိုရှင်းစရင်း */}
+             <Link 
+  href="/senders/prepaid" 
+  className="group relative bg-white border border-slate-200/40 rounded-[28px] p-5 hover:border-purple-300/60 hover:shadow-[0_16px_40px_rgba(147,51,234,0.1)] transition-all duration-500 flex flex-col items-center text-center gap-3 active:scale-[0.97] overflow-hidden"
+>
+  <div className="absolute inset-0 bg-gradient-to-b from-purple-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[28px]" />
+  <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-400 to-purple-600 text-white flex items-center justify-center shadow-lg shadow-purple-500/25 group-hover:shadow-purple-500/40 group-hover:scale-105 transition-all duration-300">
+    {/* Banknotes / Money Icon */}
+    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+    </svg>
+  </div>
+  <div className="relative">
+    <h3 className="text-sm font-bold text-slate-800 group-hover:text-purple-700 transition-colors">ကြိုရှင်းစာရင်း</h3>
+    <p className="text-[11px] text-slate-400 font-medium mt-0.5">ငွေကြိုရှင်းပေးထားသော စာရင်းများကြည့်ရန်</p>
+  </div>
+</Link>
             </div>
 
             {/* ── 📊 Statistics Section ── */}
