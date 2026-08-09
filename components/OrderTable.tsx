@@ -119,29 +119,23 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
         o.status === 'In-Transit' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-gray-100 text-gray-600 border border-gray-200'
       }`}>{o.status}</span>
     );
-    if (key === 'image_url') return (
-      <div className="flex items-center justify-center">
-        {o.image_url ? (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onPreviewImage(o.image_url); }}
-            className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
-            title="ပုံကြည့်ရန် နှိပ်ပါ"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          </button>
-        ) : (
-          <span className="p-1 text-gray-300" title="ပုံမရှိပါ">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              <line x1="3" y1="3" x2="21" y2="21" stroke="currentColor" strokeWidth={2} strokeLinecap="round" />
-            </svg>
-          </span>
-        )}
-      </div>
-    );
+  if (key === 'image_url') return (
+  <div className="flex items-center justify-center">
+    {o.image_url ? (
+      <HoverImagePreview 
+        url={o.image_url} 
+        onClick={(e) => { e.stopPropagation(); onPreviewImage(o.image_url); }} 
+      />
+    ) : (
+      <span className="p-1 text-gray-300" title="ပုံမရှိပါ">
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          <line x1="3" y1="3" x2="21" y2="21" stroke="currentColor" strokeWidth={2} strokeLinecap="round" />
+        </svg>
+      </span>
+    )}
+  </div>
+);
     if (['cod_amount', 'deli_fee', 'total_amount'].includes(key)) return (
       <span className={key === 'total_amount' ? 'font-bold text-gray-900' : ''}>
         {o[key]?.toLocaleString() || '-'}
@@ -153,6 +147,44 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
     if (key === 'created_at') return <span className="text-gray-500">{new Date(o.created_at).toLocaleDateString()}</span>;
     return o[key] || '-';
   };
+
+// Bandwidth ချွေတာသော Hover Image Preview Component (Y Position အလည်တည့်တည့် အသေပြသမည်)
+const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.MouseEvent) => void }) => {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <div 
+      className="relative inline-flex items-center justify-center"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+        title="ပုံကြည့်ရန် နှိပ်ပါ"
+      >
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      </button>
+
+      {/* Y Position ကို အလည်တည့်တည့်တွင် အသေ လော့ခ်ချထားသည့် အပိုင်း */}
+      {isHovered && (
+        <div className="fixed top-1/2 -translate-y-1/2 left-[280px] z-[9999] pointer-events-none animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white p-2 rounded-2xl shadow-2xl border border-slate-300 w-[700px] h-[800px] max-h-[90vh] flex items-center justify-center overflow-hidden">
+            <img 
+              src={url} 
+              alt="Preview" 
+              className="w-full h-full object-contain bg-slate-900/5 rounded-xl"
+              loading="lazy"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
   return (
     // Parent မှ ရောက်လာသော ref ကို ဒီနေရာတွင် တပ်ဆင်ပေးပါ
