@@ -30,6 +30,7 @@
     "react-easy-crop": "^5.5.7",
     "react-konva": "^19.2.4",
     "swiper": "^12.2.0",
+    "tesseract.js": "^7.0.0",
     "use-image": "^1.1.4",
     "xlsx": "^0.18.5"
   },

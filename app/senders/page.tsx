@@ -22,6 +22,7 @@ export default function SendersDashboard() {
   const [endDate, setEndDate] = useState("");
   const [receivedStartDate, setReceivedStartDate] = useState("");
   const [receivedEndDate, setReceivedEndDate] = useState("");
+  const [clearedFilterDate, setClearedFilterDate] = useState("");
   const [loadingSenders, setLoadingSenders] = useState(true);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -58,6 +59,7 @@ const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
   endDate,
   receivedStartDate,
   receivedEndDate,
+  clearedFilterDate,
   selectedSender,
   itemsPerPage
 ]);
@@ -162,6 +164,7 @@ const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
     setEndDate("");
     setReceivedStartDate("");
     setReceivedEndDate("");
+    setClearedFilterDate("");
 
  let allSenderOrders: any[] = [];
     let from = 0;
@@ -174,6 +177,7 @@ const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
         .from("orders")
         .select("*")
         .eq("sender_id", sender.id)
+        .eq("is_deleted", false)
         .order("created_at", { ascending: false })
         .range(from, from + step - 1);
 
@@ -214,6 +218,11 @@ const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
     const receivedDate = order.received_date
       ? String(order.received_date).split("T")[0]
       : "";
+      const clearedDateVal = order.cleared_date
+    ? String(order.cleared_date).split("T")[0]
+    : "";
+  const matchesClearedFilterDate =
+    !clearedFilterDate || clearedDateVal === clearedFilterDate;
     const matchesStartDate = !startDate || orderDate >= startDate;
     const matchesEndDate = !endDate || orderDate <= endDate;
     const matchesReceivedStartDate =
@@ -228,7 +237,8 @@ const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
       matchesStartDate &&
       matchesEndDate &&
       matchesReceivedStartDate &&
-      matchesReceivedEndDate
+      matchesReceivedEndDate &&
+      matchesClearedFilterDate
     );
   });
 
@@ -507,7 +517,7 @@ const handleExportExcel = async () => {
 const selectableOrders =
   activeTab === "cleared"
     ? clearedOrders
-    : getDisplayOrders().filter((o) => !o.cleared_date);
+    : getDisplayOrders().filter((o) => !o.cleared_date || o.status === "Returned"); 
 
 const canSelectOrders = true;
 
@@ -858,144 +868,168 @@ const totalSelectedCod = getDisplayOrders()
                             {tab.count}
                           </span>
                         </button>
+
+
+
+
                       );
                     })}
+
+
                   </div>
 
-                  {/* Filters Row */}
-                  <div className="flex flex-wrap items-center gap-1.5 px-3 py-1.5 border-t border-slate-50">
-                    {activeTab === "all" && (
-                      <label className="flex items-center gap-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-600 font-semibold cursor-pointer shrink-0">
-                        <input
-                          type="checkbox"
-                          checked={hideClearedInAll}
-                          onChange={(e) =>
-                            setHideClearedInAll(e.target.checked)
-                          }
-                          className="rounded border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer w-3.5 h-3.5"
-                        />
-                        Hide Cleared
-                      </label>
-                    )}
+                 {/* Filters Row */}
+<div className="flex flex-wrap items-center gap-1.5 px-3 py-1.5 border-t border-slate-50">
+  {activeTab === "all" && (
+    <label className="flex items-center gap-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-600 font-semibold cursor-pointer shrink-0">
+      <input
+        type="checkbox"
+        checked={hideClearedInAll}
+        onChange={(e) => setHideClearedInAll(e.target.checked)}
+        className="rounded border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer w-3.5 h-3.5"
+      />
+      Hide Cleared
+    </label>
+  )}
 
-                    <div className="relative flex-1 min-w-[180px] max-w-[260px]">
-                      <input
-                        type="text"
-                        placeholder="Search..."
-                        value={orderSearchTerm}
-                        onChange={(e) => setOrderSearchTerm(e.target.value)}
-                        className="w-full pl-7 pr-2 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-orange-300 text-slate-700 placeholder:text-slate-300"
-                      />
-                      <svg
-                        className="w-3.5 h-3.5 text-slate-300 absolute left-2 top-2"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                        />
-                      </svg>
-                    </div>
+  <div className="relative flex-1 min-w-[180px] max-w-[260px]">
+    <input
+      type="text"
+      placeholder="Search..."
+      value={orderSearchTerm}
+      onChange={(e) => setOrderSearchTerm(e.target.value)}
+      className="w-full pl-7 pr-2 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-orange-300 text-slate-700 placeholder:text-slate-300"
+    />
+    <svg
+      className="w-3.5 h-3.5 text-slate-300 absolute left-2 top-2"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+      />
+    </svg>
+  </div>
 
-                    <select
-                      value={filterFeeType}
-                      onChange={(e) => setFilterFeeType(e.target.value)}
-                      className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-md text-sm text-slate-600 font-medium focus:outline-none focus:ring-1 focus:ring-orange-300"
-                    >
-                      <option value="All">Fee: All</option>
-                      <option value="Deli">Deli</option>
-                      <option value="Kpay">Kpay</option>
-                      <option value="Cash">Cash</option>
-                      <option value="Bill">Bill</option>
-                    </select>
+  <select
+    value={filterFeeType}
+    onChange={(e) => setFilterFeeType(e.target.value)}
+    className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-md text-sm text-slate-600 font-medium focus:outline-none focus:ring-1 focus:ring-orange-300"
+  >
+    <option value="All">Fee: All</option>
+    <option value="Deli">Deli</option>
+    <option value="Kpay">Kpay</option>
+    <option value="Cash">Cash</option>
+    <option value="Bill">Bill</option>
+  </select>
 
-                    <select
-                      value={filterLoc}
-                      onChange={(e) => setFilterLoc(e.target.value)}
-                      className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-md text-sm text-slate-600 font-medium focus:outline-none focus:ring-1 focus:ring-orange-300"
-                    >
-                      <option value="All">Loc: All</option>
-                      {Array.from(
-                        new Set(
-                          orders
-                            .map((o) => o.receiver_loc)
-                            .filter(Boolean)
-                        )
-                      ).map((loc) => (
-                        <option key={loc} value={loc}>
-                          {loc}
-                        </option>
-                      ))}
-                    </select>
+  <select
+    value={filterLoc}
+    onChange={(e) => setFilterLoc(e.target.value)}
+    className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-md text-sm text-slate-600 font-medium focus:outline-none focus:ring-1 focus:ring-orange-300"
+  >
+    <option value="All">Loc: All</option>
+    {Array.from(
+      new Set(
+        orders
+          .map((o) => o.receiver_loc)
+          .filter(Boolean)
+      )
+    ).map((loc) => (
+      <option key={loc} value={loc}>
+        {loc}
+      </option>
+    ))}
+  </select>
 
-                    <div className="flex items-center gap-1 text-xs text-slate-500 bg-slate-50 px-2 py-1 border border-slate-200 rounded-md">
-                      <span className="font-semibold text-slate-400">Deli</span>
-                      <input
-                        type="date"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                        className="bg-transparent focus:outline-none text-slate-700 text-sm w-[102px]"
-                        title="Start"
-                      />
-                      <span className="text-slate-300">—</span>
-                      <input
-                        type="date"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                        className="bg-transparent focus:outline-none text-slate-700 text-sm w-[102px]"
-                        title="End"
-                      />
-                      {(startDate || endDate) && (
-                        <button
-                          onClick={() => {
-                            setStartDate("");
-                            setEndDate("");
-                          }}
-                          className="text-rose-400 hover:text-rose-600 font-bold text-sm"
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </div>
+  {/* Deli Date Filter */}
+  <div className="flex items-center gap-1 text-xs text-slate-500 bg-slate-50 px-2 py-1 border border-slate-200 rounded-md">
+    <span className="font-semibold text-slate-400">Deli</span>
+    <input
+      type="date"
+      value={startDate}
+      onChange={(e) => setStartDate(e.target.value)}
+      className="bg-transparent focus:outline-none text-slate-700 text-sm w-[102px]"
+      title="Start"
+    />
+    <span className="text-slate-300">—</span>
+    <input
+      type="date"
+      value={endDate}
+      onChange={(e) => setEndDate(e.target.value)}
+      className="bg-transparent focus:outline-none text-slate-700 text-sm w-[102px]"
+      title="End"
+    />
+    {(startDate || endDate) && (
+      <button
+        onClick={() => {
+          setStartDate("");
+          setEndDate("");
+        }}
+        className="text-rose-400 hover:text-rose-600 font-bold text-sm"
+      >
+        ✕
+      </button>
+    )}
+  </div>
 
-                    <div className="flex items-center gap-1 text-xs text-slate-500 bg-slate-50 px-2 py-1 border border-slate-200 rounded-md">
-                      <span className="font-semibold text-slate-400">Rcvd</span>
-                      <input
-                        type="date"
-                        value={receivedStartDate}
-                        onChange={(e) =>
-                          setReceivedStartDate(e.target.value)
-                        }
-                        className="bg-transparent focus:outline-none text-slate-700 text-sm w-[102px]"
-                        title="Start"
-                      />
-                      <span className="text-slate-300">—</span>
-                      <input
-                        type="date"
-                        value={receivedEndDate}
-                        onChange={(e) =>
-                          setReceivedEndDate(e.target.value)
-                        }
-                        className="bg-transparent focus:outline-none text-slate-700 text-sm w-[102px]"
-                        title="End"
-                      />
-                      {(receivedStartDate || receivedEndDate) && (
-                        <button
-                          onClick={() => {
-                            setReceivedStartDate("");
-                            setReceivedEndDate("");
-                          }}
-                          className="text-rose-400 hover:text-rose-600 font-bold text-sm"
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </div>
-                  </div>
+  {/* Rcvd Date Filter */}
+  <div className="flex items-center gap-1 text-xs text-slate-500 bg-slate-50 px-2 py-1 border border-slate-200 rounded-md">
+    <span className="font-semibold text-slate-400">Rcvd</span>
+    <input
+      type="date"
+      value={receivedStartDate}
+      onChange={(e) => setReceivedStartDate(e.target.value)}
+      className="bg-transparent focus:outline-none text-slate-700 text-sm w-[102px]"
+      title="Start"
+    />
+    <span className="text-slate-300">—</span>
+    <input
+      type="date"
+      value={receivedEndDate}
+      onChange={(e) => setReceivedEndDate(e.target.value)}
+      className="bg-transparent focus:outline-none text-slate-700 text-sm w-[102px]"
+      title="End"
+    />
+    {(receivedStartDate || receivedEndDate) && (
+      <button
+        onClick={() => {
+          setReceivedStartDate("");
+          setReceivedEndDate("");
+        }}
+        className="text-rose-400 hover:text-rose-600 font-bold text-sm"
+      >
+        ✕
+      </button>
+    )}
+  </div>
+
+  {/* Cleared Date Filter (ActiveTab standard စစ်ဆေးချက်ဖြင့် သို့မဟုတ် အမြဲပြသရန်) */}
+  {activeTab === "cleared" && (
+    <div className="flex items-center gap-1 text-xs text-slate-500 bg-slate-50 px-2 py-1 border border-slate-200 rounded-md">
+      <span className="font-semibold text-emerald-600">Cleared</span>
+      <input
+        type="date"
+        value={clearedFilterDate}
+        onChange={(e) => setClearedFilterDate(e.target.value)}
+        className="bg-transparent focus:outline-none text-slate-700 text-sm w-[102px]"
+        title="Cleared Date"
+      />
+      {clearedFilterDate && (
+        <button
+          onClick={() => setClearedFilterDate("")}
+          className="text-rose-400 hover:text-rose-600 font-bold text-sm"
+        >
+          ✕
+        </button>
+      )}
+    </div>
+  )}
+</div>
                 </div>
 
      {/* Bulk Clear / Unclear Action Bar */}
@@ -1128,7 +1162,7 @@ const totalSelectedCod = getDisplayOrders()
                             >
                              {canSelectOrders && (
                                 <td className="px-2 py-2 text-center border-b border-slate-200 border-r border-slate-100">
-                                  {(activeTab === "cleared" || !order.cleared_date) && (
+                                  {(activeTab === "cleared" || !order.cleared_date || order.status === "Returned") && (
                                     <input
                                       type="checkbox"
                                       checked={selectedOrderIds.includes(

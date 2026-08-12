@@ -13,7 +13,7 @@ export default function VoucherTemplate() {
   const [loading, setLoading] = useState(true);
   const [printTrigger, setPrintTrigger] = useState(false);
 
-  const [pcIp, setPcIp] = useState<string>("192.168.1.100:5000"); // PC ရဲ့ Local IP
+  const [pcIp, setPcIp] = useState<string>("salary-months-copper-framed.trycloudflare.com"); // PC ရဲ့ Local IP
 const [selectedPrinter, setSelectedPrinter] = useState<string>("");
 const [printersList, setPrintersList] = useState<string[]>([]);
 const [isSendingToPc, setIsSendingToPc] = useState<boolean>(false);
@@ -28,68 +28,60 @@ useEffect(() => {
   if (savedIp) setPcIp(savedIp);
 }, []);
 
-const PROTOCOL = "http";
-
+const PROTOCOL = "https";
 // 1. fetchPCPrinters ပြင်ဆင်ရန်
 const fetchPCPrinters = useCallback(async (targetIp: string) => {
   try {
-    const cleanIp = targetIp.replace(/^https?:\/\//, ""); // Protocol အပိုပါလာပါက ရှင်းထုတ်ခြင်း
-    const res = await fetch(`${PROTOCOL}://${cleanIp}/api/printers`);
+    const cleanDomain = targetIp.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    const res = await fetch(`https://${cleanDomain}/api/printers`);
     const data = await res.json();
+
     if (data.success) {
       setPrintersList(data.printers);
       if (data.printers.length > 0) setSelectedPrinter(data.printers[0]);
+    } else {
+      alert("Printer စာရင်း ယူ၍ မရပါ။ Server Configuration ကို စစ်ပါ။");
     }
   } catch (err) {
-    alert("PC Server ကို ချိတ်ဆက်၍ မရပါ! IP Address မှန်သလား သို့မဟုတ် PC တွင် Server Run ထားသလား စစ်ပေးပါ။");
+    console.error("Fetch Printers Error:", err);
+    alert("PC Server သို့ ချိတ်ဆက်၍ မရပါ! Domain နာမည် မှန်သလား သို့မဟုတ် PC တွင် Cloudflare Tunnel Run ထားသလား စစ်ပေးပါ။");
   }
 }, []);
 
 // 2. scanLocalServers ပြင်ဆင်ရန်
+// 2. scanLocalServers ပြင်ဆင်ရန် (Cloudflare Tunnel ရဲ့ Domain ကို တိုက်ရိုက် စစ်ပေးမည်)
 const scanLocalServers = useCallback(async () => {
   setIsScanning(true);
   setDiscoveredServers([]);
 
-  const cleanIp = pcIp.replace(/^https?:\/\//, "");
-  const ipParts = cleanIp.split(":")[0].split(".");
-  const basePrefix = ipParts.length === 4 ? ipParts.slice(0, 3).join(".") : "192.168.1";
-  const port = cleanIp.split(":")[1] || "5000";
+  // URL ထဲမှ http:// သို့မဟုတ် https:// နှင့် နောက်ဆုံးမှ / များကို ရှင်းထုတ်ခြင်း
+  const cleanDomain = pcIp.replace(/^https?:\/\//, "").replace(/\/$/, "");
 
-  const foundServers: string[] = [];
-  const chunkSize = 30;
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 စက္ကန့်အတွင်း မမိပါက ပိတ်မည်
 
-  for (let i = 1; i <= 254; i += chunkSize) {
-    const chunkPromises = [];
-    for (let j = i; j < i + chunkSize && j <= 254; j++) {
-      const target = `${basePrefix}.${j}:${port}`;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 600);
+    const res = await fetch(`https://${cleanDomain}/api/printers`, { 
+      signal: controller.signal 
+    });
+    clearTimeout(timeoutId);
 
-      const p = fetch(`${PROTOCOL}://${target}/api/printers`, { signal: controller.signal })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.success) foundServers.push(target);
-        })
-        .catch(() => {})
-        .finally(() => clearTimeout(timeoutId));
+    const data = await res.json();
 
-      chunkPromises.push(p);
+    if (data.success) {
+      setDiscoveredServers([cleanDomain]);
+      setPrintersList(data.printers);
+      if (data.printers.length > 0) setSelectedPrinter(data.printers[0]);
+      localStorage.setItem("pc_print_server_ip", cleanDomain);
+    } else {
+      alert("Server ထံမှ တုံ့ပြန်မှု မရရှိပါ။ Domain နာမည် ပြန်စစ်ပါ။");
     }
-    await Promise.all(chunkPromises);
+  } catch (err) {
+    alert("Cloudflare Tunnel Server သို့ ချိတ်ဆက်၍ မရပါ! PC တွင် Tunnel Run ထားခြင်း ရှိ/မရှိ စစ်ဆေးပေးပါ။");
+  } finally {
+    setIsScanning(false);
   }
-
-  setDiscoveredServers(foundServers);
-  setIsScanning(false);
-
-  if (foundServers.length > 0) {
-    const firstFound = foundServers[0];
-    setPcIp(firstFound);
-    localStorage.setItem("pc_print_server_ip", firstFound);
-    fetchPCPrinters(firstFound);
-  } else {
-    alert("Local Network ထဲတွင် Print Server ရှာမတွေ့ပါ။");
-  }
-}, [pcIp, fetchPCPrinters]);
+}, [pcIp]);
 
 // Server IP ပြောင်းသွားတိုင်း ထို PC ထဲရှိ Printer များကို တောင်းမည့် Function
 const handleServerChange = useCallback((targetIp: string) => {
@@ -105,12 +97,12 @@ const handleSendToPCPrint = useCallback(async () => {
   setIsSendingToPc(true);
 
   const currentItemId = voucherData?.item_id || voucherData?.itemId || "---";
-  const cleanIp = pcIp.replace(/^https?:\/\//, "");
+  const cleanDomain = pcIp.replace(/^https?:\/\//, "").replace(/\/$/, "");
 
   try {
     const imageBase64 = await toPng(voucherRef.current, { cacheBust: true, pixelRatio: 3 });
 
-    const res = await fetch(`${PROTOCOL}://${cleanIp}/api/print`, {
+    const res = await fetch(`https://${cleanDomain}/api/print`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -132,7 +124,7 @@ const handleSendToPCPrint = useCallback(async () => {
     }
   } catch (err) {
     console.error("PC Print error:", err);
-    alert("PC Server ထံ ပို့၍ မရပါ။ Wi-Fi Network တစ်ခုတည်း ချိတ်ထားကြောင်း စစ်ဆေးပါ။");
+    alert("PC Server ထံ ပို့၍ မရပါ။ Cloudflare Tunnel အလုပ်လုပ်နေခြင်း ရှိ/မရှိ စစ်ဆေးပါ။");
   } finally {
     setIsSendingToPc(false);
   }
@@ -906,55 +898,54 @@ const handleSaveAsImage = useCallback(() => {
       <h3 className="font-bold text-sm border-b pb-2">PC Print Server ချိတ်ဆက်ရန်</h3>
       
       {/* STEP 1: Server ရှာခြင်းနှင့် ရွေးချယ်ခြင်း */}
-      <div>
-        <div className="flex justify-between items-center mb-1">
-          <label className="text-xs font-bold text-slate-700">၁။ Server ရွေးပါ:</label>
-          <button
-            onClick={scanLocalServers}
-            disabled={isScanning}
-            className="text-[11px] text-indigo-600 font-bold hover:underline" 
-          >
-            {isScanning ? "Scanning..." : "🔄 ပြန်ရှာမည်။"}
-          </button>
-        </div>
+<div>
+  <div className="flex justify-between items-center mb-1">
+    <label className="text-xs font-bold text-slate-700">၁။ Server Domain ရွေးပါ/ရိုက်ထည့်ပါ:</label>
+    <button
+      onClick={scanLocalServers}
+      disabled={isScanning}
+      className="text-[11px] text-indigo-600 font-bold hover:underline"
+    >
+      {isScanning ? "Checking..." : "🔄 ချိတ်ဆက်မှု စစ်မည်"}
+    </button>
+  </div>
 
-        {/* Scan ဖတ်နေစဉ် Loading ပြမည် */}
-        {isScanning ? (
-          <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-center text-xs text-indigo-600 font-medium">
-            <span className="inline-block animate-spin mr-1">⏳</span> Local Network ထဲတွင် Server ရှာနေသည်...
-          </div>
-        ) : discoveredServers.length > 0 ? (
-          /* ရှာတွေ့သော Server စာရင်း ရွေးရန် Dropdown */
-          <select
-            value={pcIp}
-            onChange={(e) => handleServerChange(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-50 border rounded-lg text-xs font-mono font-bold"
-          >
-            {discoveredServers.map((srv, idx) => (
-              <option key={idx} value={srv}>
-                🖥️ Server: {srv}
-              </option>
-            ))}
-          </select>
-        ) : (
-          /* Server မတွေ့ပါက Manual ရိုက်ထည့်နိုင်သော Input Box */
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={pcIp}
-              onChange={(e) => setPcIp(e.target.value)}
-              placeholder="192.168.1.100:5000"
-              className="flex-1 px-3 py-1.5 border rounded-lg text-xs font-mono"
-            />
-            <button
-              onClick={() => fetchPCPrinters(pcIp)}
-              className="px-3 py-1.5 bg-slate-800 text-white text-xs font-bold rounded-lg"
-            >
-              ချိတ်မည်
-            </button>
-          </div>
-        )}
-      </div>
+  {/* Scan/Check ဖတ်နေစဉ် Loading ပြမည် */}
+  {isScanning ? (
+    <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-center text-xs text-indigo-600 font-medium">
+      <span className="inline-block animate-spin mr-1">⏳</span> Cloudflare Tunnel Server ကို စစ်ဆေးနေသည်...
+    </div>
+  ) : discoveredServers.length > 0 ? (
+    <select
+      value={pcIp}
+      onChange={(e) => handleServerChange(e.target.value)}
+      className="w-full px-3 py-2 bg-slate-50 border rounded-lg text-xs font-mono font-bold"
+    >
+      {discoveredServers.map((srv, idx) => (
+        <option key={idx} value={srv}>
+          🌐 Domain: {srv}
+        </option>
+      ))}
+    </select>
+  ) : (
+    /* Manual ရိုက်ထည့်ရန် Input Box */
+    <div className="flex gap-2">
+      <input
+        type="text"
+        value={pcIp}
+        onChange={(e) => setPcIp(e.target.value)}
+        placeholder="xxxx.trycloudflare.com"
+        className="flex-1 px-3 py-1.5 border rounded-lg text-xs font-mono"
+      />
+      <button
+        onClick={() => fetchPCPrinters(pcIp)}
+        className="px-3 py-1.5 bg-slate-800 text-white text-xs font-bold rounded-lg"
+      >
+        ချိတ်မည်
+      </button>
+    </div>
+  )}
+</div>
 
       {/* STEP 2: Printer ရွေးချယ်ခြင်း (ပျောက်မသွားအောင် အခြေအနေအလိုက်ပြမည်) */}
       <div className="border-t pt-3">

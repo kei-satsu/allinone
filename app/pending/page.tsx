@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import AddCityForm from "@/components/AddCityForm";
+import { createWorker } from 'tesseract.js'
 
 
 interface QueueItem {
@@ -107,6 +108,59 @@ const appendLog = (currentHistory: any[], action: string, note: string) => {
     image_url: '',
     remark: ''
   })
+
+  
+
+  const [ocrLoading, setOcrLoading] = useState(false)
+const [ocrText, setOcrText] = useState('')
+const [showOcrModal, setShowOcrModal] = useState(false)
+
+const handleExtractText = async () => {
+    if (!selectedItem?.image_url) return;
+    setOcrLoading(true);
+    setOcrWords([]);
+    setOcrText('');
+    setShowOcrModal(true);
+
+    try {
+      const targetUrl = getCloudinaryUrl(selectedItem.image_url, CLOUDINARY_TRANSFORMS.main);
+      
+      // 🌟 မြန်မာစာအပြင် အင်္ဂလိပ်စာပါ နှစ်မျိုးလုံး ဖတ်နိုင်ရန် 'mya+eng' ဟု ပြောင်းပါ
+      const worker = await createWorker('mya+eng');
+      
+      const { data } = await worker.recognize(targetUrl);
+      
+      if (data && data.text) {
+        setOcrText(data.text);
+      }
+
+      const words = (data as any)?.words as OcrWord[];
+      if (words && words.length > 0) {
+        setOcrWords(words);
+      }
+
+      if ((!data?.text || !data.text.trim()) && (!words || words.length === 0)) {
+        alert('ပုံထဲမှ စာသားများကို ဖတ်ယူ၍ မရပါ။');
+        setShowOcrModal(false);
+      }
+      
+      await worker.terminate();
+    } catch (err) {
+      console.error('OCR Extraction Error:', err);
+      alert('OCR Scan ဖတ်ရာတွင် အမှားအယွင်းရှိနေပါသည်။');
+      setShowOcrModal(false);
+    } finally {
+      setOcrLoading(false);
+    }
+  };
+// OCR Words နဲ့ Image Size မှတ်ရန် State များ
+interface OcrWord {
+  text: string;
+  bbox: { x0: number; y0: number; x1: number; y1: number };
+}
+
+const [ocrWords, setOcrWords] = useState<OcrWord[]>([]);
+const [imgNaturalSize, setImgNaturalSize] = useState({ width: 0, height: 0 });
 
   // Keep a small, predictable set of Cloudinary delivery variants.
   // These values are intentionally independent of viewport size, DPR, or zoom state.
@@ -454,6 +508,8 @@ const handleSelectItem = (item: any, shouldFocusInput = true, branchOverride?: s
 
   setSelectedSenderId(item.sender_id ? String(item.sender_id) : '')
   setSearchQuery(item.sender_name || '')
+
+  
   
   setFormData(prev => ({
     received_date: item.received_date || today,
@@ -480,8 +536,10 @@ const handleSelectItem = (item: any, shouldFocusInput = true, branchOverride?: s
     branch: item.branch || activeBranch,
     image_url: item.image_url || '',
     remark: item.remark || ''
-  }))
+  })
 
+)
+setOcrWords([]);
   if (shouldFocusInput) {
     setTimeout(() => receiverNameRef.current?.focus(), 50)
   }
@@ -891,6 +949,17 @@ if (updatedPending.length > 0) {
                   onMouseDown={e => e.stopPropagation()}
                 >
                   <button
+  type="button"
+  onClick={handleExtractText}
+  className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 rounded-lg transition-all duration-200 active:scale-95 flex items-center gap-1 border border-orange-500/30"
+  title="Scan & Copy Text"
+>
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 4h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  </svg>
+  Scan Text
+</button>
+                  <button
                     type="button"
                     onClick={handleZoomIn}
                     className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-orange-500 hover:bg-white/5 rounded-xl transition-all duration-200 active:scale-95"
@@ -946,20 +1015,67 @@ if (updatedPending.length > 0) {
                     Reset
                   </button>
                 </div>
-
-                <div className="w-full h-full flex items-center justify-center overflow-hidden pointer-events-none">
-                 <img 
-  src={getCloudinaryUrl(selectedItem.image_url, CLOUDINARY_TRANSFORMS.main)} 
-  alt="Voucher" 
-  draggable={false} 
-  style={{ 
+{/* Container Wrapper */}
+<div 
+  className="relative inline-block"
+  style={{
     transform: `translate(${position.x}px, ${position.y}px) scale(${zoomScale}) rotate(${rotation}deg)`,
     transformOrigin: 'center center',
-    cursor: isDragging ? 'grabbing' : 'grab'
+    transition: 'transform 75ms ease-out'
   }}
-  className="max-w-full max-h-full object-contain shadow-2xl transition-transform duration-75 ease-out pointer-events-auto"
-/>
-                </div>
+>
+  {/* ပုံအမှန် */}
+  <img 
+    src={getCloudinaryUrl(selectedItem.image_url, CLOUDINARY_TRANSFORMS.main)} 
+    alt="Voucher" 
+    draggable={false} 
+    onLoad={(e) => {
+      // ပုံရဲ့ မူလ Resolution အစစ်ကို ရယူခြင်း
+      const target = e.currentTarget;
+      setImgNaturalSize({
+        width: target.naturalWidth,
+        height: target.naturalHeight
+      });
+    }}
+    className="max-w-full max-h-[75vh] object-contain shadow-2xl pointer-events-auto select-none"
+  />
+
+  {/* ✨ Google Lens Style Interactive OCR Text Overlay Layer */}
+  {/* ✨ Google Lens Style Interactive OCR Text Overlay Layer */}
+  {ocrWords.length > 0 && imgNaturalSize.width > 0 && (
+    <div 
+      className="absolute inset-0 pointer-events-auto select-text z-10 overflow-hidden"
+      onMouseDown={(e) => e.stopPropagation()} // 💡 စာသား Highlight ဆွဲစဉ် ပုံပါ လိုက်ရွှေ့မသွားစေရန် တားဆီးခြင်း
+    >
+      {ocrWords.map((word, idx) => {
+        const { x0, y0, x1, y1 } = word.bbox;
+        const left = (x0 / imgNaturalSize.width) * 100;
+        const top = (y0 / imgNaturalSize.height) * 100;
+        const width = ((x1 - x0) / imgNaturalSize.width) * 100;
+        const height = ((y1 - y0) / imgNaturalSize.height) * 100;
+
+        return (
+          <span
+            key={idx}
+            style={{
+              position: 'absolute',
+              left: `${left}%`,
+              top: `${top}%`,
+              width: `${width}%`,
+              height: `${height}%`,
+              fontSize: `min(${height * 2}px, 1rem)`,
+              lineHeight: 1,
+            }}
+            className="text-transparent hover:bg-orange-400/30 selection:bg-orange-500/50 selection:text-white cursor-text whitespace-nowrap overflow-hidden flex items-center justify-center leading-none"
+            title={word.text}
+          >
+            {word.text}
+          </span>
+        );
+      })}
+    </div>
+  )}
+</div>
                 <div className="absolute bottom-2 right-3 text-[10px] bg-black/60 text-gray-400 px-2 py-0.5 rounded font-mono pointer-events-none z-10">
                   Zoom: {Math.round(zoomScale * 100)}%
                 </div>
@@ -1407,6 +1523,67 @@ if (updatedPending.length > 0) {
       onClose={() => setIsModalOpen(false)} 
       onCityAdded={loadCities} 
     />     
+
+{/* OCR Text Result Popup Modal */}
+{showOcrModal && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[80vh]">
+      
+      {/* Modal Header */}
+      <div className="px-5 py-3.5 bg-gray-900 text-white flex items-center justify-between">
+        <h3 className="font-bold text-sm uppercase tracking-wider flex items-center gap-2">
+          <span>🔍 Recognized Text Result</span>
+        </h3>
+        <button 
+          onClick={() => setShowOcrModal(false)}
+          className="text-gray-400 hover:text-white text-lg font-bold"
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Modal Body */}
+      <div className="p-5 overflow-y-auto flex-1">
+        {ocrLoading ? (
+          <div className="flex flex-col items-center justify-center py-8 gap-3">
+            <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-xs text-gray-500 font-medium animate-pulse">Voucher မှ စာလုံးများကို ဖတ်ယူနေပါသည်...</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <textarea
+              readOnly
+              value={ocrText}
+              className="w-full h-48 p-3 bg-gray-50 border border-gray-300 rounded-xl font-mono text-xs text-gray-800 focus:outline-none resize-none leading-relaxed"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Modal Footer */}
+      <div className="px-5 py-3 bg-gray-50 border-t border-gray-200 flex justify-end gap-2">
+        <button
+          onClick={() => setShowOcrModal(false)}
+          className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-200 rounded-lg transition"
+        >
+          Close
+        </button>
+        <button
+          disabled={ocrLoading || !ocrText}
+          onClick={() => {
+            navigator.clipboard.writeText(ocrText)
+            alert('စာသားများကို Copy ကူးယူပြီးပါပြီ!')
+          }}
+          className="px-4 py-2 text-xs font-bold bg-orange-500 hover:bg-orange-600 active:scale-95 text-white rounded-lg transition shadow disabled:opacity-50"
+        >
+          Copy All Text
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
+
     </div>
   )
 } 
