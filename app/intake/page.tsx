@@ -98,23 +98,37 @@ const deleteFromOfflineQueue = async (id: string) => {
   });
 };
 
-// Telegram သို့ ပုံပို့ရန် Server Route ခေါ်ယူခြင်း
-const sendToTelegram = async (imageUrl: string, note: string, barcode: string | undefined, branch: string) => {
-  console.log("Sending to Telegram via Server Route...", { branch });
+// app/intake/page.tsx
+
+const sendToTelegram = async (data: {
+  imageUrl: string;
+  note?: string;
+  barcode?: string;
+  branch?: string;
+}) => {
   try {
-    const response = await fetch('/api/telegram', {
+    if (!data.imageUrl || typeof data.imageUrl !== 'string' || !data.imageUrl.startsWith('http')) {
+      throw new Error(`Invalid imageUrl for Telegram: ${String(data.imageUrl)}`);
+    }
+
+    const res = await fetch('/api/telegram', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageUrl, note, barcode, branch })
+      body: JSON.stringify(data),
     });
-    const result = await response.json();
-    if (result.ok) {
-      console.log("Telegram သို့ ပုံပို့ခြင်း အောင်မြင်ပါသည်။");
+
+    const result = await res.json();
+
+    if (res.ok && result.ok) {
+      console.log('Telegram သို့ ပို့ဆောင်ခြင်း အောင်မြင်ပါသည်:', result.data);
+      return result;
     } else {
-      console.error("Telegram API Error Response:", result);
+      console.error('Telegram API Error Response:', result.error);
+      throw new Error(result.error || 'Telegram ပေးပို့ခြင်း မအောင်မြင်ပါ');
     }
   } catch (error: any) {
-    console.error("Network/Fetch Error:", error);
+    console.error('Network/Fetch Error:', error);
+    throw error;
   }
 };
 
@@ -820,64 +834,79 @@ const capturePhoto = useCallback(async () => {
   };
 
 const processSingleOfflineItem = async (item: any) => {
-  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'YOUR_CLOUD_NAME';
-  const uploadPreset = 'for_allinone';
+
 
   let secureUrl = item.cloudinary_url;
 
   // ─── 🌟 STEP 1: Supabase မှာ Barcode စာရင်း ရှိပြီးသားလား အရင်စစ်ခြင်း ───
-  if (item.barcode) {
-    const { data: existingOrder } = await supabase
-      .from('orders')
-      .select('image_url')
-      .eq('barcode', item.barcode)
-      .maybeSingle();
+if (item.barcode) {
+  const { data: existingOrder } = await supabase
+    .from('orders')
+    .select('image_url')
+    .eq('barcode', item.barcode)
+    .maybeSingle();
 
-    // အကယ်၍ Supabase မှာ ရောက်ပြီးသား ဖြစ်နေပါက ထပ်မတင်တော့ဘဲ Telegram သို့ ပို့ပေးမည်
-    if (existingOrder) {
+  if (existingOrder) {
+    const existingImageUrl = existingOrder.image_url;
+
+    if (!existingImageUrl || typeof existingImageUrl !== 'string' || !existingImageUrl.startsWith('http')) {
+      console.warn(`Barcode [${item.barcode}] ရှိထားသော်လည်း image_url မရှိပါ။ Telegram သို့ မပို့တော့ပါ။`);
+    } else {
       console.log(`Barcode [${item.barcode}] က Supabase မှာ ရှိပြီးသားမို့ Telegram သို့ တိုက်ရိုက်ပို့ပါမည်။`);
-      await sendToTelegram(existingOrder.image_url, item.uploader_note, item.barcode, item.branch);
-      return; // အောင်မြင်စွာ ပြီးစီးသွားသဖြင့် Function ထဲမှ ထွက်မည် (Queue ထဲမှ ဖျက်မည်)
+      await sendToTelegram({
+        imageUrl: existingImageUrl,
+        note: item.uploader_note || item.note || '',
+        barcode: item.barcode || '',
+        branch: item.branch || 'MDY',
+      });
     }
+
+    return;
+  }
+}
+
+ // ─── 🌟 STEP 2: Cloudflare R2 သို့ ပုံတင်ခြင်း (မတင်ရသေးပါက) ───
+if (!secureUrl) {
+  const recoveredFile = item.file instanceof File
+    ? item.file
+    : item.fileBase64
+      ? base64ToFile(item.fileBase64, item.fileName || 'offline-image.jpg')
+      : (item.file as File | undefined);
+
+  if (!recoveredFile) {
+    throw new Error('Offline queue item is missing its image payload');
   }
 
-  // ─── 🌟 STEP 2: Cloudinary သို့ ပုံတင်ခြင်း (မတင်ရသေးပါက) ───
-  if (!secureUrl) {
-    const recoveredFile = item.file instanceof File
-      ? item.file
-      : item.fileBase64
-        ? base64ToFile(item.fileBase64, item.fileName || 'offline-image.jpg')
-        : (item.file as File | undefined);
+  let fileToUpload: File = recoveredFile;
 
-    if (!recoveredFile) {
-      throw new Error('Offline queue item is missing its image payload');
-    }
-
-    let fileToUpload: File = recoveredFile;
-
-    if (item.textAnnotations && item.textAnnotations.length > 0) {
-      const temporaryPreviewUrl = URL.createObjectURL(recoveredFile);
-      const adaptedItem = { ...item, preview: temporaryPreviewUrl, file: recoveredFile };
-      fileToUpload = (await bakeImageWithText(adaptedItem)) as File;
-      URL.revokeObjectURL(temporaryPreviewUrl);
-    }
-
-    const formData = new FormData();
-    formData.append('file', fileToUpload);
-    formData.append('upload_preset', uploadPreset);
-
-    const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
-      { method: 'POST', body: formData }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Cloudinary Upload Failed: ${response.statusText}`);
-    }
-
-    const cloudinaryData = await response.json();
-    secureUrl = cloudinaryData.secure_url;
+  if (item.textAnnotations && item.textAnnotations.length > 0) {
+    const temporaryPreviewUrl = URL.createObjectURL(recoveredFile);
+    const adaptedItem = { ...item, preview: temporaryPreviewUrl, file: recoveredFile };
+    fileToUpload = (await bakeImageWithText(adaptedItem)) as File;
+    URL.revokeObjectURL(temporaryPreviewUrl);
   }
+
+  // Cloudinary အစား မိမိတို့၏ R2 Next.js Server Route သို့ တင်ပို့ခြင်း
+  const formData = new FormData();
+  formData.append('file', fileToUpload);
+
+  const response = await fetch('/api/upload-r2', {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(`R2 Upload Failed: ${errorData.error || response.statusText}`);
+  }
+
+  const r2Data = await response.json();
+  if (!r2Data?.url || typeof r2Data.url !== 'string' || !r2Data.url.startsWith('http')) {
+    throw new Error(`R2 Upload returned invalid URL: ${JSON.stringify(r2Data)}`);
+  }
+
+  secureUrl = r2Data.url; // R2 မှ ပြန်လာသော Public URL ကို ရယူခြင်း
+}
 
  // ─── 🌟 STEP 3: Supabase သို့ ဒေတာ ထည့်သွင်းခြင်း (With JSON History) ───
  const currentStatus = (item.transit && item.transit.length > 0) ? 'In-Transit' : 'Pending';
@@ -920,8 +949,17 @@ const processSingleOfflineItem = async (item: any) => {
     }
   }
 
-  // ─── 🌟 STEP 4: Telegram သို့ အကြောင်းကြားစာ ပို့ခြင်း ───
-  await sendToTelegram(secureUrl, item.uploader_note, item.barcode, item.branch);
+ // ─── 🌟 STEP 4: Telegram သို့ အကြောင်းကြားစာ ပို့ခြင်း ───
+if (!secureUrl || typeof secureUrl !== 'string' || !secureUrl.startsWith('http')) {
+  throw new Error(`Cannot send Telegram message without a valid image URL. Received: ${String(secureUrl)}`);
+}
+
+await sendToTelegram({
+  imageUrl: secureUrl,
+  note: item.uploader_note || item.note || '',
+  barcode: item.barcode || '',
+  branch: item.branch || 'MDY',
+});
 };
 
   const uploadSingleItem = async (itemId: string) => {

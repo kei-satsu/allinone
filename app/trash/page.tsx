@@ -59,12 +59,15 @@ const handlePermanentDelete = async (order: any) => {
   if (confirm("⚠️ သတိပြုရန်!\nဒီမှတ်တမ်းကို အပြီးတိုင်ဖျက်ပါက ဘယ်လိုမှ ပြန်ယူ၍ ရတော့မည်မဟုတ်ပါ။ ဖြတ်ရန် သေချာပါသလား?")) {
     setLoading(true)
     try {
-      // ၁။ Image URL ကို သုံးပြီး Cloudinary က ပုံကို ဖျက်မည်
+      // ၁။ Image URL ပေါ်မူတည်၍ Cloudinary သို့မဟုတ် R2 ထဲမှ ပုံကို ဖျက်မည်
       if (order.image_url) {
-        await fetch('/api/cloudinary/delete', {
+        const isR2Url = order.image_url.includes('r2.dev');
+        const deleteEndpoint = isR2Url ? '/api/r2/delete' : '/api/cloudinary/delete';
+
+        await fetch(deleteEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageUrl: order.image_url }) // <-- image_url ပို့ပေးလိုက်ရုံပါပဲ
+          body: JSON.stringify({ imageUrl: order.image_url })
         });
       }
 
@@ -72,7 +75,7 @@ const handlePermanentDelete = async (order: any) => {
       const { error } = await supabase.from('orders').delete().eq('id', order.id);
       if (error) throw error;
 
-      alert("မှတ်တမ်းနှင့် Cloudinary ပုံကို အပြီးတိုင် ဖျက်ဆီးလိုက်ပါပြီ။");
+      alert("မှတ်တမ်းနှင့် ပုံကို အပြီးတိုင် ဖျက်ဆီးလိုက်ပါပြီ။");
       fetchData();
     } catch (error: any) {
       alert(error.message);
