@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { createNewUser, updateUserProfile, deleteUser, sendResetPasswordEmail } from "@/app/actions/admin"
+import { createNewUser, updateUserProfile, deleteUser, sendResetPasswordEmail, getRiderById } from "@/app/actions/admin"
 
 export interface UserProfile {
   id: string
@@ -9,6 +9,7 @@ export interface UserProfile {
   username?: string
   role?: string
   branch?: string
+  rider_id?: string // 👈 rider_id ထည့်သွင်းထားသည်
   created_at?: string
 }
 
@@ -25,12 +26,41 @@ export default function UserTableClient({ initialUsers }: { initialUsers: UserPr
   const [username, setUsername] = useState("")
   const [role, setRole] = useState("staff")
   const [branch, setBranch] = useState("MDY")
+  const [riderId, setRiderId] = useState("")
+  const [riderLookupLoading, setRiderLookupLoading] = useState(false)
 
   // Edit Form State
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null)
   const [editUsername, setEditUsername] = useState("")
   const [editRole, setEditRole] = useState("staff")
   const [editBranch, setEditBranch] = useState("MDY")
+
+  const handleRiderIdLookup = async (value: string) => {
+    const normalizedId = value.trim()
+    setRiderId(value)
+
+    if (role !== "rider" || !normalizedId) {
+      if (!normalizedId) setUsername("")
+      return
+    }
+
+    setRiderLookupLoading(true)
+    setMessage(null)
+    try {
+      const res = await getRiderById(normalizedId)
+      if (res.success && res.rider?.name) {
+        setUsername(res.rider.name)
+      } else {
+        setUsername("")
+        setMessage({ type: "error", text: res.message || "ဤ Rider ID မတွေ့ပါ။" })
+      }
+    } catch (err: any) {
+      setUsername("")
+      setMessage({ type: "error", text: err.message || "Rider ID ရှာဖွေရာတွင် အမှားအယွင်းရှိပါသည်။" })
+    } finally {
+      setRiderLookupLoading(false)
+    }
+  }
 
   // 🟢 1. User အကောင့်သစ် ဆောက်ခြင်း
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -39,12 +69,28 @@ export default function UserTableClient({ initialUsers }: { initialUsers: UserPr
       setMessage({ type: "error", text: "Email နှင့် Password ဖြည့်စွက်ပေးပါ။" })
       return
     }
+    if (role === "rider" && !riderId.trim()) {
+      setMessage({ type: "error", text: "Rider ID ဖြည့်စွက်ပေးပါ။" })
+      return
+    }
+    if (role === "rider" && !username.trim()) {
+      setMessage({ type: "error", text: "မှန်ကန်သော Rider ID ဖြည့်ပြီး Rider အမည်ကို ရယူပေးပါ။" })
+      return
+    }
 
     setLoading(true)
     setMessage(null)
 
     try {
-      const res = await createNewUser({ email, pass, username, role, branch })
+      // 👇 ဒီနေရာတွင် rider_id ကို createNewUser ထံ ထည့်သွင်းပေးလိုက်ပါသည်
+      const res = await createNewUser({
+        email,
+        pass,
+        username,
+        role,
+        branch,
+        rider_id: role === "rider" ? riderId.trim() : undefined
+      })
 
       if (res.success) {
         setMessage({ type: "success", text: res.message })
@@ -53,6 +99,7 @@ export default function UserTableClient({ initialUsers }: { initialUsers: UserPr
         setUsername("")
         setRole("staff")
         setBranch("MDY")
+        setRiderId("")
         setShowModal(false)
         window.location.reload()
       } else {
@@ -271,6 +318,27 @@ export default function UserTableClient({ initialUsers }: { initialUsers: UserPr
             <h3 className="text-lg font-bold text-slate-800">User Account အသစ်ဖွင့်ရန်</h3>
 
             <form onSubmit={handleCreateUser} className="space-y-4">
+
+              {role === "rider" && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Rider ID</label>
+                  <input
+                    type="text"
+                    required
+                    value={riderId}
+                    onChange={e => setRiderId(e.target.value)}
+                    onBlur={e => handleRiderIdLookup(e.target.value)}
+                    placeholder="riders table ထဲရှိ ID ထည့်ပါ"
+                    className="w-full px-3.5 py-2.5 text-sm rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    {riderLookupLoading
+                      ? "Rider အမည်ရှာဖွေနေသည်..."
+                      : "ID ဖြည့်ပြီး အပြင်ဘက်ကိုနှိပ်ပါ။ Username တွင် Rider အမည် အလိုအလျောက်ဖြည့်ပါမည်။"}
+                  </p>
+                </div>
+              )}
+              
               <div>
                 <label className="block text-xs font-bold text-slate-600 mb-1">Username</label>
                 <input
@@ -311,11 +379,20 @@ export default function UserTableClient({ initialUsers }: { initialUsers: UserPr
                   <label className="block text-xs font-bold text-slate-600 mb-1">Role</label>
                   <select
                     value={role}
-                    onChange={e => setRole(e.target.value)}
+                    onChange={e => {
+                      const nextRole = e.target.value
+                      setRole(nextRole)
+                      if (nextRole !== "rider") {
+                        setRiderId("")
+                      } else {
+                        setUsername("")
+                      }
+                    }}
                     className="w-full px-3 py-2.5 text-sm rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 bg-white"
                   >
                     <option value="staff">Staff</option>
                     <option value="admin">Admin</option>
+                    <option value="rider">Rider</option>
                   </select>
                 </div>
 
@@ -354,7 +431,7 @@ export default function UserTableClient({ initialUsers }: { initialUsers: UserPr
         </div>
       )}
 
-      {/* 🟢 MODAL 2: User Profile ပြင်ရန် */}
+      {/* 🟢 MODAL 2: User Profile ပြောင်းလဲရန် */}
       {editingUser && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 w-full max-w-sm border border-slate-200 shadow-2xl space-y-4">

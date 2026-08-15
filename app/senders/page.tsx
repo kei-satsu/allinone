@@ -360,6 +360,7 @@ const handleExportExcel = async () => {
     sectionBg: "E2E8F0",    // Light Gray Slate
     retSectionBg: "FFE4E6", // Light Pink/Rose
     accentGreen: "DCFCE7",  // Light Emerald for Net Payable
+    totalBg: "F1F5F9",      // Light Slate for Total Row
     border: "CBD5E1",       // Slate Border Color
   };
 
@@ -378,7 +379,7 @@ const handleExportExcel = async () => {
 
   // ─── Header Section (Title & Date) ───
   const titleRow = worksheet.addRow([`ငွေရှင်းစရင်း - ${selectedSender?.name || ""}`]);
-  worksheet.mergeCells("A1:H1");
+  worksheet.mergeCells("A1:I1"); // Column 9 ခုဖြစ်၍ I1 ထိ Merge ထားပါသည်
   titleRow.getCell(1).font = fontTitle;
   titleRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: colors.titleBg } };
   titleRow.getCell(1).alignment = { vertical: "middle", horizontal: "center" };
@@ -415,7 +416,7 @@ const handleExportExcel = async () => {
   const renderTable = (sectionTitle: string, ordersList: any[], isReturned = false) => {
     // Section Title Banner
     const secRow = worksheet.addRow([sectionTitle]);
-    worksheet.mergeCells(`A${secRow.number}:H${secRow.number}`);
+    worksheet.mergeCells(`A${secRow.number}:I${secRow.number}`);
     secRow.getCell(1).font = fontSection;
     secRow.getCell(1).fill = {
       type: "pattern",
@@ -423,16 +424,17 @@ const handleExportExcel = async () => {
       fgColor: { argb: isReturned ? colors.retSectionBg : colors.sectionBg },
     };
 
-    // Table Header
+    // Table Header (Column 9 ခု)
     const headRow = worksheet.addRow([
       "Way ID",
+      "Date",
       "Receiver Name",
       "Phone",
-      "Location",
+      "LOC",
       "Address",
       "COD (Ks)",
       "Deli Fee",
-      "Status",
+      "Total",
     ]);
     headRow.eachCell((cell) => {
       cell.font = fontHeader;
@@ -449,13 +451,14 @@ const handleExportExcel = async () => {
     ordersList.forEach((o, idx) => {
       const row = worksheet.addRow([
         o.item_id || o.id,
+        o.received_date ? String(o.received_date).split("T")[0] : "",
         o.receiver_name || "",
         o.receiver_phone || "",
         o.receiver_loc || "",
         o.receiver_address || "",
         Number(o.cod_amount) || 0,
         Number(o.deli_fee) || 0,
-        o.status,
+        Number(o.total_amount) || 0,
       ]);
 
       row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
@@ -467,16 +470,49 @@ const handleExportExcel = async () => {
           cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "F8FAFC" } };
         }
 
-        // Alignments & Number Formatting (#,##0)
-        if (colNumber === 6 || colNumber === 7) {
+        // Column 7 (COD), 8 (Deli Fee), 9 (Total) များကို Right Align နှင့် #,##0 Format ပေးခြင်း
+        if (colNumber >= 7) {
           cell.numFmt = "#,##0";
           cell.alignment = { horizontal: "right", vertical: "middle" };
-        } else if (colNumber === 1 || colNumber === 3 || colNumber === 8) {
+        } else if (colNumber === 1 || colNumber === 2 || colNumber === 4) {
           cell.alignment = { horizontal: "center", vertical: "middle" };
         } else {
           cell.alignment = { horizontal: "left", vertical: "middle" };
         }
       });
+    });
+
+    // 🟢 ─── TOTAL ROW သတ်မှတ်ခြင်း ───
+    const totalCod = ordersList.reduce((sum, o) => sum + (Number(o.cod_amount) || 0), 0);
+    const totalDeli = ordersList.reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
+    const totalGrand = ordersList.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+
+    const totalRow = worksheet.addRow([
+      "စုစုပေါင်း (Total)",
+      "",
+      "",
+      "",
+      "",
+      "",
+      totalCod,
+      totalDeli,
+      totalGrand,
+    ]);
+
+    // Way ID မှ Address (Column A မှ F) အထိ Merge လုပ်လိုက်ခြင်း
+    worksheet.mergeCells(`A${totalRow.number}:F${totalRow.number}`);
+
+    totalRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      cell.font = fontBold;
+      cell.border = thinBorder;
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: colors.totalBg } };
+
+      if (colNumber >= 7) {
+        cell.numFmt = "#,##0";
+        cell.alignment = { horizontal: "right", vertical: "middle" };
+      } else if (colNumber === 1) {
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+      }
     });
 
     worksheet.addRow([]);
@@ -491,8 +527,8 @@ const handleExportExcel = async () => {
     row.height = 20;
   });
 
-  // ─── Column Widths စိတ်ကြိုက် သတ်မှတ်ခြင်း ───
-  const columnWidths = [15, 22, 16, 18, 32, 15, 15, 14];
+  // ─── Column Widths (9 ခု) သတ်မှတ်ခြင်း ───
+  const columnWidths = [16, 14, 18, 15, 5, 26, 15, 14, 15];
 
   columnWidths.forEach((width, index) => {
     worksheet.getColumn(index + 1).width = width;

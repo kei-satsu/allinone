@@ -24,6 +24,7 @@ export async function getUsersList() {
       username: profile?.username || authUser.user_metadata?.username || authUser.email?.split('@')[0] || '',
       role: profile?.role || authUser.app_metadata?.role || 'staff',
       branch: profile?.branch || authUser.app_metadata?.branch || authUser.user_metadata?.branch || 'MDY',
+      rider_id: profile?.rider_id || authUser.user_metadata?.rider_id || null, // 👈 rider_id ကို ပါးပေးလိုက်သည်
       created_at: authUser.created_at,
     }
   })
@@ -31,30 +32,46 @@ export async function getUsersList() {
   return mergedUsers
 }
 
-// ၂။ User အသစ်ဖွင့်ချိန်တွင် Username, Role, Branch အတူတကွ သတ်မှတ်ခြင်း
-export async function createNewUser(formData: { email: string; pass: string; username: string; role: string; branch: string }) {
-  const { email, pass, username, role, branch } = formData
+// ၂။ User အသစ်ဖွင့်ချိန်တွင် Username, Role, Branch, Rider ID အတူတကွ သတ်မှတ်ခြင်း
+export async function createNewUser(formData: {
+  email: string
+  pass: string
+  username: string
+  role: string
+  branch: string
+  rider_id?: string
+}) {
+  // 👈 1. rider_id ကိုပါ formData ကနေ ဆွဲထုတ်လိုက်သည်
+  const { email, pass, username, role, branch, rider_id } = formData
 
   const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
     email,
     password: pass,
     email_confirm: true,
     app_metadata: { role, branch },
-    user_metadata: { username, branch }
+    user_metadata: { username, branch, rider_id: role === 'rider' ? rider_id : null },
   })
 
   if (authError) return { success: false, message: authError.message }
 
   if (authUser.user) {
-    await supabaseAdmin
+    const { error: profileError } = await supabaseAdmin
       .from('profiles')
-      .upsert({
-        id: authUser.user.id,
-        email: email,
-        username: username || email.split('@')[0],
-        role,
-        branch
-      }, { onConflict: 'id' })
+      .upsert(
+        {
+          id: authUser.user.id,
+          email,
+          username: username || email.split('@')[0],
+          role,
+          branch,
+          rider_id: role === 'rider' ? (rider_id || null) : null, // 👈 2. profiles table ထဲသို့ rider_id ထည့်ပေးလိုက်သည်
+        },
+        { onConflict: 'id' },
+      )
+
+    if (profileError) {
+      return { success: false, message: profileError.message }
+    }
   }
 
   revalidatePath('/admin/users')
@@ -62,26 +79,34 @@ export async function createNewUser(formData: { email: string; pass: string; use
 }
 
 // ၃။ User ရဲ့ Username, Role သို့မဟုတ် Branch ကို ပြောင်းလဲခြင်း
-export async function updateUserProfile(userId: string, newUsername: string, newRole: string, newBranch: string) {
+export async function updateUserProfile(
+  userId: string,
+  newUsername: string,
+  newRole: string,
+  newBranch: string,
+) {
   const { data: userData } = await supabaseAdmin.auth.admin.getUserById(userId)
   const userEmail = userData?.user?.email || ''
 
   const { error: dbError } = await supabaseAdmin
     .from('profiles')
-    .upsert({
-      id: userId,
-      email: userEmail,
-      username: newUsername,
-      role: newRole,
-      branch: newBranch,
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'id' })
+    .upsert(
+      {
+        id: userId,
+        email: userEmail,
+        username: newUsername,
+        role: newRole,
+        branch: newBranch,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' },
+    )
 
   if (dbError) return { success: false, message: dbError.message }
 
   const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
     app_metadata: { role: newRole, branch: newBranch },
-    user_metadata: { username: newUsername, branch: newBranch }
+    user_metadata: { username: newUsername, branch: newBranch },
   })
 
   if (authError) return { success: false, message: authError.message }
@@ -92,7 +117,8 @@ export async function updateUserProfile(userId: string, newUsername: string, new
 
 // ၄။ User Account ကို ဖျက်ပစ်ခြင်း
 export async function deleteUser(userId: string) {
-  await supabaseAdmin.from('profiles').delete().eq('id', userId)
+  const { error: profileError } = await supabaseAdmin.from('profiles').delete().eq('id', userId)
+  if (profileError) return { success: false, message: profileError.message }
 
   const { error } = await supabaseAdmin.auth.admin.deleteUser(userId)
 
@@ -106,7 +132,6 @@ export async function deleteUser(userId: string) {
 export async function sendResetPasswordEmail(email: string) {
   if (!email) return { success: false, message: 'Email အချက်အလက် မရှိပါ။' }
 
-  // App ရဲ့ Origin Domain ကို ယူခြင်း (.env ထဲတွင် NEXT_PUBLIC_SITE_URL သတ်မှတ်ထားလျှင် ပိုကောင်းပါသည်)
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
   const redirectTo = `${siteUrl}/reset-password`
 
@@ -116,8 +141,53 @@ export async function sendResetPasswordEmail(email: string) {
 
   if (error) return { success: false, message: error.message }
 
-  return { 
-    success: true, 
-    message: `${email} ထံသို့ Password ပြောင်းရန် Link ကို အောင်မြင်စွာ ပို့ပေးလိုက်ပါပြီ။` 
+  return {
+    success: true,
+    message: `${email} ထံသို့ Password ပြောင်းရန် Link ကို အောင်မြင်စွာ ပို့ပေးလိုက်ပါပြီ။`,
+  }
+}
+
+// ၆။ riders table ထဲမှ ID ဖြင့် Rider အမည်ရှာခြင်း
+export async function getRiderById(id: string) {
+  const riderId = id.trim()
+
+  if (!riderId) {
+    return {
+      success: false,
+      rider: null,
+      message: 'Rider ID ဖြည့်စွက်ပေးပါ။',
+    }
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('riders')
+    .select('id, name')
+    .eq('id', riderId)
+    .maybeSingle()
+
+  if (error) {
+    console.error('getRiderById error:', error)
+    return {
+      success: false,
+      rider: null,
+      message: 'Rider အချက်အလက် ရှာဖွေရာတွင် အမှားရှိပါသည်။',
+    }
+  }
+
+  if (!data) {
+    return {
+      success: false,
+      rider: null,
+      message: 'ဤ Rider ID မတွေ့ပါ။',
+    }
+  }
+
+  return {
+    success: true,
+    rider: {
+      id: data.id,
+      name: data.name,
+    },
+    message: 'Rider အမည် ရရှိပါပြီ။',
   }
 }
