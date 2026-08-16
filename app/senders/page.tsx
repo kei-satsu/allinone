@@ -378,7 +378,7 @@ const handleExportExcel = async () => {
   };
 
   // ─── Header Section (Title & Date) ───
-  const titleRow = worksheet.addRow([`ငွေရှင်းစရင်း - ${selectedSender?.name || ""}`]);
+  const titleRow = worksheet.addRow([`All In One Express ငွေရှင်းစာရင်း - ${selectedSender?.name || ""}`]);
   worksheet.mergeCells("A1:I1"); // Column 9 ခုဖြစ်၍ I1 ထိ Merge ထားပါသည်
   titleRow.getCell(1).font = fontTitle;
   titleRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: colors.titleBg } };
@@ -389,7 +389,7 @@ const handleExportExcel = async () => {
   worksheet.addRow([]);
 
   // ─── Summary Table Section ───
-  const sumHeaderRow = worksheet.addRow(["ငွေရှင်းစရင်း အကျဉ်းချုပ်", ""]);
+  const sumHeaderRow = worksheet.addRow(["ငွေရှင်းစာရင်း အကျဉ်းချုပ်", ""]);
   worksheet.mergeCells(`A${sumHeaderRow.number}:B${sumHeaderRow.number}`);
   sumHeaderRow.getCell(1).font = fontSection;
   sumHeaderRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: colors.sectionBg } };
@@ -495,8 +495,8 @@ const handleExportExcel = async () => {
       "",
       "",
       totalCod,
-      totalDeli,
-      totalGrand,
+           "",
+           "",
     ]);
 
     // Way ID မှ Address (Column A မှ F) အထိ Merge လုပ်လိုက်ခြင်း
