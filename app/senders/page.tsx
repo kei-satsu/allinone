@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import SenderModal from "@/components/SenderModal";
 import ExcelJS from "exceljs";
@@ -43,14 +43,19 @@ const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
 
   // Multiple Ways Selection & Clearing Date States
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
-  const [isMouseDown, setIsMouseDown] = useState(false);
 
-// Mouse လွှတ်လိုက်ပါက Drag selection ရပ်ရန် 👈 အသစ်ထည့်ရန်
-useEffect(() => {
-  const handleMouseUp = () => setIsMouseDown(false);
-  window.addEventListener("mouseup", handleMouseUp);
-  return () => window.removeEventListener("mouseup", handleMouseUp);
-}, []);
+  // Drag state ကို render တစ်ကြိမ်နဲ့တစ်ကြိမ်ကြား မလွဲစေရန် ref သုံးထားသည်။
+  const isDraggingSelectionRef = useRef(false);
+
+  // Mouse လွှတ်လိုက်သည်နှင့် drag selection ကို ရပ်ပါ။
+  useEffect(() => {
+    const handleMouseUp = () => {
+      isDraggingSelectionRef.current = false;
+    };
+
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => window.removeEventListener("mouseup", handleMouseUp);
+  }, []);
   
   const [clearedDateInput, setClearedDateInput] = useState<string>(
     new Date().toISOString().split("T")[0]
@@ -571,10 +576,18 @@ const canSelectOrders = true;
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
 
-// Row ပေါ်မှာ Mouse စဖိချိန်
-const handleRowMouseDown = (id: string, isSelectable: boolean) => {
-  if (!isSelectable) return;
-  setIsMouseDown(true);
+// Row ပေါ်မှာ ဘယ်ဘက် Mouse ခလုတ် စဖိချိန်
+const handleRowMouseDown = (
+  event: React.MouseEvent<HTMLTableRowElement>,
+  id: string,
+  isSelectable: boolean
+) => {
+  // Right-click / middle-click နဲ့ row selection မစတင်စေရန်
+  if (!isSelectable || event.button !== 0) return;
+
+  isDraggingSelectionRef.current = true;
+
+  // Row တစ်ကြိမ်နှိပ်ရုံဖြင့် select / deselect toggle လုပ်မည်။
   setSelectedOrderIds((prev) =>
     prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
   );
@@ -582,7 +595,7 @@ const handleRowMouseDown = (id: string, isSelectable: boolean) => {
 
 // Mouse ဖိထားရင်း အခြား Row များပေါ်သို့ ဖြတ်သွားချိန် (Drag)
 const handleRowMouseEnter = (id: string, isSelectable: boolean) => {
-  if (isMouseDown && isSelectable) {
+  if (isDraggingSelectionRef.current && isSelectable) {
     setSelectedOrderIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
   }
 };
@@ -1225,9 +1238,12 @@ const totalSelectedCod = getDisplayOrders()
     return (
       <tr
         key={order.id || index}
-        onMouseDown={() => handleRowMouseDown(order.id, isSelectable)}
+        onMouseDown={(event) =>
+          handleRowMouseDown(event, order.id, isSelectable)
+        }
         onMouseEnter={() => handleRowMouseEnter(order.id, isSelectable)}
-        className={`transition-colors cursor-pointer ${
+        onDragStart={(event) => event.preventDefault()}
+        className={`select-none transition-colors cursor-pointer ${
           isSelected
             ? "bg-orange-100/70"
             : index % 2 === 0
@@ -1241,15 +1257,19 @@ const totalSelectedCod = getDisplayOrders()
               <input
                 type="checkbox"
                 checked={isSelected}
-                onClick={(e) => e.stopPropagation()} // 👈 Row event နဲ့ ထပ်မနေအောင် တားပေးပါသည်
+                // Checkbox ကိုနှိပ်သောအခါ row ရဲ့ drag/toggle handler မဝင်စေရန်
+                onMouseDown={(event) => {
+                  event.stopPropagation();
+                  isDraggingSelectionRef.current = false;
+                }}
+                onClick={(event) => event.stopPropagation()}
                 onChange={() => {
-                  if (isSelected) {
-                    setSelectedOrderIds(
-                      selectedOrderIds.filter((id) => id !== order.id)
-                    );
-                  } else {
-                    setSelectedOrderIds([...selectedOrderIds, order.id]);
-                  }
+                  // Functional update သုံးထားသဖြင့် stale state ကြောင့် ပြန် select မဖြစ်ပါ။
+                  setSelectedOrderIds((prev) =>
+                    prev.includes(order.id)
+                      ? prev.filter((id) => id !== order.id)
+                      : [...prev, order.id]
+                  );
                 }}
                 className="rounded border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer w-3.5 h-3.5"
               />
