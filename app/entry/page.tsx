@@ -230,7 +230,8 @@ useEffect(() => {
   }
 
   const handleStatusChange = (status: string) => {
-    const nextDeliverDate = (status === 'On Way' || status === 'Delivered')
+    const isDateRelevant = ['On Way', 'Delivered', 'Returned'].includes(status)
+    const nextDeliverDate = isDateRelevant
       ? formData.deliver_date || today
       : ''
 
@@ -726,8 +727,8 @@ useEffect(() => {
                     type="date"
                     value={formData.deliver_date}
                     onChange={e => setFormData({...formData, deliver_date: e.target.value})}
-                    className={`${winInput} font-mono ${formData.status !== 'On Way' && formData.status !== 'Delivered' ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                    disabled={formData.status !== 'On Way' && formData.status !== 'Delivered'}
+                    className={`${winInput} font-mono ${!['On Way', 'Delivered', 'Returned'].includes(formData.status) ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    disabled={!['On Way', 'Delivered', 'Returned'].includes(formData.status)}
                   />
                 </div>
               </div>
