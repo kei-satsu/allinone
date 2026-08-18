@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import SenderModal from "@/components/SenderModal";
 import ExcelJS from "exceljs";
@@ -43,6 +43,20 @@ const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
 
   // Multiple Ways Selection & Clearing Date States
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+
+  // Drag state ကို render တစ်ကြိမ်နဲ့တစ်ကြိမ်ကြား မလွဲစေရန် ref သုံးထားသည်။
+  const isDraggingSelectionRef = useRef(false);
+
+  // Mouse လွှတ်လိုက်သည်နှင့် drag selection ကို ရပ်ပါ။
+  useEffect(() => {
+    const handleMouseUp = () => {
+      isDraggingSelectionRef.current = false;
+    };
+
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => window.removeEventListener("mouseup", handleMouseUp);
+  }, []);
+  
   const [clearedDateInput, setClearedDateInput] = useState<string>(
     new Date().toISOString().split("T")[0]
   );
@@ -378,7 +392,7 @@ const handleExportExcel = async () => {
   };
 
   // ─── Header Section (Title & Date) ───
-  const titleRow = worksheet.addRow([`ငွေရှင်းစရင်း - ${selectedSender?.name || ""}`]);
+  const titleRow = worksheet.addRow([`All In One Express ငွေရှင်းစာရင်း - ${selectedSender?.name || ""}`]);
   worksheet.mergeCells("A1:I1"); // Column 9 ခုဖြစ်၍ I1 ထိ Merge ထားပါသည်
   titleRow.getCell(1).font = fontTitle;
   titleRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: colors.titleBg } };
@@ -389,7 +403,7 @@ const handleExportExcel = async () => {
   worksheet.addRow([]);
 
   // ─── Summary Table Section ───
-  const sumHeaderRow = worksheet.addRow(["ငွေရှင်းစရင်း အကျဉ်းချုပ်", ""]);
+  const sumHeaderRow = worksheet.addRow(["ငွေရှင်းစာရင်း အကျဉ်းချုပ်", ""]);
   worksheet.mergeCells(`A${sumHeaderRow.number}:B${sumHeaderRow.number}`);
   sumHeaderRow.getCell(1).font = fontSection;
   sumHeaderRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: colors.sectionBg } };
@@ -495,8 +509,8 @@ const handleExportExcel = async () => {
       "",
       "",
       totalCod,
-      totalDeli,
-      totalGrand,
+           "",
+           "",
     ]);
 
     // Way ID မှ Address (Column A မှ F) အထိ Merge လုပ်လိုက်ခြင်း
@@ -561,6 +575,33 @@ const canSelectOrders = true;
   const totalPages = Math.ceil(totalDisplayOrders.length / itemsPerPage) || 1;
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+
+// Row ပေါ်မှာ ဘယ်ဘက် Mouse ခလုတ် စဖိချိန်
+const handleRowMouseDown = (
+  event: React.MouseEvent<HTMLTableRowElement>,
+  id: string,
+  isSelectable: boolean
+) => {
+  // Right-click / middle-click နဲ့ row selection မစတင်စေရန်
+  if (!isSelectable || event.button !== 0) return;
+
+  isDraggingSelectionRef.current = true;
+
+  // Row တစ်ကြိမ်နှိပ်ရုံဖြင့် select / deselect toggle လုပ်မည်။
+  setSelectedOrderIds((prev) =>
+    prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+  );
+};
+
+// Mouse ဖိထားရင်း အခြား Row များပေါ်သို့ ဖြတ်သွားချိန် (Drag)
+const handleRowMouseEnter = (id: string, isSelectable: boolean) => {
+  if (isDraggingSelectionRef.current && isSelectable) {
+    setSelectedOrderIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  }
+};
+
+
+  
   const currentPaginatedOrders = totalDisplayOrders.slice(
     indexOfFirstItem,
     indexOfLastItem
@@ -1127,6 +1168,7 @@ const totalSelectedCod = getDisplayOrders()
                                       selectedOrderIds.includes(o.id)
                                     )
                                   }
+                                  onClick={(e) => e.stopPropagation()}
                                   onChange={(e) => {
                                     if (e.target.checked)
                                       setSelectedOrderIds(
@@ -1186,124 +1228,115 @@ const totalSelectedCod = getDisplayOrders()
                             
                           </tr>
                         </thead>
-                        <tbody>
-                         {currentPaginatedOrders.map((order, index) => (
-                            <tr
-                              key={order.id || index}
-                              className={`transition-colors ${
-                                index % 2 === 0
-                                  ? "bg-white"
-                                  : "bg-slate-50/50"
-                              } hover:bg-blue-50/60`}
-                            >
-                             {canSelectOrders && (
-                                <td className="px-2 py-2 text-center border-b border-slate-200 border-r border-slate-100">
-                                  {(activeTab === "cleared" || !order.cleared_date || order.status === "Returned") && (
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedOrderIds.includes(
-                                        order.id
-                                      )}
-                                      onChange={() => {
-                                        if (
-                                          selectedOrderIds.includes(
-                                            order.id
-                                          )
-                                        ) {
-                                          setSelectedOrderIds(
-                                            selectedOrderIds.filter(
-                                              (id) => id !== order.id
-                                            )
-                                          );
-                                        } else {
-                                          setSelectedOrderIds([
-                                            ...selectedOrderIds,
-                                            order.id,
-                                          ]);
-                                        }
-                                      }}
-                                      className="rounded border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer w-3.5 h-3.5"
-                                    />
-                                  )}
-                                </td>
-                              )}
-                              <td className="sticky left-0 bg-inherit px-3 py-2 font-mono font-bold text-slate-800 border-b border-slate-200 border-r border-slate-100 text-sm">
-                                {order.item_id || order.id}
-                              </td>
-                              <td className="px-3 py-2 font-mono text-slate-500 border-b border-slate-200 border-r border-slate-100 text-sm">
-                                {order.received_date
-                                  ? String(order.received_date).split(
-                                      "T"
-                                    )[0]
-                                  : "—"}
-                              </td>
-                              <td className="px-3 py-2 font-semibold text-slate-700 border-b border-slate-200 border-r border-slate-100 text-sm">
-                                {order.receiver_name || "Unknown"}
-                              </td>
-                              <td className="px-3 py-2 font-mono text-slate-500 border-b border-slate-200 border-r border-slate-100 text-sm">
-                                {order.receiver_phone || "—"}
-                              </td>
-                             
-                              <td className="px-3 py-2 text-slate-600 border-b border-slate-200 border-r border-slate-100 text-sm max-w-[200px] truncate" title={order.receiver_address || ""}>
-  {order.receiver_address || "—"}
-</td>
-                              <td className="px-3 py-2 text-right font-mono font-semibold text-slate-700 border-b border-slate-200 border-r border-slate-100">
-                                {order.cod_amount
-                                  ? Number(
-                                      order.cod_amount
-                                    ).toLocaleString()
-                                  : "0"}
-                              </td>
-                              <td className="px-3 py-2 text-right font-mono text-slate-500 border-b border-slate-200 border-r border-slate-100">
-                                {order.deli_fee
-                                  ? Number(
-                                      order.deli_fee
-                                    ).toLocaleString()
-                                  : "0"}
-                              </td>
-                              <td className="px-3 py-2 text-center border-b border-slate-200 border-r border-slate-100">
-                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs font-bold">
-                                  {order.fee_type || "—"}
-                                </span>
-                              </td>
-                              <td className="px-3 py-2 text-right font-mono font-bold text-slate-800 border-b border-slate-200 border-r border-slate-100">
-                                {order.total_amount
-                                  ? Number(
-                                      order.total_amount
-                                    ).toLocaleString()
-                                  : "0"}
-                              </td>
-                              <td className="px-3 py-2 font-mono text-slate-500 border-b border-slate-200 border-r border-slate-100 text-sm">
-                                {order.deliver_date ||
-                                  new Date(
-                                    order.created_at
-                                  ).toLocaleDateString()}
-                              </td>
-                              <td className="px-3 py-2 text-center border-b border-slate-200 border-r border-slate-100">
-                                {getStatusBadge(order.status)}
-                              </td>
-                              {(activeTab === "cleared" ||
-                                activeTab === "all") && (
-                                <td className="px-3 py-2 font-mono text-emerald-600 font-semibold border-b border-slate-200 text-sm">
-                                  {order.cleared_date
-                                    ? `📅 ${new Date(
-                                        order.cleared_date
-                                      ).toLocaleDateString()}`
-                                    : "—"}
-                                </td>
-                              )}
-                              {activeTab === "returned" && (
-                                <td className="px-3 py-2 font-mono text-rose-600 font-semibold border-b border-slate-200 text-sm">
-                                  {order.refund_date
-                                    ? `📅 ${new Date(
-                                        order.refund_date
-                                      ).toLocaleDateString()}`
-                                    : "—"}
-                                </td>
-                              )}
-                            </tr>
-                          ))}
-                        </tbody>
+                       <tbody >
+  {currentPaginatedOrders.map((order, index) => {
+    // Select လုပ်လို့ရသော Way ဟုတ်/မဟုတ် စစ်ဆေးခြင်း
+    const isSelectable =
+      activeTab === "cleared" || !order.cleared_date || order.status === "Returned";
+    const isSelected = selectedOrderIds.includes(order.id);
+
+    return (
+      <tr
+        key={order.id || index}
+        onMouseDown={(event) =>
+          handleRowMouseDown(event, order.id, isSelectable)
+        }
+        onMouseEnter={() => handleRowMouseEnter(order.id, isSelectable)}
+        onDragStart={(event) => event.preventDefault()}
+        className={`select-none transition-colors cursor-pointer ${
+          isSelected
+            ? "bg-orange-100/70"
+            : index % 2 === 0
+            ? "bg-white"
+            : "bg-slate-50/50"
+        } hover:bg-blue-50/60`}
+      >
+        {canSelectOrders && (
+          <td className="px-2 py-2 text-center border-b border-slate-200 border-r border-slate-100">
+            {isSelectable && (
+              <input
+                type="checkbox"
+                checked={isSelected}
+                // Checkbox ကိုနှိပ်သောအခါ row ရဲ့ drag/toggle handler မဝင်စေရန်
+                onMouseDown={(event) => {
+                  event.stopPropagation();
+                  isDraggingSelectionRef.current = false;
+                }}
+                onClick={(event) => event.stopPropagation()}
+                onChange={() => {
+                  // Functional update သုံးထားသဖြင့် stale state ကြောင့် ပြန် select မဖြစ်ပါ။
+                  setSelectedOrderIds((prev) =>
+                    prev.includes(order.id)
+                      ? prev.filter((id) => id !== order.id)
+                      : [...prev, order.id]
+                  );
+                }}
+                className="rounded border-slate-300 text-orange-500 focus:ring-orange-500 cursor-pointer w-3.5 h-3.5"
+              />
+            )}
+          </td>
+        )}
+        <td className="sticky left-0 bg-inherit px-3 py-2 font-mono font-bold text-slate-800 border-b border-slate-200 border-r border-slate-100 text-sm">
+          {order.item_id || order.id}
+        </td>
+        <td className="px-3 py-2 font-mono text-slate-500 border-b border-slate-200 border-r border-slate-100 text-sm">
+          {order.received_date
+            ? String(order.received_date).split("T")[0]
+            : "—"}
+        </td>
+        <td className="px-3 py-2 font-semibold text-slate-700 border-b border-slate-200 border-r border-slate-100 text-sm">
+          {order.receiver_name || "Unknown"}
+        </td>
+        <td className="px-3 py-2 font-mono text-slate-500 border-b border-slate-200 border-r border-slate-100 text-sm">
+          {order.receiver_phone || "—"}
+        </td>
+        <td
+          className="px-3 py-2 text-slate-600 border-b border-slate-200 border-r border-slate-100 text-sm max-w-[200px] truncate"
+          title={order.receiver_address || ""}
+        >
+          {order.receiver_address || "—"}
+        </td>
+        <td className="px-3 py-2 text-right font-mono font-semibold text-slate-700 border-b border-slate-200 border-r border-slate-100">
+          {order.cod_amount ? Number(order.cod_amount).toLocaleString() : "0"}
+        </td>
+        <td className="px-3 py-2 text-right font-mono text-slate-500 border-b border-slate-200 border-r border-slate-100">
+          {order.deli_fee ? Number(order.deli_fee).toLocaleString() : "0"}
+        </td>
+        <td className="px-3 py-2 text-center border-b border-slate-200 border-r border-slate-100">
+          <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs font-bold">
+            {order.fee_type || "—"}
+          </span>
+        </td>
+        <td className="px-3 py-2 text-right font-mono font-bold text-slate-800 border-b border-slate-200 border-r border-slate-100">
+          {order.total_amount
+            ? Number(order.total_amount).toLocaleString()
+            : "0"}
+        </td>
+        <td className="px-3 py-2 font-mono text-slate-500 border-b border-slate-200 border-r border-slate-100 text-sm">
+          {order.deliver_date ||
+            new Date(order.created_at).toLocaleDateString()}
+        </td>
+        <td className="px-3 py-2 text-center border-b border-slate-200 border-r border-slate-100">
+          {getStatusBadge(order.status)}
+        </td>
+        {(activeTab === "cleared" || activeTab === "all") && (
+          <td className="px-3 py-2 font-mono text-emerald-600 font-semibold border-b border-slate-200 text-sm">
+            {order.cleared_date
+              ? `📅 ${new Date(order.cleared_date).toLocaleDateString()}`
+              : "—"}
+          </td>
+        )}
+        {activeTab === "returned" && (
+          <td className="px-3 py-2 font-mono text-rose-600 font-semibold border-b border-slate-200 text-sm">
+            {order.refund_date
+              ? `📅 ${new Date(order.refund_date).toLocaleDateString()}`
+              : "—"}
+          </td>
+        )}
+      </tr>
+    );
+  })}
+</tbody>
                       </table>
                       {/* ─── PAGINATION CONTROLS ─── */}
                       {getDisplayOrders().length > 0 && (
@@ -1319,6 +1352,8 @@ const totalSelectedCod = getDisplayOrders()
                               <option value={50}>50</option>
                               <option value={100}>100</option>
                               <option value={200}>200</option>
+                              <option value={500}>500</option>
+                              <option value={1000}>1000</option>
                             </select>
                             <span>
                               Showing {indexOfFirstItem + 1} -{" "}

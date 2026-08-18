@@ -103,7 +103,7 @@ export default function BulkUpdatePage() {
     .from('orders')
     .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
     .or(`branch.eq.${branch},transit.cs.[{"transit_to":"${branch}"}]`) // 👈 branch parameter အမှန်အတိုင်း သုံးထားသည်
-    .in('status', ['At Office', 'Pending', 'In-Transit', 'On Way'])
+    .in('status', ['At Office', 'Pending', 'In-Transit', 'Via-Agent', 'On Way'])
     .order('created_at', { ascending: false })
     .limit(40)
 
@@ -261,12 +261,20 @@ async function performSearch(query: string) {
     }
   }
 
- const handleBulkUpdateSubmit = async (e: React.FormEvent) => {
+const resolveBulkStatus = (selectedStatus: string, selectedCityId: string) => {
+    if (selectedStatus === 'In-Transit' && selectedCityId && selectedCityId !== 'MDY' && selectedCityId !== 'YGN') {
+      return 'Via-Agent'
+    }
+    return selectedStatus
+  }
+
+  const handleBulkUpdateSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (selectedIds.length === 0) return alert("ကျေးဇူးပြု၍ အပ်ဒိတ်လုပ်မည့် ပါဆယ်ထုပ်များကို အရင်ရွေးချယ်ပါ!")
 
     setLoading(true)
     try {
+      const finalBulkStatus = resolveBulkStatus(bulkStatus, bulkRiderId)
       const isInTransit = bulkStatus === 'In-Transit';
       
       let targetEntityName = 'ဖြုတ်လိုက်သည်';
@@ -284,8 +292,8 @@ async function performSearch(query: string) {
         if (!currentOrder) return null;
 
         let changes: string[] = [];
-        if (currentOrder.status !== bulkStatus) {
-          changes.push(`Bulk စနစ်ဖြင့် Status ကို "${currentOrder.status || 'At Office'}" မှ "${bulkStatus}" သို့ ပြောင်းလဲခဲ့သည်`);
+        if (currentOrder.status !== finalBulkStatus) {
+          changes.push(`Bulk စနစ်ဖြင့် Status ကို "${currentOrder.status || 'At Office'}" မှ "${finalBulkStatus}" သို့ ပြောင်းလဲခဲ့သည်`);
         }
 
         if (isInTransit) {
@@ -317,7 +325,7 @@ async function performSearch(query: string) {
         const updatedHistory = appendLog(currentOrder.history, "Bulk Updated", logNote);
 
         const updateData: any = {
-          status: bulkStatus,
+          status: finalBulkStatus,
           history: updatedHistory
         };
 
@@ -685,9 +693,15 @@ async function performSearch(query: string) {
                         <td className="py-2.5 px-3 text-center text-gray-600 font-medium">{o.deliver_rider?.name || <span className="text-gray-300">-</span>}</td>
                         <td className="py-2.5 px-3 text-center">
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wide ${
-                            o.status === 'Delivered' ? 'bg-green-50 text-green-700 border border-green-200' : 
-                            o.status === 'Pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 
-                            o.status === 'In-Transit' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 
+                            o.status === 'At Office' ? 'bg-slate-100 text-slate-700 border border-slate-200' :
+                            o.status === 'Pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                            o.status === 'On Way' ? 'bg-sky-50 text-sky-700 border border-sky-200' :
+                            o.status === 'In-Transit' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
+                            o.status === 'Via-Agent' ? 'bg-violet-50 text-violet-700 border border-violet-200' :
+                            o.status === 'Delivered' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                            o.status === 'Returned' ? 'bg-rose-50 text-rose-700 border border-rose-200' :
+                            o.status === 'Settled' ? 'bg-green-700 text-white border border-green-800' :
+                            o.status === 'Arrived' ? 'bg-cyan-50 text-cyan-700 border border-cyan-200' :
                             'bg-gray-100 text-gray-600 border border-gray-200'
                           }`}>{o.status}</span>
                         </td>
