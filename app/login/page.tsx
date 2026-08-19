@@ -29,7 +29,9 @@ export default function LoginPage() {
           const activeUser = session.user
           const assignedBranch = activeUser?.user_metadata?.branch || "MDY"
           localStorage.setItem("user_branch", assignedBranch)
-          window.location.href = "/"
+          window.location.href = activeUser.app_metadata?.role === "customer_service"
+            ? "/customer-service"
+            : "/"
           return
         }
       } catch (err) {
@@ -77,7 +79,9 @@ export default function LoginPage() {
       if (loggedInUser) {
         const assignedBranch = loggedInUser.user_metadata?.branch || "MDY"
         localStorage.setItem("user_branch", assignedBranch)
-        window.location.href = "/"
+        window.location.href = loggedInUser.app_metadata?.role === "customer_service"
+          ? "/customer-service"
+          : "/"
       }
     } catch (err) {
       setError("Connection error. Please try again later.")

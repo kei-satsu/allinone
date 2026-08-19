@@ -392,6 +392,7 @@ export default function UserTableClient({ initialUsers }: { initialUsers: UserPr
                   >
                     <option value="staff">Staff</option>
                     <option value="admin">Admin</option>
+                    <option value="customer_service">Customer Service</option>
                     <option value="rider">Rider</option>
                   </select>
                 </div>
@@ -458,6 +459,7 @@ export default function UserTableClient({ initialUsers }: { initialUsers: UserPr
                 >
                   <option value="staff">Staff</option>
                   <option value="admin">Admin</option>
+                  <option value="customer_service">Customer Service</option>
                 </select>
               </div>
 

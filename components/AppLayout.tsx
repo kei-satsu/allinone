@@ -414,6 +414,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => { setMounted(true) }, [])
 
   const isAdmin = realBranch === "ADMIN" || userRole === "admin"
+  const isCustomerService = userRole === "customer_service"
 
   // Title Update
   useEffect(() => {
@@ -455,6 +456,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [isReady, pathname, isAdmin, router])
 
+  useEffect(() => {
+    if (isReady && isCustomerService && pathname !== "/customer-service") {
+      router.replace("/customer-service")
+    }
+  }, [isReady, isCustomerService, pathname, router])
+
   // Keybindings
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -482,6 +489,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (!mounted || !isReady) return <div className="w-full h-screen bg-[#f3f3f3]" />
   if (isPublicPage) return <div className="w-full min-h-screen">{children}</div>
   if (!isAuthenticated) return <div className="w-full min-h-screen bg-[#f3f3f3]" />
+  if (isCustomerService) return <div className="w-full min-h-screen">{children}</div>
 
   if (!isAdmin && (pathname === "/trash" || pathname.startsWith("/admin"))) {
     return <div className="w-full h-screen bg-[#f3f3f3]" />
