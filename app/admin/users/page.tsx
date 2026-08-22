@@ -1,11 +1,10 @@
 // app/admin/users/page.tsx
 import { getUsersList } from '@/app/actions/admin'
-import UserTableClient from './UserTableClient' // အောက်တွင် ပြထားသော Client Component
+import UserTableClient from './UserTableClient'
 
-export const revalidate = 0 // Data အမြဲ လတ်ဆတ်နေစေရန်
+export const dynamic = 'force-dynamic'
 
 export default async function AdminUsersPage() {
-  // Step 4 မှ ရေးခဲ့သော getUsersList Action အား လှမ်းခေါ်ခြင်း
   const users = await getUsersList()
 
   return (
@@ -13,12 +12,17 @@ export default async function AdminUsersPage() {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold">User Management</h1>
-          <p className="text-sm text-gray-400">User အကောင့်များနှင့် Role များကို စီမံခန့်ခွဲရန်</p>
+          <p className="text-sm text-gray-400">
+            User အကောင့်များနှင့် Role များကို စီမံခန့်ခွဲရန်
+          </p>
         </div>
       </div>
 
-      {/* User Table နှင့် Create User Form ပါဝင်သော Client Component */}
-      <UserTableClient initialUsers={users || []} />
+      <UserTableClient initialUsers={users ?? []} />
     </div>
   )
 }
+
+// မှတ်ချက်။ Rider lookup အတွက် page.tsx ကို getRiderById မခေါ်ပါ။
+// Client Component က server action ဖြစ်သော getRiderById ကို တိုက်ရိုက်ခေါ်ပါမည်။
+// ထို့ကြောင့် အောက်ပါ admin.ts ထဲတွင် getRiderById ကို export လုပ်ထားရန်လိုပါသည်။

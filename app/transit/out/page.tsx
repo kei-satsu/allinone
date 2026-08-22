@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import * as XLSX from 'xlsx'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import EditOrderModal from '@/components/EditOrderModal' // သင့် Component တည်နေရာလမ်းကြောင်းအတိုင်း ချိန်ပေးပါ
@@ -105,6 +106,12 @@ useEffect(() => {
   const [viewingDetailOrder, setViewingDetailOrder] = useState<any | null>(null);
   const [showMobileFilters, setShowMobileFilters] = useState(false)
   const [expandedMobileCards, setExpandedMobileCards] = useState<Record<string, boolean>>({})
+  const [showExcelModal, setShowExcelModal] = useState(false)
+  const [excelCols, setExcelCols] = useState<Record<string, boolean>>(() => {
+    const initialState: Record<string, boolean> = {}
+    COLUMN_DEFS.forEach(col => { initialState[col.key] = col.defaultVisible })
+    return initialState
+  })
 
   // ၁။ Print ထုတ်မည့် Data ကို ယာယီသိမ်းထားမည့် State
   const [activePrintOrder, setActivePrintOrder] = useState<any | null>(null);
@@ -263,6 +270,45 @@ const start = append ? ordersRef.current.length : 0;
   setLoading(false);
   setLoadingMore(false);
 }, [userBranch, colFilters]);
+
+  const handleExportExcel = () => {
+    const dataToExport = selectedOrders.size > 0
+      ? orders.filter(order => selectedOrders.has(order.id))
+      : orders
+
+    if (dataToExport.length === 0) {
+      alert("Export ထုတ်ရန် မှတ်တမ်းမရှိပါ။")
+      return
+    }
+
+    const excelRows = dataToExport.map(order => {
+      const rowData: Record<string, unknown> = {}
+
+      COLUMN_DEFS.forEach(col => {
+        if (!excelCols[col.key]) return
+
+        if (col.key === 'pickup_rider' || col.key === 'deliver_rider') {
+          rowData[col.label] = order[col.key]?.name || '-'
+        } else if (col.key === 'image_url') {
+          rowData[col.label] = order.image_url ? 'Has Photo' : '-'
+        } else if (col.key === 'branch') {
+          rowData[col.label] = order.branch === 'MDY' ? 'MANDALAY' : order.branch === 'YGN' ? 'YANGON' : order.branch
+        } else if (col.key === 'created_at') {
+          rowData[col.label] = order[col.key] ? new Date(order[col.key]).toLocaleDateString() : '-'
+        } else {
+          rowData[col.label] = order[col.key] ?? '-'
+        }
+      })
+
+      return rowData
+    })
+
+    const worksheet = XLSX.utils.json_to_sheet(excelRows)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Transit_Out_Report')
+    XLSX.writeFile(workbook, `Transit_Out_${new Date().toISOString().split('T')[0]}.xlsx`)
+    setShowExcelModal(false)
+  }
 
   // Filters ပြောင်းလဲမှုကို Debounce လုပ်၍ စောင့်ကြည့်ရန်
   const filterString = JSON.stringify(colFilters);
@@ -511,6 +557,21 @@ const start = append ? ordersRef.current.length : 0;
             Refresh
           </button>
 
+          <button
+            onClick={() => {
+              const currentVisible: Record<string, boolean> = {}
+              COLUMN_DEFS.forEach(col => { currentVisible[col.key] = visibleCols[col.key] })
+              setExcelCols({ ...currentVisible, item_id: true })
+              setShowExcelModal(true)
+            }}
+            className="bg-green-600 hover:bg-green-700 text-white font-medium px-3 py-1.5 rounded-md transition-all text-xs flex items-center gap-1.5 shadow-sm"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Excel Export
+          </button>
+
          
         </div>
       </div>
@@ -624,6 +685,61 @@ const start = append ? ordersRef.current.length : 0;
             onRowContextMenu={() => {}}
             onPreviewImage={setPreviewImage}
           />
+
+      {showExcelModal && (
+        <div
+          className="fixed inset-0 bg-gray-900/60 backdrop-blur-[3px] flex items-end sm:items-center justify-center z-50 p-0 sm:p-4 animate-in fade-in duration-200"
+          onClick={() => setShowExcelModal(false)}
+        >
+          <div className="absolute inset-0" />
+          <div
+            className="relative bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-xl max-h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-200 border border-gray-100"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 bg-green-50 border-b border-green-100 flex justify-between items-center shrink-0">
+              <div>
+                <h3 className="text-sm font-extrabold text-green-900 uppercase tracking-wider">📊 Export to Excel (.xlsx)</h3>
+                <p className="text-[11px] text-green-700 font-medium mt-0.5">
+                  {selectedOrders.size > 0 ? `ရွေးချယ်ထားသော အော်ဒါ (${selectedOrders.size}) စောင်ကို ထုတ်ယူပါမည်။` : `လက်ရှိ Transit Out အော်ဒါ (${orders.length}) စောင်ကို ထုတ်ယူပါမည်။`}
+                </p>
+              </div>
+              <button onClick={() => setShowExcelModal(false)} className="text-gray-400 hover:text-gray-700 bg-gray-200/60 hover:bg-gray-200 w-7 h-7 flex items-center justify-center rounded-full transition-colors shrink-0" aria-label="Close export dialog">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto flex-1 bg-slate-50/50">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Excel တွင် ပါဝင်မည့် Column များ ရွေးရန်</span>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setExcelCols(Object.fromEntries(COLUMN_DEFS.map(col => [col.key, true])))} className="text-[10px] font-bold text-green-600 hover:underline">Select All</button>
+                  <span className="text-gray-300 text-[10px]">|</span>
+                  <button type="button" onClick={() => setExcelCols(Object.fromEntries(COLUMN_DEFS.map(col => [col.key, col.key === 'item_id'])))} className="text-[10px] font-bold text-red-500 hover:underline">Clear All</button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                {COLUMN_DEFS.map(col => (
+                  <label key={`excel-${col.key}`} className="flex items-center p-2 hover:bg-slate-50 cursor-pointer text-xs text-gray-700 font-medium rounded-lg transition-colors">
+                    <input
+                      type="checkbox"
+                      className="mr-2.5 w-4 h-4 text-green-600 rounded border-gray-300 accent-green-600"
+                      checked={excelCols[col.key] || false}
+                      onChange={() => setExcelCols(prev => ({ ...prev, [col.key]: !prev[col.key] }))}
+                      disabled={col.key === 'item_id'}
+                    />
+                    <span className="truncate">{col.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-4 bg-gray-50 border-t border-gray-200 flex items-center gap-3 shrink-0">
+              <button onClick={handleExportExcel} className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 rounded-xl text-center shadow-md transition-colors text-xs">📂 Excel ဖိုင်ထုတ်မည် (Confirm)</button>
+              <button onClick={() => setShowExcelModal(false)} className="px-5 py-2.5 bg-white border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-100 transition-colors text-xs">မလုပ်တော့ပါ</button>
+            </div>
+          </div>
+        </div>
+      )}
       
      
 
