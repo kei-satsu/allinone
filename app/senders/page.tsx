@@ -404,6 +404,16 @@ const handleExportExcel = async () => {
 
   // ─── Helper Function: Render Dynamic Tables with Custom Colors ───
   const renderTable = (sectionTitle: string, ordersList: any[], isReturned = false) => {
+    const sortedOrders = [...ordersList].sort((a, b) => {
+      const dateA = a.received_date ? String(a.received_date).split("T")[0] : "";
+      const dateB = b.received_date ? String(b.received_date).split("T")[0] : "";
+
+      if (!dateA && !dateB) return 0;
+      if (!dateA) return 1;
+      if (!dateB) return -1;
+      return dateA.localeCompare(dateB);
+    });
+
     // Section Title Banner
     const secRow = worksheet.addRow([sectionTitle]);
     worksheet.mergeCells(`A${secRow.number}:J${secRow.number}`);
@@ -439,7 +449,7 @@ const handleExportExcel = async () => {
     });
 
     // Table Data Rows
-    ordersList.forEach((o, idx) => {
+    sortedOrders.forEach((o, idx) => {
       const row = worksheet.addRow([
         idx + 1,
         o.item_id || o.id,
