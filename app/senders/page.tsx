@@ -16,6 +16,21 @@ export default function SendersDashboard() {
   const [realBranch, setRealBranch] = useState<string | null>(null);
 
   const [orderSearchTerm, setOrderSearchTerm] = useState("");
+  const [columnFilters, setColumnFilters] = useState({
+    wayId: "",
+    receivedDate: "",
+    receiverName: "",
+    phone: "",
+    address: "",
+    cod: "",
+    deliFee: "",
+    feeType: "",
+    total: "",
+    deliverDate: "",
+    status: "",
+    clearedDate: "",
+    refundDate: "",
+  });
   const [filterFeeType, setFilterFeeType] = useState("All");
   const [filterLoc, setFilterLoc] = useState("All");
   const [startDate, setStartDate] = useState("");
@@ -74,6 +89,7 @@ const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
   receivedStartDate,
   receivedEndDate,
   clearedFilterDate,
+  columnFilters,
   selectedSender,
   itemsPerPage
 ]);
@@ -172,6 +188,21 @@ const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
     setOrders([]);
     setSelectedOrderIds([]);
     setOrderSearchTerm("");
+    setColumnFilters({
+      wayId: "",
+      receivedDate: "",
+      receiverName: "",
+      phone: "",
+      address: "",
+      cod: "",
+      deliFee: "",
+      feeType: "",
+      total: "",
+      deliverDate: "",
+      status: "",
+      clearedDate: "",
+      refundDate: "",
+    });
     setFilterFeeType("All");
     setFilterLoc("All");
     setStartDate("");
@@ -243,6 +274,28 @@ const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
       !receivedStartDate || receivedDate >= receivedStartDate;
     const matchesReceivedEndDate =
       !receivedEndDate || receivedDate <= receivedEndDate;
+    const columnValues = {
+      wayId: order.item_id || order.id,
+      receivedDate,
+      receiverName: order.receiver_name,
+      phone: order.receiver_phone,
+      address: order.receiver_address,
+      cod: order.cod_amount,
+      deliFee: order.deli_fee,
+      feeType: order.fee_type,
+      total: order.total_amount,
+      deliverDate: order.deliver_date || orderDate,
+      status: order.status,
+      clearedDate: clearedDateVal,
+      refundDate: order.refund_date,
+    };
+    const matchesColumnFilters = Object.entries(columnFilters).every(
+      ([key, value]) =>
+        !value ||
+        String(columnValues[key as keyof typeof columnValues] ?? "")
+          .toLowerCase()
+          .includes(value.toLowerCase())
+    );
 
     return (
       matchesSearch &&
@@ -252,9 +305,14 @@ const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
       matchesEndDate &&
       matchesReceivedStartDate &&
       matchesReceivedEndDate &&
-      matchesClearedFilterDate
+      matchesClearedFilterDate &&
+      matchesColumnFilters
     );
   });
+
+  const updateColumnFilter = (key: keyof typeof columnFilters, value: string) => {
+    setColumnFilters((current) => ({ ...current, [key]: value }));
+  };
 
  const unclearedOrders = filteredOrders.filter(
   (o) =>
@@ -555,6 +613,7 @@ const selectableOrders =
 const canSelectOrders = true;
 
   const totalDisplayOrders = getDisplayOrders();
+  const hasActiveColumnFilter = Object.values(columnFilters).some(Boolean);
   const totalPages = Math.ceil(totalDisplayOrders.length / itemsPerPage) || 1;
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -1136,7 +1195,7 @@ const totalSelectedCod = getDisplayOrders()
 
                 {/* ─── EXCEL-STYLE TABLE ─── */}
                 <div className="flex-1 overflow-auto custom-scrollbar">
-                  {getDisplayOrders().length > 0 ? (
+                  {getDisplayOrders().length > 0 || hasActiveColumnFilter ? (
                     <>
                       <table className="min-w-[1180px] w-full border-collapse text-sm">
                         <thead>
@@ -1209,6 +1268,70 @@ const totalSelectedCod = getDisplayOrders()
                               </th>
                             )}
                             
+                          </tr>
+                          <tr className="bg-white border-b border-slate-200">
+                            {canSelectOrders && (
+                              <th className="px-2 py-1 border-r border-slate-100" />
+                            )}
+                            {(
+                              [
+                                ["wayId", "Way ID"],
+                                ["receivedDate", "Rcvd date"],
+                                ["receiverName", "Receiver"],
+                                ["phone", "Phone"],
+                                ["address", "Address"],
+                                ["cod", "COD"],
+                                ["deliFee", "Deli fee"],
+                                ["feeType", "Fee type"],
+                                ["total", "Total"],
+                                ["deliverDate", "Deli date"],
+                                ["status", "Status"],
+                              ] as const
+                            ).map(([key, placeholder]) => (
+                              <th
+                                key={key}
+                                className="px-1 py-1 border-r border-slate-100"
+                              >
+                                <input
+                                  type="text"
+                                  value={columnFilters[key]}
+                                  onChange={(event) =>
+                                    updateColumnFilter(key, event.target.value)
+                                  }
+                                  placeholder={placeholder}
+                                  aria-label={`Filter ${placeholder}`}
+                                  className="w-full min-w-[74px] px-1.5 py-1 bg-slate-50 border border-slate-200 rounded text-xs font-normal text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-orange-300"
+                                />
+                              </th>
+                            ))}
+                            {(activeTab === "cleared" || activeTab === "all") && (
+                              <th className="px-1 py-1">
+                                <input
+                                  type="text"
+                                  value={columnFilters.clearedDate}
+                                  onChange={(event) =>
+                                    updateColumnFilter("clearedDate", event.target.value)
+                                  }
+                                  placeholder="Cleared date"
+                                  aria-label="Filter Cleared Date"
+                                  className="w-full min-w-[86px] px-1.5 py-1 bg-slate-50 border border-slate-200 rounded text-xs font-normal text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-orange-300"
+                                />
+                              </th>
+                            )}
+                            {activeTab === "returned" && (
+                              <th className="px-1 py-1">
+                                <input
+                                  type="text"
+                                  value={columnFilters.refundDate}
+                                  onChange={(event) =>
+                                    updateColumnFilter("refundDate", event.target.value)
+                                  }
+                                  placeholder="Refund date"
+                                  aria-label="Filter Refund Date"
+                                  className="w-full min-w-[86px] px-1.5 py-1 bg-slate-50 border border-slate-200 rounded text-xs font-normal text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-orange-300"
+                                />
+                              </th>
+                            )}
                           </tr>
                         </thead>
                        <tbody >
