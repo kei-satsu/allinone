@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { supabase } from "@/lib/supabase"; // 💡 အစ်ကို့ရဲ့ supabase path အတိုင်း ပြင်ပေးပါ
+import { createCity } from "@/lib/databaseApi";
 
 interface AddCityFormProps {
   isOpen: boolean;         // Modal ပွင့်နေသလား စစ်သည့် State
@@ -26,18 +26,7 @@ export default function AddCityForm({ isOpen, onClose, onCityAdded }: AddCityFor
 
     try {
       // 💡 Supabase ထဲသို့ C.ID ရော name ရော တွဲလျက် လှမ်းထည့်ခြင်း
-      const { error } = await supabase
-        .from("cities")
-        .insert([{ "C.ID": cityId.trim(), name: cityName.trim() }]);
-
-      if (error) {
-        if (error.code === "23505") {
-          setStatus({ type: "error", text: "❌ ဒီ C.ID (သို့) မြို့နာမည်က ရှိပြီးသားဖြစ်နေပါတယ်ဗျာ။" });
-        } else {
-          setStatus({ type: "error", text: `❌ အမှားရှိနေပါသည်- ${error.message}` });
-        }
-        return;
-      }
+      await createCity({ "C.ID": cityId.trim(), name: cityName.trim() });
 
       setStatus({ type: "success", text: "🎉 မြို့အသစ်ကို အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။" });
       setCityId("");

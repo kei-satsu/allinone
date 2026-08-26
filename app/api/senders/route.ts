@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     const location = searchParams.get('LOC')
     let query = supabaseServer
       .from('senders')
-      .select('*, orders(id, status, cleared_date)')
+      .select('id, name, phone, LOC, orders(id, status, cleared_date)')
       .order('name', { ascending: true })
 
     if (location) query = query.eq('LOC', location)

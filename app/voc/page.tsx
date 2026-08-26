@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { supabase } from "@/lib/supabase";
+import { apiClient } from "@/lib/databaseApi";
 import { toPng } from "html-to-image";
 
 export default function VoucherTemplate() {
@@ -130,7 +130,7 @@ const handleSendToPCPrint = useCallback(async () => {
   }
 }, [pcIp, selectedPrinter, voucherData]);
 
-  // ─── Fetch Order from Supabase ────────────────
+  // ─── Fetch Order from apiClient ────────────────
   useEffect(() => {
     async function loadVoucherData() {
       const savedData = localStorage.getItem("print_order_data");
@@ -143,7 +143,7 @@ const handleSendToPCPrint = useCallback(async () => {
 
       try {
         // Try with primary key 'id'
-        const { data, error } = await supabase
+        const { data, error } = await apiClient
           .from("orders")
           .select("*")
           .eq("id", orderId)
@@ -151,7 +151,7 @@ const handleSendToPCPrint = useCallback(async () => {
 
         if (error) {
           console.error("First attempt failed, trying with item_id...", error);
-          const { data: retryData } = await supabase
+          const { data: retryData } = await apiClient
             .from("orders")
             .select("*")
             .eq("item_id", orderId)
@@ -277,7 +277,7 @@ const handleSaveAsImage = useCallback(() => {
       <div className="min-h-screen bg-gray-900 flex items-center justify-center text-white font-sans">
         <div className="text-center space-y-2">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
-          <p className="text-sm text-gray-400">Loading Voucher From Supabase...</p>
+          <p className="text-sm text-gray-400">Loading Voucher From apiClient...</p>
         </div>
       </div>
     );
@@ -293,7 +293,7 @@ const handleSaveAsImage = useCallback(() => {
             ID: {localStorage.getItem("print_order_data")}
           </p>
           <p className="text-[11px] text-amber-400 mt-2">
-            Supabase Table နာမည် (သို့မဟုတ်) ID Column မတူညီခြင်း ဖြစ်နိုင်ပါသည်။
+            apiClient Table နာမည် (သို့မဟုတ်) ID Column မတူညီခြင်း ဖြစ်နိုင်ပါသည်။
           </p>
         </div>
       </div>

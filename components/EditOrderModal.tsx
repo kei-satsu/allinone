@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { apiClient } from '@/lib/databaseApi'
 import dynamic from 'next/dynamic'
 
 // ImageUploader ကို Client-side သီးသန့်အလုပ်လုပ်ရန် Dynamic Import သုံးခြင်း
@@ -115,12 +115,12 @@ useEffect(() => {
     if (!isOpen) return
     
     async function fetchSenders() {
-      const { data, error } = await supabase.from('senders').select('*').order('name', { ascending: true })
+      const { data, error } = await apiClient.from('senders').select('*').order('name', { ascending: true })
       if (!error && data) setSenders(data)
     }
 
     async function fetchCities() {
-      const { data, error } = await supabase.from('cities').select('*').order('name', { ascending: true })
+      const { data, error } = await apiClient.from('cities').select('*').order('name', { ascending: true })
       if (!error && data) setCities(data)
     }
 
@@ -138,7 +138,7 @@ useEffect(() => {
   if (!currentBranch) return;
 
   async function fetchRiders() {
-    const { data, error } = await supabase
+    const { data, error } = await apiClient
       .from('riders')
       .select('*')
       .eq('branch', currentBranch)
@@ -315,7 +315,7 @@ const handleUpdateSubmit = async (e: React.FormEvent) => {
     history: updatedHistory      // 🌟 History Array အသစ်
   }
 
-  const { error } = await supabase
+  const { error } = await apiClient
     .from('orders')
     .update(payload)
     .eq('id', orderData.id)

@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect, useRef } from 'react'
-import { supabase } from '@/lib/supabase'
+import { apiClient } from '@/lib/databaseApi'
 import { useRouter } from 'next/navigation'
 import AddCityForm from "@/components/AddCityForm";
 import { createWorker } from 'tesseract.js'
@@ -224,7 +224,7 @@ const loadCities = async (targetBranch?: string) => {
   // Parameter မပါလာပါက userBranch သို့မဟုတ် localStorage မှ ယူမည်
   const activeBranch = targetBranch || userBranch || localStorage.getItem('user_branch') || '';
 
-  const { data, error } = await supabase
+  const { data, error } = await apiClient
     .from("cities")
     .select('*')
     .order('sort_order', { ascending: true });  
@@ -236,8 +236,8 @@ const loadCities = async (targetBranch?: string) => {
   
   if (data) {
     // activeBranch ပေါ်မူတည်ပြီး ထိပ်ဆုံး ရွှေ့ပေးခြင်း
-    const topCity = data.filter(city => city["C.ID"] === activeBranch);
-    const otherCities = data.filter(city => city["C.ID"] !== activeBranch);
+    const topCity = data.filter((city: any) => city["C.ID"] === activeBranch);
+    const otherCities = data.filter((city: any) => city["C.ID"] !== activeBranch);
 
     setCities([...topCity, ...otherCities]);
   }
@@ -343,21 +343,21 @@ const loadCities = async (targetBranch?: string) => {
   }, [isResizing])
 
   async function fetchRiders(branch: string) {
-    const { data } = await supabase.from('riders').select('*').eq('branch', branch)
+    const { data } = await apiClient.from('riders').select('*').eq('branch', branch)
     if (data) setRiders(data)
   }
 
   useEffect(() => {
     if (!userBranch) return
     async function fetchSenders() {
-      const { data, error } = await supabase.from('senders').select('*').order('name', { ascending: true })
+      const { data, error } = await apiClient.from('senders').select('*').order('name', { ascending: true })
       if (!error && data) setSenders(data)
     }
     fetchSenders()
   }, [userBranch])
 
  async function fetchPendingItems(branch: string) {
-  const { data, error } = await supabase
+  const { data, error } = await apiClient
     .from('orders')
     .select('*')
     .eq('branch', branch)
@@ -435,7 +435,7 @@ const loadCities = async (targetBranch?: string) => {
           const nameTrim = String(payload.sender?.name || '').trim()
           let senderToUse: any = null
           if (nameTrim) {
-            const { data: found, error: findErr } = await supabase
+            const { data: found, error: findErr } = await apiClient
               .from('senders')
               .select('*')
               .ilike('name', nameTrim)
@@ -445,7 +445,7 @@ const loadCities = async (targetBranch?: string) => {
           }
 
           if (!senderToUse) {
-            const { data: newSender, error: sErr } = await supabase
+            const { data: newSender, error: sErr } = await apiClient
               .from('senders')
               .insert([{ name: nameTrim, phone: payload.sender?.phone, LOC: payload.sender?.LOC }])
               .select()
@@ -456,7 +456,7 @@ const loadCities = async (targetBranch?: string) => {
 
           // Update order with sender id
           const finalOrder = { ...payload.order, sender_id: senderToUse.id }
-          const { error: oErr } = await supabase.from('orders').update(finalOrder).eq('id', finalOrder.id)
+          const { error: oErr } = await apiClient.from('orders').update(finalOrder).eq('id', finalOrder.id)
           if (oErr) throw oErr
 
           // Ensure dropdown state has this sender
@@ -464,13 +464,13 @@ const loadCities = async (targetBranch?: string) => {
         } 
         // 🌟 ၂။ ပုံမှန် ရှိပြီးသား Sender မို့ အော်ဒါတစ်ခုတည်း Update လုပ်မည့်အပိုင်း
         else if (payload && payload.type === 'update_order') {
-          const { error } = await supabase.from('orders').update(payload.order).eq('id', payload.order.id)
+          const { error } = await apiClient.from('orders').update(payload.order).eq('id', payload.order.id)
           if (error) throw error
         } else if (payload && payload.type === 'order') {
-          const { error } = await supabase.from('orders').insert([payload.order || payload])
+          const { error } = await apiClient.from('orders').insert([payload.order || payload])
           if (error) throw error
         } else {
-          const { error } = await supabase.from('orders').insert([itemToSync.payload])
+          const { error } = await apiClient.from('orders').insert([itemToSync.payload])
           if (error) throw error
         }
 
@@ -550,7 +550,7 @@ setOcrWords([]);
     if (processedStack.length === 0) return
     const lastId = processedStack[processedStack.length - 1]
     setProcessedStack(prev => prev.slice(0, -1))
-    const { data, error } = await supabase.from('orders').select('*').eq('id', lastId).single()
+    const { data, error } = await apiClient.from('orders').select('*').eq('id', lastId).single()
     if (!error && data) {
       setPendingItems(prev => [data, ...prev])
       handleSelectItem(data)
@@ -695,7 +695,7 @@ const logNote = [
           const nameTrim = (formData.sender_name || '').trim()
           let existingSender: any = null
           if (nameTrim) {
-            const { data: found, error: findErr } = await supabase
+            const { data: found, error: findErr } = await apiClient
               .from('senders')
               .select('*')
               .ilike('name', nameTrim)
@@ -710,7 +710,7 @@ const logNote = [
             // ensure local state contains this sender
             setSenders(prev => prev.some(s => String(s.id) === String(existingSender.id)) ? prev : [...prev, existingSender])
           } else {
-            const { data: newSender, error: senderError } = await supabase
+            const { data: newSender, error: senderError } = await apiClient
               .from('senders')
               .insert([{ name: nameTrim, phone: formData.sender_phone, LOC: formData.sender_loc }])
               .select()
@@ -728,7 +728,7 @@ const logNote = [
         }
 
         // ပြီးမှ Order ကို Update လုပ်မယ်
-        const { error: orderError } = await supabase.from('orders').update(baseOrderPayload).eq('id', selectedItem.id)
+        const { error: orderError } = await apiClient.from('orders').update(baseOrderPayload).eq('id', selectedItem.id)
         if (orderError) throw orderError
 
        // ── 💡 ပုံရွှေ့ပေးမည့် Logic အသစ် (နေရာ ၂ ခုလုံးတွင် ဤကုဒ်ဖြင့် အစားထိုးပါ) ──

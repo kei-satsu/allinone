@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { supabase } from "@/lib/supabase";
+import { apiClient } from "@/lib/databaseApi";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
@@ -25,7 +25,7 @@ export default function PrepaidSenderSummary() {
     setLoading(true);
 
     // Muti-row orders query matching the prepaid rules
-    const { data, error } = await supabase
+    const { data, error } = await apiClient
       .from("orders")
       .select("sender_name, cod_amount, deli_fee, total_amount")
       .eq("is_deleted", false)
@@ -42,7 +42,7 @@ export default function PrepaidSenderSummary() {
       // Grouping logic by sender_name
       const grouped: Record<string, SenderSummary> = {};
 
-      data.forEach((item) => {
+      data.forEach((item: any) => {
         const name = item.sender_name?.trim() || "Unknown Sender";
         if (!grouped[name]) {
           grouped[name] = {

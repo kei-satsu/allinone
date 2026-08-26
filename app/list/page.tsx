@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect, useRef } from 'react'
-import { supabase } from '@/lib/supabase'
+import { apiClient } from '@/lib/databaseApi'
 import * as XLSX from 'xlsx'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -260,7 +260,7 @@ useEffect(() => {
     const start = append ? orders.length : 0;
     const end = start + 99;
 
-    let query = supabase
+    let query = apiClient
       .from('orders')
       .select(
         `
@@ -316,7 +316,7 @@ useEffect(() => {
     const { data, error, count } = await query;
 
     if (error) {
-      console.error("Supabase Fetch Error Details:", {
+      console.error("apiClient Fetch Error Details:", {
   message: error.message,
   code: error.code,
   details: error.details,
@@ -336,7 +336,7 @@ useEffect(() => {
   }
 
   const fetchRiders = async () => {
-    const { data } = await supabase.from('riders').select('*')
+    const { data } = await apiClient.from('riders').select('*')
     if (data) setRiders(data)
   }
 
@@ -472,7 +472,7 @@ useEffect(() => {
 
   const handleDeleteOrder = async (orderId: string) => {
     if (confirm("ဒီမှတ်တမ်းကို အမှိုက်ပုံး (Recently Deleted) ထဲသို့ ထည့်ရန် သေချာပါသလား?")) {
-      const { error } = await supabase
+      const { error } = await apiClient
         .from('orders')
         .update({ 
           is_deleted: true, 

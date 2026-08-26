@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect, useRef } from 'react'
-import { supabase } from '@/lib/supabase'
+import { apiClient } from '@/lib/databaseApi'
 import * as XLSX from 'xlsx'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -236,7 +236,7 @@ const [excelCols, setExcelCols] = useState<Record<string, boolean>>(() => {
 
 
 const fetchSenders = async (branchCode: string) => {
-  const { data, error } = await supabase
+  const { data, error } = await apiClient
     .from('orders')
     .select('sender_name')
     .eq('is_deleted', false)
@@ -253,7 +253,7 @@ const fetchSenders = async (branchCode: string) => {
 
   // Sender အမည်များကို Group ဖွဲ့ပြီး Count တွက်ခြင်း
   const counts: Record<string, number> = {};
-  data.forEach((item) => {
+  data.forEach((item: any) => {
     const name = item.sender_name || 'Unknown Sender';
     counts[name] = (counts[name] || 0) + 1;
   });
@@ -356,7 +356,7 @@ useEffect(() => {
     const start = append ? orders.length : 0;
     const end = start + 99;
 
-    let query = supabase
+    let query = apiClient
       .from('orders')
       .select(
         `
@@ -431,7 +431,7 @@ useEffect(() => {
   }
 
   const fetchRiders = async () => {
-    const { data } = await supabase.from('riders').select('*')
+    const { data } = await apiClient.from('riders').select('*')
     if (data) setRiders(data)
   }
 
@@ -596,7 +596,7 @@ useEffect(() => {
 
   const handleDeleteOrder = async (orderId: string) => {
     if (confirm("ဒီမှတ်တမ်းကို အမှိုက်ပုံး (Recently Deleted) ထဲသို့ ထည့်ရန် သေချာပါသလား?")) {
-      const { error } = await supabase
+      const { error } = await apiClient
         .from('orders')
         .update({ 
           is_deleted: true, 

@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "@/lib/supabase";
+import { apiClient } from "@/lib/databaseApi";
 import { useRouter } from "next/navigation";
 import EditOrderModal from "@/components/EditOrderModal";
 import * as XLSX from "xlsx";
@@ -167,7 +167,7 @@ export default function DailyReport() {
 
     try {
       // ၁။ Orders များအား Date ဖြင့် အကြမ်းဖျင်း ဆွဲထုတ်ခြင်း
-      const { data: ordersData, error: ordersError } = await supabase
+      const { data: ordersData, error: ordersError } = await apiClient
         .from("orders")
         .select(
           `
@@ -185,7 +185,7 @@ export default function DailyReport() {
         alert(`Orders fetch failed: ${ordersError.message || ordersError}`);
       } else {
         // 🌟 ပြင်ဆင်ထားသည့် Logic အပြည့်အစုံ
-        const filteredOrders = (ordersData || []).filter((order) => {
+        const filteredOrders = (ordersData || []).filter((order: any) => {
           const transitList = Array.isArray(order.transit) ? order.transit : [];
           const hasTransit = transitList.length > 0;
 
@@ -245,7 +245,7 @@ export default function DailyReport() {
       }
 
       // ၂။ Handovers စာရင်းဆွဲထုတ်ခြင်း (.eq မှာတော့ "" ထည့်စရာမလိုပါ)
-      const { data: handoversData, error: handoversError } = await supabase
+      const { data: handoversData, error: handoversError } = await apiClient
         .from("cash_handovers")
         .select("*")
         .eq("branch", activeBranch)
@@ -268,7 +268,7 @@ export default function DailyReport() {
   };
 
   const fetchRiders = async () => {
-    const { data, error } = await supabase.from("riders").select("*");
+    const { data, error } = await apiClient.from("riders").select("*");
     if (data) setRiders(data);
   };
 
@@ -454,7 +454,7 @@ export default function DailyReport() {
     if (!confirm("ဖျက်မှာသေချာပြီလား?")) return;
 
     try {
-      const { error } = await supabase
+      const { error } = await apiClient
         .from("cash_handovers")
         .delete()
         .eq("id", handoverId);
@@ -473,7 +473,7 @@ export default function DailyReport() {
     if (!handoverModal.riderName) return;
     setSubmitting(true);
     try {
-      const { error } = await supabase.from("cash_handovers").insert([
+      const { error } = await apiClient.from("cash_handovers").insert([
         {
           rider_name: handoverModal.riderName,
           branch: userBranch,
@@ -2173,7 +2173,7 @@ export default function DailyReport() {
                         const idsForQuery = selectedIds.map((id) =>
                           isNaN(Number(id)) ? id : Number(id),
                         );
-                        const { error } = await supabase
+                        const { error } = await apiClient
                           .from("orders")
                           .update({ status: "Settled" })
                           .in("id", idsForQuery);
@@ -2466,7 +2466,7 @@ export default function DailyReport() {
                       const idsForQuery = selectedIds.map((id) =>
                         isNaN(Number(id)) ? id : Number(id),
                       );
-                      const { error } = await supabase
+                      const { error } = await apiClient
                         .from("orders")
                         .update({ status: "Settled" })
                         .in("id", idsForQuery);

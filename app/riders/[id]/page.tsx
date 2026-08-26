@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { getRiders } from '@/lib/databaseApi'
+import { getOrders } from '@/lib/ordersApi'
 
 
 // Helper function to compute default date range (Prev month 26th - This month 25th)
@@ -79,31 +80,17 @@ export default function RiderDetailPage() {
     const fetchData = async () => {
       setLoading(true)
 
-      const { data: riderData, error: riderError } = await supabase
-        .from('riders')
-        .select('name, phone, branch')
-        .eq('id', riderId)
-        .single()
-
-      if (riderError || !riderData) {
+      try {
+        const { data: riderList } = await getRiders({ select: 'name, phone, branch', id: riderId })
+        const riderData = riderList[0]
+        if (!riderData) throw new Error('Rider not found')
+        setRider(riderData)
+        const { data: orderData } = await getOrders({ deliver_rider_id: riderId, branch: userBranch, sortBy: 'created_at', order: 'desc', limit: 1000 })
+        setOrders(orderData || [])
+      } catch (error) {
         alert('Rider not found')
         router.back()
         return
-      }
-      setRider(riderData)
-
-      const { data: orderData, error: orderError } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('deliver_rider_id', riderId)
-        .eq('branch', userBranch)
-        .order('created_at', { ascending: false })
-
-      if (orderError) {
-        console.error(orderError)
-        setOrders([])
-      } else {
-        setOrders(orderData || [])
       }
       setLoading(false)
     }

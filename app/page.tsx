@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect, useMemo } from 'react'
-import { supabase } from '@/lib/supabase'
+import { apiClient } from '@/lib/databaseApi'
 import Link from 'next/link'
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
@@ -57,7 +57,7 @@ export default function Dashboard() {
         let hasMore = true
 
         while (hasMore) {
-          const { data, error } = await supabase
+          const { data, error } = await apiClient
             .from('orders')
             .select('*')
             .range(page * pageSize, (page + 1) * pageSize - 1)
@@ -142,7 +142,7 @@ const handleExportExcel = async () => {
     }
 
     while (hasMore) {
-      let query = supabase
+      let query = apiClient
         .from('orders')
         .select(`
           *,
@@ -173,7 +173,7 @@ const handleExportExcel = async () => {
       const { data, error } = await query;
 
       if (error) {
-        throw new Error(`Supabase Query Error: ${error.message}`);
+        throw new Error(`apiClient Query Error: ${error.message}`);
       }
 
       if (!data || data.length === 0) {

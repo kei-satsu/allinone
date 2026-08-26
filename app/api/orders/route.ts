@@ -24,7 +24,7 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const page = Math.max(Number(searchParams.get('page') || '1'), 1)
-    const limit = Math.min(Math.max(Number(searchParams.get('limit') || '100'), 1), 1000)
+    const limit = Math.min(Math.max(Number(searchParams.get('limit') || '50'), 1), 1000)
     const from = (page - 1) * limit
     const to = from + limit - 1
     const status = searchParams.get('status')

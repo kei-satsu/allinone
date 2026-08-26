@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
+import { apiClient } from '@/lib/databaseApi'
 import * as XLSX from 'xlsx'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -193,7 +193,7 @@ const start = append ? ordersRef.current.length : 0;
   // ✅ ပြင်ဆင်ချက် ၁: transitFilterObj ကို JSON.stringify ထဲ ထည့်ပေးပါ
   const transitSearchFilter = JSON.stringify([transitFilterObj]);
 
-  let query = supabase
+  let query = apiClient
     .from('orders')
     .select(`
       *,
@@ -240,7 +240,7 @@ const start = append ? ordersRef.current.length : 0;
  const { data, error, count } = await query;
 
   if (error) {
-    console.error("❌ Supabase DB Fetch Error:", error.message);
+    console.error("❌ apiClient DB Fetch Error:", error.message);
   } else if (data) {
     const formattedOrders = data.map((order: any) => {
       let transitArray = order.transit;
@@ -323,7 +323,7 @@ const start = append ? ordersRef.current.length : 0;
   }, [userBranch, filterString, fetchData]);
 
   const fetchRiders = async () => {
-    const { data } = await supabase.from('riders').select('*')
+    const { data } = await apiClient.from('riders').select('*')
     if (data) setRiders(data)
   }
 
@@ -388,7 +388,7 @@ const start = append ? ordersRef.current.length : 0;
 
   const handleDeleteOrder = async (orderId: string) => {
     if (confirm("ဒီမှတ်တမ်းကို အမှိုက်ပုံး (Recently Deleted) ထဲသို့ ထည့်ရန် သေချာပါသလား?")) {
-      const { error } = await supabase
+      const { error } = await apiClient
         .from('orders')
         .update({ 
           is_deleted: true, 

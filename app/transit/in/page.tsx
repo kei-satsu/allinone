@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect, useRef } from 'react'
-import { supabase } from '@/lib/supabase'
+import { apiClient } from '@/lib/databaseApi'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import EditOrderModal from '@/components/EditOrderModal' // သင့် Component တည်နေရာလမ်းကြောင်းအတိုင်း ချိန်ပေးပါ
@@ -202,7 +202,7 @@ useEffect(() => {
   setLoading(true);
 
   // 🌟 ၁။ Base Query တည်ဆောက်ခြင်း
-  let query = supabase
+  let query = apiClient
     .from('orders')
     .select(`
       *,
@@ -269,7 +269,7 @@ useEffect(() => {
 };
 
   const fetchRiders = async () => {
-    const { data } = await supabase.from('riders').select('*')
+    const { data } = await apiClient.from('riders').select('*')
     if (data) setRiders(data)
   }
 
@@ -385,7 +385,7 @@ const filteredOrders = orders.filter(o => {
 
   const handleDeleteOrder = async (orderId: string) => {
     if (confirm("ဒီမှတ်တမ်းကို အမှိုက်ပုံး (Recently Deleted) ထဲသို့ ထည့်ရန် သေချာပါသလား?")) {
-      const { error } = await supabase
+      const { error } = await apiClient
         .from('orders')
         .update({ 
           is_deleted: true, 

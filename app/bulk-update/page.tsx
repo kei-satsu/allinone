@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { supabase } from '@/lib/supabase'
+import { apiClient } from '@/lib/databaseApi'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Scanner } from '@yudiel/react-qr-scanner' // 📸 Camera Scanner Package
@@ -87,19 +87,19 @@ export default function BulkUpdatePage() {
   }, [router])
 
   async function fetchRiders(branch: string) {
-    const { data } = await supabase.from('riders').select('*').eq('branch', branch)
+    const { data } = await apiClient.from('riders').select('*').eq('branch', branch)
     if (data) setRiders(data)
   }
 
   async function fetchCities() {
-    const { data } = await supabase.from('cities').select('*')
+    const { data } = await apiClient.from('cities').select('*')
     if (data) setCities(data)
   }
 
  async function fetchRecentOrders(branch: string) {
   setSearchLoading(true)
   
-  const { data, error } = await supabase
+  const { data, error } = await apiClient
     .from('orders')
     .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
     .or(`branch.eq.${branch},transit.cs.[{"transit_to":"${branch}"}]`) // 👈 branch parameter အမှန်အတိုင်း သုံးထားသည်
@@ -121,7 +121,7 @@ async function performSearch(query: string) {
       return
     }
     setSearchLoading(true)
-    const { data, error } = await supabase
+    const { data, error } = await apiClient
       .from('orders')
       .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
       // 💡 Branch/Transit စစ်ဆေးချက် AND Search Term စစ်ဆေးချက်
@@ -156,10 +156,10 @@ async function performSearch(query: string) {
       if (!value) return
 
       setSearchLoading(true)
-      const { data, error } = await supabase
+      const { data, error } = await apiClient
         .from('orders')
         .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
-        // 💡 .or() နှစ်ခု ဆက်ရေးလိုက်ပါက Supabase မှ AND ပုံစံဖြင့် ချိတ်ဆက်စစ်ဆေးပေးပါသည်
+        // 💡 .or() နှစ်ခု ဆက်ရေးလိုက်ပါက apiClient မှ AND ပုံစံဖြင့် ချိတ်ဆက်စစ်ဆေးပေးပါသည်
         .or(`branch.eq.${userBranch},transit.cs.[{"transit_to":"${userBranch}"}]`)
         .or(`item_id.eq.${value},barcode.eq.${value}`)
         .maybeSingle()
@@ -189,7 +189,7 @@ async function performSearch(query: string) {
     if (!value) return;
 
     setCameraLoading(true);
-    const { data, error } = await supabase
+    const { data, error } = await apiClient
       .from('orders')
       .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
       .or(`branch.eq.${userBranch},transit.cs.[{"transit_to":"${userBranch}"}]`)
@@ -371,7 +371,7 @@ const resolveBulkStatus = (selectedStatus: string, selectedCityId: string) => {
           updateData.note = null;
         }
 
-        return supabase
+        return apiClient
           .from('orders')
           .update(updateData)
           .eq('id', id);

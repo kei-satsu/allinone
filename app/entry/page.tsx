@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect, useRef } from 'react'
-import { supabase } from '@/lib/supabase'
+import { apiClient } from '@/lib/databaseApi'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import AddCityForm from "@/components/AddCityForm";
@@ -33,9 +33,9 @@ export default function EntryForm() {
   const [cities, setCities] = useState<any[]>([]);       // Table မြို့စာရင်းသိမ်းရန် State
 const [isModalOpen, setIsModalOpen] = useState(false); // Pop-up ပွင့်/ပိတ် ထိန်းရန် State
 
-// 💡 Supabase ထဲက မြို့စာရင်းကို ဆွဲထုတ်ပေးမည့် Function
+// 💡 apiClient ထဲက မြို့စာရင်းကို ဆွဲထုတ်ပေးမည့် Function
 const loadCities = async () => {
-  const { data, error } = await supabase
+  const { data, error } = await apiClient
     .from("cities")
     .select("*")
     .order("name", { ascending: true }); // မြို့နာမည်အလိုက် အက္ခရာစဉ်ပေးထားပါသည်
@@ -119,7 +119,7 @@ useEffect(() => {
   useEffect(() => {
     if (!userBranch) return
     async function fetchRiders() {
-      const { data, error } = await supabase.from('riders').select('*').eq('branch', userBranch)
+      const { data, error } = await apiClient.from('riders').select('*').eq('branch', userBranch)
       if (!error && data) setRiders(data)
     }
     fetchRiders()
@@ -127,7 +127,7 @@ useEffect(() => {
 
   useEffect(() => {
     async function fetchSenders() {
-      const { data, error } = await supabase.from('senders').select('*').order('name', { ascending: true })
+      const { data, error } = await apiClient.from('senders').select('*').order('name', { ascending: true })
       if (!error && data) setSenders(data)
     }
     fetchSenders()
@@ -175,20 +175,20 @@ useEffect(() => {
 
         if (payload && payload.type === 'create_sender_and_order') {
           // First create sender
-          const { data: senderData, error: senderError } = await supabase.from('senders').insert(payload.sender).select().single()
+          const { data: senderData, error: senderError } = await apiClient.from('senders').insert(payload.sender).select().single()
           if (senderError || !senderData) throw new Error(senderError?.message || 'Sender creation failed')
 
           // Then create order with new sender id
           const orderPayload = { ...payload.order, sender_id: senderData.id }
-          const { error: orderError } = await supabase.from('orders').insert([orderPayload])
+          const { error: orderError } = await apiClient.from('orders').insert([orderPayload])
           if (orderError) throw new Error(orderError.message)
 
         } else if (payload && payload.type === 'order') {
-          const { error } = await supabase.from('orders').insert([payload.order || payload])
+          const { error } = await apiClient.from('orders').insert([payload.order || payload])
           if (error) throw new Error(error.message)
         } else {
           // fallback: insert payload as order
-          const { error } = await supabase.from('orders').insert([itemToSync.payload])
+          const { error } = await apiClient.from('orders').insert([itemToSync.payload])
           if (error) throw new Error(error.message)
         }
 
@@ -328,7 +328,7 @@ useEffect(() => {
       if (selectedSenderId) {
         const orderPayload = { ...baseOrder, sender_id: selectedSenderId }
         if (isOnlineNow) {
-          const { error } = await supabase.from('orders').insert([orderPayload])
+          const { error } = await apiClient.from('orders').insert([orderPayload])
           if (error) {
             alert(`❌ အမှားအယွင်း - Order မဆွဲထုတ်နိုင်ခြင်း:\n${error.message}`)
             setLoading(false)
@@ -346,7 +346,7 @@ useEffect(() => {
         const newSenderData = { name: formData.sender_name, phone: formData.sender_phone, LOC: formData.sender_loc }
 
         if (isOnlineNow) {
-          const { data: senderCreated, error: senderError } = await supabase.from('senders').insert(newSenderData).select().single()
+          const { data: senderCreated, error: senderError } = await apiClient.from('senders').insert(newSenderData).select().single()
           if (senderError || !senderCreated) {
             console.error('Sender creation error:', senderError)
             // fallback to queue
@@ -357,7 +357,7 @@ useEffect(() => {
             alert("ℹ️ စender အသစ်တည်ဆောက်ခြင်းမှ ကွန်ယက်ပြissue ရှိနေသည်။ Offline Queue သို့ သိမ်းဆည်းထားသည်။")
           } else {
             const orderPayload = { ...baseOrder, sender_id: senderCreated.id }
-            const { error: orderError } = await supabase.from('orders').insert([orderPayload])
+            const { error: orderError } = await apiClient.from('orders').insert([orderPayload])
             if (orderError) {
               alert(`❌ Order မဆွဲထုတ်နိုင်ခြင်း:\n${orderError.message}`)
               setLoading(false)

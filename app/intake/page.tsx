@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { apiClient } from '@/lib/databaseApi';
 import { useMobileDockVisibility } from '@/components/AppLayout';
 import Konva from 'konva';
 import { Stage, Layer, Image as KonvaImage, Text as KonvaText } from 'react-konva';
@@ -577,8 +577,8 @@ useEffect(() => {
     setCameraLoading(true);
 
     try {
-      // ၂။ Supabase Database ရဲ့ orders table ထဲမှာ ဒီ barcode ရှိနှင့်ပြီးသားလား လှမ်းစစ်ခြင်း
-      const { data, error } = await supabase
+      // ၂။ apiClient Database ရဲ့ orders table ထဲမှာ ဒီ barcode ရှိနှင့်ပြီးသားလား လှမ်းစစ်ခြင်း
+      const { data, error } = await apiClient
         .from('orders')
         .select('id')
         .eq('barcode', value)
@@ -838,9 +838,9 @@ const processSingleOfflineItem = async (item: any) => {
 
   let secureUrl = item.cloudinary_url;
 
-  // ─── 🌟 STEP 1: Supabase မှာ Barcode စာရင်း ရှိပြီးသားလား အရင်စစ်ခြင်း ───
+  // ─── 🌟 STEP 1: apiClient မှာ Barcode စာရင်း ရှိပြီးသားလား အရင်စစ်ခြင်း ───
 if (item.barcode) {
-  const { data: existingOrder } = await supabase
+  const { data: existingOrder } = await apiClient
     .from('orders')
     .select('image_url')
     .eq('barcode', item.barcode)
@@ -852,7 +852,7 @@ if (item.barcode) {
     if (!existingImageUrl || typeof existingImageUrl !== 'string' || !existingImageUrl.startsWith('http')) {
       console.warn(`Barcode [${item.barcode}] ရှိထားသော်လည်း image_url မရှိပါ။ Telegram သို့ မပို့တော့ပါ။`);
     } else {
-      console.log(`Barcode [${item.barcode}] က Supabase မှာ ရှိပြီးသားမို့ Telegram သို့ တိုက်ရိုက်ပို့ပါမည်။`);
+      console.log(`Barcode [${item.barcode}] က apiClient မှာ ရှိပြီးသားမို့ Telegram သို့ တိုက်ရိုက်ပို့ပါမည်။`);
       await sendToTelegram({
         imageUrl: existingImageUrl,
         note: item.uploader_note || item.note || '',
@@ -908,7 +908,7 @@ if (!secureUrl) {
   secureUrl = r2Data.url; // R2 မှ ပြန်လာသော Public URL ကို ရယူခြင်း
 }
 
- // ─── 🌟 STEP 3: Supabase သို့ ဒေတာ ထည့်သွင်းခြင်း (With JSON History) ───
+ // ─── 🌟 STEP 3: apiClient သို့ ဒေတာ ထည့်သွင်းခြင်း (With JSON History) ───
  const currentStatus = (item.transit && item.transit.length > 0) ? 'In-Transit' : 'Pending';
 
   // 1. Initial History Object တစ်ခု တည်ဆောက်ခြင်း
@@ -925,7 +925,7 @@ if (!secureUrl) {
   ];
 
   // 2. Orders Table ထဲသို့ Insert လုပ်ခြင်း (history Column ပါတစ်ခါတည်းထည့်မည်)
-  const { error: dbError } = await supabase
+  const { error: dbError } = await apiClient
     .from('orders')
     .insert([
       {
@@ -943,7 +943,7 @@ if (!secureUrl) {
   // အကယ်၍ Barcode ရှိပြီးသား Error (Code 23505) ဖြစ်ပါက Error မတက်စေဘဲ ဆက်သွားမည်
   if (dbError) {
     if (dbError.code === '23505') {
-      console.warn(`Barcode [${item.barcode}] က Supabase မှာ ရောက်ပြီးသား ဖြစ်နေပါသည်။`);
+      console.warn(`Barcode [${item.barcode}] က apiClient မှာ ရောက်ပြီးသား ဖြစ်နေပါသည်။`);
     } else {
       throw dbError;
     }

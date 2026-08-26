@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { apiClient } from '@/lib/databaseApi'
 import { useRouter } from 'next/navigation'
 import EditOrderModal from '@/components/EditOrderModal'
 import * as XLSX from 'xlsx';
@@ -151,7 +151,7 @@ export default function DailyReport() {
 if (!activeBranch || !activeDate) return;
 
 // ၂။ Orders များအားဆွဲထုတ်ခြင်း
-const { data: ordersData, error: ordersError } = await supabase
+const { data: ordersData, error: ordersError } = await apiClient
   .from('orders')
   .select(`
     *,
@@ -176,11 +176,11 @@ if (ordersError) {
 } else {
   // 🌟 Filter လုပ်ပြီးတာနဲ့ activeBranch နဲ့ ကိုက်ညီသော transit_to & transit_date များကို Mapping လုပ်ခြင်း
   const mappedOrders = (ordersData || [])
-    .filter((order) => {
+    .filter((order: any) => {
       const transitList = Array.isArray(order.transit) ? order.transit : [];
       return transitList.length > 0 && transitList.some((leg: any) => leg.transit_from === activeBranch || leg.transit_form === activeBranch);
     })
-    .map((order) => {
+    .map((order: any) => {
       const transitList = Array.isArray(order.transit) ? order.transit : [];
       
       // activeBranch နဲ့ ကိုက်ညီတဲ့ transit leg ကို ရှာယူခြင်း
@@ -198,7 +198,7 @@ if (ordersError) {
   setReportData(mappedOrders);
 }
       // ၂။ Handovers စာရင်းဆွဲထုတ်ခြင်း
-      const { data: handoversData, error: handoversError } = await supabase
+      const { data: handoversData, error: handoversError } = await apiClient
         .from('cash_handovers')
         .select('*')
         .eq('branch', activeBranch)
@@ -219,12 +219,12 @@ if (ordersError) {
   }
 
 const fetchRiders = async () => {
-  const { data, error } = await supabase.from('riders').select('*')
+  const { data, error } = await apiClient.from('riders').select('*')
   if (data) setRiders(data)
 }
 
 const fetchCities = async () => {
-  const { data, error } = await supabase.from('cities').select('*')
+  const { data, error } = await apiClient.from('cities').select('*')
   if (data) setCities(data)
 }
 
@@ -271,7 +271,7 @@ const fetchCities = async () => {
     if (!confirm('ဖျက်မှာသေချာပြီလား?')) return
     
     try {
-      const { error } = await supabase
+      const { error } = await apiClient
         .from('cash_handovers')
         .delete()
         .eq('id', handoverId)
@@ -290,7 +290,7 @@ const fetchCities = async () => {
     if (!handoverModal.riderName) return
     setSubmitting(true)
     try {
-      const { error } = await supabase
+      const { error } = await apiClient
         .from('cash_handovers')
         .insert([{
           rider_name: handoverModal.riderName,
@@ -499,7 +499,7 @@ const exportToExcel = () => {
     prev.map(o => (o.id === orderId ? { ...o, agent_fee: numValue } : o))
   );
   // Database update
-  const { error } = await supabase
+  const { error } = await apiClient
     .from('orders')
     .update({ agent_fee: numValue })
     .eq('id', orderId);

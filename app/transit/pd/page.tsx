@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect, useRef } from 'react'
-import { supabase } from '@/lib/supabase'
+import { apiClient } from '@/lib/databaseApi'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import EditOrderModal from '@/components/EditOrderModal' // သင့် Component တည်နေရာလမ်းကြောင်းအတိုင်း ချိန်ပေးပါ
@@ -82,9 +82,9 @@ export default function OrderList() {
     if (!order) return
 
     try {
-      // 1. Supabase Table ထဲတွင် Status ကို 'At Office' သို့ Update ပြုလုပ်ခြင်း
-      const { error } = await supabase
-        .from('orders') // ✨ သင့် Supabase Table အမည်အတိအကျ (ဥပမာ orders) ဖြစ်ရပါမည်
+      // 1. apiClient Table ထဲတွင် Status ကို 'At Office' သို့ Update ပြုလုပ်ခြင်း
+      const { error } = await apiClient
+        .from('orders') // ✨ သင့် apiClient Table အမည်အတိအကျ (ဥပမာ orders) ဖြစ်ရပါမည်
         .update({ status: 'Arrived',arrival_date: new Date().toISOString().split('T')[0] })
         .eq('id', order.id) // သို့မဟုတ် 'item_id' သုံးထားပါက .eq('item_id', order.item_id) ဟု ပြောင်းပါ
 
@@ -189,7 +189,7 @@ useEffect(() => {
   if (!activeBranch) return;
 
   setLoading(true);
-  const { data, error } = await supabase
+  const { data, error } = await apiClient
     .from('orders')
     .select(`
       *,
@@ -227,7 +227,7 @@ useEffect(() => {
 };
 
   const fetchRiders = async () => {
-    const { data } = await supabase.from('riders').select('*')
+    const { data } = await apiClient.from('riders').select('*')
     if (data) setRiders(data)
   }
 
@@ -312,7 +312,7 @@ useEffect(() => {
 
   const handleDeleteOrder = async (orderId: string) => {
     if (confirm("ဒီမှတ်တမ်းကို အမှိုက်ပုံး (Recently Deleted) ထဲသို့ ထည့်ရန် သေချာပါသလား?")) {
-      const { error } = await supabase
+      const { error } = await apiClient
         .from('orders')
         .update({ 
           is_deleted: true, 
@@ -334,7 +334,7 @@ async function handleQuickAtOffice(order: any) {
   if (!isConfirmed) return;
 
   try {
-    const { error } = await supabase
+    const { error } = await apiClient
       .from('orders')
       .update({ status: 'Arrived',arrival_date: new Date().toISOString().split('T')[0] })
       .eq('id', order.id);

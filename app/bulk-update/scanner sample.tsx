@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect, useRef } from 'react'
-import { supabase } from '@/lib/supabase'
+import { apiClient } from '@/lib/databaseApi'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Scanner } from '@yudiel/react-qr-scanner' // 📸 Camera Scanner Package
@@ -65,18 +65,18 @@ export default function BulkUpdatePage() {
   }, [router])
 
   async function fetchRiders(branch: string) {
-    const { data } = await supabase.from('riders').select('*').eq('branch', branch)
+    const { data } = await apiClient.from('riders').select('*').eq('branch', branch)
     if (data) setRiders(data)
   }
 
   async function fetchCities() {
-  const { data } = await supabase.from('cities').select('*')
+  const { data } = await apiClient.from('cities').select('*')
   if (data) setCities(data)
 }
 
   async function fetchRecentOrders(branch: string) {
     setSearchLoading(true)
-    const { data, error } = await supabase
+    const { data, error } = await apiClient
       .from('orders')
       .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
       .or(`branch.eq.${branch},transit_to.eq.${branch}`)
@@ -95,7 +95,7 @@ export default function BulkUpdatePage() {
       return
     }
     setSearchLoading(true)
-    const { data, error } = await supabase
+    const { data, error } = await apiClient
       .from('orders')
       .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
       .eq('branch', userBranch)
@@ -129,7 +129,7 @@ export default function BulkUpdatePage() {
       if (!value) return
 
       setSearchLoading(true)
-      const { data, error } = await supabase
+      const { data, error } = await apiClient
         .from('orders')
         .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
         .eq('branch', userBranch)
@@ -161,7 +161,7 @@ export default function BulkUpdatePage() {
     if (!value) return;
 
     setCameraLoading(true);
-    const { data, error } = await supabase
+    const { data, error } = await apiClient
       .from('orders')
       .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
       .eq('branch', userBranch)
@@ -277,8 +277,8 @@ export default function BulkUpdatePage() {
         updateData.note = null;
       }
 
-      // Supabase သို့ Update လုပ်ရန် လှမ်းပို့ခြင်း
-      return supabase
+      // apiClient သို့ Update လုပ်ရန် လှမ်းပို့ခြင်း
+      return apiClient
         .from('orders')
         .update(updateData)
         .eq('id', id);

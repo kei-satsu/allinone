@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { apiClient } from '@/lib/databaseApi'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -16,7 +16,7 @@ export default function TrashList() {
     if (!activeBranch) return
 
     setLoading(true)
-    const { data, error } = await supabase
+    const { data, error } = await apiClient
       .from('orders')
       .select('*')
       .eq('branch', activeBranch)
@@ -41,7 +41,7 @@ export default function TrashList() {
   // 🔄 မှတ်တမ်းကို မူလစာရင်းထဲ ပြန်ဆယ်မည့် Function (Restore)
   const handleRestore = async (orderId: string) => {
     if (confirm("ဒီမှတ်တမ်းကို မူလစာရင်းထဲသို့ ပြန်ထည့်ရန် သေချာပါသလား?")) {
-      const { error } = await supabase
+      const { error } = await apiClient
         .from('orders')
         .update({ is_deleted: false, deleted_at: null })
         .eq('id', orderId)
@@ -71,8 +71,8 @@ const handlePermanentDelete = async (order: any) => {
         });
       }
 
-      // ၂။ Supabase Database ထဲက Record ကို ဖျက်မည်
-      const { error } = await supabase.from('orders').delete().eq('id', order.id);
+      // ၂။ apiClient Database ထဲက Record ကို ဖျက်မည်
+      const { error } = await apiClient.from('orders').delete().eq('id', order.id);
       if (error) throw error;
 
       alert("မှတ်တမ်းနှင့် ပုံကို အပြီးတိုင် ဖျက်ဆီးလိုက်ပါပြီ။");

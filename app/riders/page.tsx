@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
+import { getRiders, createRider, updateRider, deleteRider } from '@/lib/databaseApi'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -36,17 +36,12 @@ export default function RidersManagement() {
   const fetchRiders = useCallback(async () => {
     if (!userBranch) return
     setLoading(true)
-    const { data, error } = await supabase
-      .from('riders')
-      .select('*')
-      .eq('branch', userBranch)
-      .order('name', { ascending: true })
-
-    if (error) {
-      console.error('Supabase error:', error)
-      alert(`Failed to load riders: ${error.message}`)
-    } else {
+    try {
+      const { data } = await getRiders({ branch: userBranch })
       setRiders(data || [])
+    } catch (error) {
+      console.error('Rider API error:', error)
+      alert(`Failed to load riders: ${error instanceof Error ? error.message : error}`)
     }
     setLoading(false)
   }, [userBranch])
@@ -78,30 +73,27 @@ export default function RidersManagement() {
     setSaving(true)
 
     if (editingRider) {
-      const { error } = await supabase
-        .from('riders')
-        .update({
+      try {
+        await updateRider(editingRider.id, {
           name: formData.name.trim(),
           phone: formData.phone.trim() || null,
         })
-        .eq('id', editingRider.id)
-      if (error) alert('Update failed: ' + error.message)
-      else {
         await fetchRiders()
         setModalOpen(false)
+      } catch (error) {
+        alert('Update failed: ' + (error instanceof Error ? error.message : error))
       }
     } else {
-      const { error } = await supabase
-        .from('riders')
-        .insert([{
+      try {
+        await createRider({
           name: formData.name.trim(),
           phone: formData.phone.trim() || null,
           branch: userBranch,
-        }])
-      if (error) alert('Add failed: ' + error.message)
-      else {
+        })
         await fetchRiders()
         setModalOpen(false)
+      } catch (error) {
+        alert('Add failed: ' + (error instanceof Error ? error.message : error))
       }
     }
     setSaving(false)
@@ -109,9 +101,12 @@ export default function RidersManagement() {
 
   const handleDelete = async (rider: Rider) => {
     if (!confirm(`Delete rider "${rider.name}"? This action cannot be undone.`)) return
-    const { error } = await supabase.from('riders').delete().eq('id', rider.id)
-    if (error) alert('Delete failed: ' + error.message)
-    else await fetchRiders()
+    try {
+      await deleteRider(rider.id)
+      await fetchRiders()
+    } catch (error) {
+      alert('Delete failed: ' + (error instanceof Error ? error.message : error))
+    }
   }
 
   const winInput = "w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all shadow-sm"

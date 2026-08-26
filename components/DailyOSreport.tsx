@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
+import { getSenderSummary } from '@/lib/databaseApi'
 
 interface SenderWaySummary {
   sender_id: string | null
@@ -33,16 +33,12 @@ export default function SenderWaySummaryModal({ isOpen, onClose }: SenderWaySumm
     if (!userBranch || !selectedDate || !isOpen) return
     setLoading(true)
 
-    const { data, error } = await supabase.rpc('get_sender_daily_summary', {
-      p_branch: userBranch,
-      p_date: selectedDate
-    })
-
-    if (error) {
-      console.error('Error fetching sender way summary:', error.message)
-      setSummaryList([])
-    } else {
+    try {
+      const { data } = await getSenderSummary(userBranch, selectedDate)
       setSummaryList(data || [])
+    } catch (error) {
+      console.error('Error fetching sender way summary:', error)
+      setSummaryList([])
     }
 
     setLoading(false)
