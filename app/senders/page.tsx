@@ -1042,17 +1042,15 @@ export default function SendersDashboard() {
                       | {selectedSender.LOC || "—"}
                     </span>
                   </div>
-                  {realBranch === "ADMIN" && (
-                    <button
-                      onClick={() => {
-                        setModalMode("edit");
-                        setIsModalOpen(true);
-                      }}
-                      className="px-2 py-1 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-md transition-colors border border-slate-200"
-                    >
-                      ✏️ Edit
-                    </button>
-                  )}
+                  <button
+                    onClick={() => {
+                      setModalMode("edit");
+                      setIsModalOpen(true);
+                    }}
+                    className="px-2 py-1 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-md transition-colors border border-slate-200"
+                  >
+                    ✏️ Edit
+                  </button>
                 </div>
 
                 {/* Tabs + Filters */}
