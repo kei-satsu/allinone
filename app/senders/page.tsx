@@ -792,7 +792,7 @@ export default function SendersDashboard() {
           sender.id === savedSender.id ? { ...sender, ...savedSender } : sender,
         ),
       );
-      setSelectedSender((current) =>
+      setSelectedSender((current: any | null) =>
         current?.id === savedSender.id
           ? { ...current, ...savedSender }
           : current,

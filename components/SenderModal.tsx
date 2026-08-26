@@ -13,6 +13,9 @@ interface SenderModalProps {
   activeBranch: string; // 👈 လက်ရှိ ရွေးထားတဲ့ Branch လက်ခံရန်
 }
 
+const readSenderText = (value: unknown) =>
+  value === null || value === undefined ? "" : String(value);
+
 export default function SenderModal({
   isOpen,
   onClose,
@@ -35,17 +38,22 @@ export default function SenderModal({
     if (isOpen) {
       if (mode === "edit" && editData) {
         // Edit Mode ဆိုလျှင် ဒေတာဟောင်းများကို ထည့်ပေးမည်
-        setName(editData.name || "");
-        setPhone(editData.phone || "");
-        setAddress(editData.Address ?? editData.address ?? "");
+        setName(readSenderText(editData.name));
+        setPhone(readSenderText(editData.phone));
+        setAddress(
+          readSenderText(
+            editData.Address ?? editData.address ?? editData.ADDRESS,
+          ),
+        );
         setKpayNo(
-          editData["kpay-no"] ?? editData.kpay_no ?? editData.kpayNo ?? "",
+          readSenderText(
+            editData["kpay-no"] ?? editData.kpay_no ?? editData.kpayNo,
+          ),
         );
         setKpayName(
-          editData["kpay-name"] ??
-            editData.kpay_name ??
-            editData.kpayName ??
-            "",
+          readSenderText(
+            editData["kpay-name"] ?? editData.kpay_name ?? editData.kpayName,
+          ),
         );
         setLoc(editData.LOC || activeBranch || "MDY");
       } else {
