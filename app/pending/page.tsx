@@ -63,6 +63,7 @@ export default function PendingEntry() {
   const [isThumbGridOpen, setIsThumbGridOpen] = useState(false)
 
   const today = new Date().toISOString().split('T')[0]
+  const selectedBarcode = selectedItem?.barcode || selectedItem?.item_id || selectedItem?.id || ''
 
      // Rider ID ဖြင့် Rider Name ရှာပေးသည့် Helper Logic
 const getRiderName = (riderId: string | number | null) => {
@@ -1158,13 +1159,21 @@ if (updatedPending.length > 0) {
 <div className="flex-1 overflow-y-auto p-5 bg-gray-50/60 custom-scrollbar">
   <form onSubmit={handleSubmit} className="w-full space-y-5">
     
-    {selectedItem?.uploader_note && (
-      <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-xl shadow-sm transition-all animate-fadeIn">
+    {(selectedItem?.uploader_note || selectedBarcode) && (
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {selectedItem?.uploader_note && <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-xl shadow-sm transition-all animate-fadeIn">
         <span className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5 mb-1">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" /></svg>
           Note for this Parcel
         </span>
         <p className="text-gray-950 font-medium text-sm leading-relaxed">{selectedItem.uploader_note}</p>
+      </div>}
+        {selectedBarcode && (
+          <div className="bg-white border border-gray-200 border-l-4 border-l-blue-500 p-4 rounded-r-xl shadow-sm flex flex-col justify-center">
+            <span className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-1">Barcode Number</span>
+            <span className="font-mono font-bold text-gray-900 tracking-widest select-all break-all">{selectedBarcode}</span>
+          </div>
+        )}
       </div>
     )}
 

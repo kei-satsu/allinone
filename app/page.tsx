@@ -1,33 +1,66 @@
 "use client"
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { apiClient } from '@/lib/databaseApi'
+import { getOrders } from '@/lib/ordersApi'
 import Link from 'next/link'
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import BarcodeScannerModal from '@/components/BarcodeScannerModal' 
 import { ParcelDetailModal, ParcelOrder } from '@/components/ParcelDetailModal'
 
+type DashboardStats = {
+  total: number
+  atOffice: number
+  pending: number
+  delivered: number
+  deliveryRate: number
+  totalCod: number
+  unpaidCod: number
+}
+
+const emptyStats: DashboardStats = {
+  total: 0,
+  atOffice: 0,
+  pending: 0,
+  delivered: 0,
+  deliveryRate: 0,
+  totalCod: 0,
+  unpaidCod: 0,
+}
+
+const showDashboardSummary = false
+
 export default function Dashboard() {
-  const [allOrders, setAllOrders] = useState<any[]>([])
   const [userBranch, setUserBranch] = useState('')
-  const [loading, setLoading] = useState(true)
+  const loading = false
+  const [stats, setStats] = useState<DashboardStats>(emptyStats)
 
   const [isScannerOpen, setIsScannerOpen] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<ParcelOrder | null>(null)
 
   // 🟢 Barcode Scan ဖတ်ပြီးပါက Voucher ရှာ၍ Print ထုတ်ပေးမည့် Function
-  const handleScanCode = (scannedCode: string) => {
+  const handleScanCode = async (scannedCode: string) => {
     setIsScannerOpen(false)
     if (!scannedCode) return;
-    const matchedOrder = allOrders.find(
+
+    try {
+      const { data: matchingOrders } = await getOrders({
+        search: scannedCode.trim(),
+        limit: 20,
+      })
+      const matchedOrder = matchingOrders.find(
       (o) =>
         String(o.item_id).trim() === String(scannedCode).trim() ||
         String(o.barcode).trim() === String(scannedCode).trim()
-    )
-    if (matchedOrder) {
-      setSelectedOrder(matchedOrder)
-    } else {
-      alert(`Barcode "${scannedCode}" ဖြင့် ကိုက်ညီသော Order/Voucher မတွေ့ရှိပါ။`)
+      )
+      if (matchedOrder) {
+        setSelectedOrder(matchedOrder)
+      } else {
+        alert(`Barcode "${scannedCode}" ဖြင့် ကိုက်ညီသော Order/Voucher မတွေ့ရှိပါ။`)
+      }
+    } catch (err) {
+      console.error('Barcode search error:', err)
+      alert(`Barcode "${scannedCode}" ဖြင့် Order ရှာဖွေရာတွင် အမှားအယွင်းရှိခဲ့သည်။`)
     }
   }
 
@@ -46,80 +79,6 @@ export default function Dashboard() {
       setUserBranch('ALL')
     }
   }, [])
-
-  useEffect(() => {
-    async function fetchStats() {
-      setLoading(true)
-      try {
-        let fetchedOrders: any[] = []
-        let page = 0
-        const pageSize = 1000
-        let hasMore = true
-
-        while (hasMore) {
-          const { data, error } = await apiClient
-            .from('orders')
-            .select('*')
-            .range(page * pageSize, (page + 1) * pageSize - 1)
-
-          if (error) throw error
-
-          if (data && data.length > 0) {
-            fetchedOrders = [...fetchedOrders, ...data]
-            if (data.length < pageSize) {
-              hasMore = false
-            } else {
-              page++
-            }
-          } else {
-            hasMore = false
-          }
-        }
-
-        setAllOrders(fetchedOrders)
-      } catch (err) {
-        console.error("Error fetching orders:", err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchStats()
-  }, [])
-
-  const stats = useMemo(() => {
-    if (!userBranch || allOrders.length === 0) {
-      return {
-        total: 0,
-        atOffice: 0,
-        pending: 0,
-        delivered: 0,
-        totalCod: 0,
-        unpaidCod: 0
-      }
-    }
-
-    const filteredRows = userBranch === 'ALL'
-      ? allOrders
-      : allOrders.filter(o => o.branch === userBranch)
-
-    const deliveredCount = filteredRows.filter(o => o.status === 'Delivered').length
-    const atOfficeCount = filteredRows.filter(o => o.status === 'At Office').length
-    const pendingCount = filteredRows.filter(o => o.status === 'Pending').length
-    const totalCount = filteredRows.length
-
-    return {
-      total: totalCount,
-      atOffice: atOfficeCount,
-      pending: pendingCount,
-      delivered: deliveredCount,
-      deliveryRate: totalCount > 0 ? Math.round((deliveredCount / totalCount) * 100) : 0,
-      totalCod: filteredRows.reduce((sum, o) => sum + (o.cod_amount || 0), 0),
-      unpaidCod: filteredRows
-        .filter(o => o.status !== 'Delivered')
-        .reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0)
-    }
-  }, [userBranch, allOrders])
 
 const handleExportExcel = async () => {
   setIsExporting(true);
@@ -473,6 +432,7 @@ const handleExportExcel = async () => {
 </Link>
             </div>
 
+            {showDashboardSummary && <>
             {/* ── 📊 Statistics Section ── */}
             <section>
               <div className="flex items-center gap-3 mb-5">
@@ -586,6 +546,7 @@ const handleExportExcel = async () => {
                 </div>
               </div>
             </div>
+            </>}
 
             {/* ── 📥 Excel Export Card ── */}
             <div className="bg-white border border-slate-200/40 rounded-[28px] p-6 shadow-[0_4px_24px_rgba(15,23,42,0.02)] space-y-5">

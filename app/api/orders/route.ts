@@ -64,7 +64,7 @@ export async function GET(request: Request) {
     if (search) {
       const escapedSearch = search.replace(/[%(),]/g, '')
       query = query.or(
-        `id.ilike.%${escapedSearch}%,item_id.ilike.%${escapedSearch}%,receiver_name.ilike.%${escapedSearch}%,receiver_phone.ilike.%${escapedSearch}%,receiver_loc.ilike.%${escapedSearch}%,receiver_address.ilike.%${escapedSearch}%`,
+        `id.ilike.%${escapedSearch}%,item_id.ilike.%${escapedSearch}%,barcode.ilike.%${escapedSearch}%,receiver_name.ilike.%${escapedSearch}%,receiver_phone.ilike.%${escapedSearch}%,receiver_loc.ilike.%${escapedSearch}%,receiver_address.ilike.%${escapedSearch}%`,
       )
     }
 
