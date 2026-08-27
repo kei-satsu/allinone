@@ -30,6 +30,7 @@ export async function GET(request: Request) {
     const status = searchParams.get('status')
     const senderId = searchParams.get('sender_id')
     const deliverRiderId = searchParams.get('deliver_rider_id')
+    const pickupRiderId = searchParams.get('pickup_rider_id')
     const branch = searchParams.get('branch')
     const pending = searchParams.get('pending') === 'true'
     const cleared = searchParams.get('cleared')
@@ -53,6 +54,7 @@ export async function GET(request: Request) {
     }
     if (senderId) query = query.eq('sender_id', senderId)
     if (deliverRiderId) query = query.eq('deliver_rider_id', deliverRiderId)
+    if (pickupRiderId) query = query.eq('pickup_rider_id', pickupRiderId)
     if (branch) query = query.eq('branch', branch)
     if (isDeleted !== null) query = query.eq('is_deleted', isDeleted === 'true')
     if (id) query = query.eq('id', id)
