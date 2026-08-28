@@ -10,6 +10,8 @@ function BlankVoucher({ code }: { code: string }) {
   const amountRowStyle = { ...rowStyle, minHeight: '23px' };
   const totalRowStyle = { ...rowStyle, minHeight: '30px' };
   const labelStyle = { width: '58px', fontWeight: 700, fontSize: '11px', textAlign: 'right' as const };
+  const amountSpacerStyle = { flex: 1, minWidth: 0 };
+  const paymentOptionsStyle = { display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto', flexShrink: 0 };
   const paymentOptionStyle = { display: 'inline-flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap' as const, fontSize: '9px', fontWeight: 700 };
 
   return (
@@ -45,9 +47,9 @@ function BlankVoucher({ code }: { code: string }) {
         <div style={{ ...rowStyle, alignItems: 'flex-start' }}><span style={labelStyle}>Address:</span><span style={{ ...blankFieldStyle, minHeight: '48px' }} /></div>
       </div>
       <div style={{ marginTop: '7px', borderTop: '1px solid #111', fontSize: '12px' }}>
-        <div style={amountRowStyle}><strong style={labelStyle}>COD:</strong><span className="flex-1" /><strong></strong></div>
-        <div style={{ ...amountRowStyle, borderTop: '1px dashed #111', paddingTop: '5px' }}><strong style={labelStyle}>Deli Fee:</strong><span className="flex-1" /><span style={paymentOptionStyle}><span style={{ width: '10px', height: '10px', border: '1px solid #111', display: 'inline-block' }} />Sender Pay</span><span style={paymentOptionStyle}><span style={{ width: '10px', height: '10px', border: '1px solid #111', display: 'inline-block' }} />Receiver Pay</span></div>
-        <div style={{ ...totalRowStyle, borderTop: '1px solid #111', paddingTop: '5px', fontSize: '14px' }}><strong style={ {width: '58px', fontWeight: 700, fontSize: '15px', textAlign: 'right' as const }}>Total:</strong><span className="flex-1" /><strong></strong></div>
+        <div style={amountRowStyle}><strong style={labelStyle}>COD:</strong><span style={amountSpacerStyle} /><strong></strong></div>
+        <div style={{ ...amountRowStyle, borderTop: '1px dashed #111', paddingTop: '5px' }}><strong style={labelStyle}>Deli Fee:</strong><span style={amountSpacerStyle} /><span style={paymentOptionsStyle}><span style={paymentOptionStyle}><span style={{ width: '10px', height: '10px', border: '1px solid #111', display: 'inline-block' }} />Sender Pay</span><span style={paymentOptionStyle}><span style={{ width: '10px', height: '10px', border: '1px solid #111', display: 'inline-block' }} />Receiver Pay</span></span></div>
+        <div style={{ ...totalRowStyle, borderTop: '1px solid #111', paddingTop: '5px', fontSize: '14px' }}><strong style={ {width: '58px', fontWeight: 700, fontSize: '15px', textAlign: 'right' as const }}>Total:</strong><span style={amountSpacerStyle} /><strong></strong></div>
       </div>
       <div style={{ flex: 1, paddingTop: '7px', textAlign: 'center', fontSize: '12px', width: '100%', borderTop: '1px solid #111' }}>
         <strong>မှတ်ချက်</strong>
@@ -149,8 +151,9 @@ const BarcodePrinterPage = () => {
     let printHTML = '';
 
     if (isVoucherMode) {
+      const logoUrl = new URL('/voclogo.png', window.location.href).href;
       printHTML = generatedList
-        .map((id) => document.getElementById(`voucher-${id}`)?.outerHTML || '')
+        .map((id) => (document.getElementById(`voucher-${id}`)?.outerHTML || '').replaceAll('src="/voclogo.png"', `src="${logoUrl}"`))
         .join('');
     } else if (isA6Grid) {
       // 🌟 ၁၀၀x၁၅၀mm အတွက် တစ်ရွက်ကို ၁၀ ခုစီ အုပ်စုခွဲ၍ စီပေးခြင်း
@@ -252,7 +255,18 @@ const BarcodePrinterPage = () => {
         <body>
           ${printHTML}
           <script>
-            window.onload = function() { window.print(); setTimeout(function(){ window.close(); }, 500); };
+            window.onload = function() {
+              var images = Array.from(document.images);
+              Promise.all(images.map(function(image) {
+                return image.complete ? Promise.resolve() : new Promise(function(resolve) {
+                  image.onload = resolve;
+                  image.onerror = resolve;
+                });
+              })).then(function() {
+                window.print();
+                setTimeout(function(){ window.close(); }, 500);
+              });
+            };
           </script>
         </body>
       </html>
