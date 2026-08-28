@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import JsBarcode from 'jsbarcode';
 import { QRCodeSVG } from 'qrcode.react';
 
-function BlankVoucher({ code }: { code: string }) {
+function BlankVoucher({ code, showCode }: { code: string; showCode: boolean }) {
   const blankFieldStyle = { minHeight: '18px', flex: 1 };
   const rowStyle = { display: 'flex', alignItems: 'flex-end', gap: '8px', marginTop: '5px' };
   const amountRowStyle = { ...rowStyle, minHeight: '23px' };
@@ -25,14 +25,14 @@ function BlankVoucher({ code }: { code: string }) {
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '12px' }}>
         <span><strong>Date:</strong></span>
-        <strong style={{ fontFamily: 'monospace', letterSpacing: '1px' }}>{code}</strong>
+        {showCode && <strong style={{ fontFamily: 'monospace', letterSpacing: '1px' }}>{code}</strong>}
       </div>
       <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start', marginTop: '7px', fontSize: '10px' }}>
         <div style={{ flex: 1, lineHeight: 1.35 }}>
           <div><strong>MDY Office:</strong> No.Nga-6/93, 62A, between 109 &amp; 109B, Mandalay. 09-889988856</div>
           <div style={{ marginTop: '5px' }}><strong>YGN Office:</strong> No.280, Corner of Du Yar St. &amp; Ba La Min Htin St., 50 ward, North Dagon, Yangon.</div>
         </div>
-        <QRCodeSVG value={code} size={52} />
+        {showCode && <QRCodeSVG value={code} size={52} />}
       </div>
       <div style={{ marginTop: '8px' }}>
         <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '11px', letterSpacing: '3px', borderTop: '1px solid #111', borderBottom: '1px solid #111', padding: '3px' }}>FROM</div>
@@ -66,6 +66,7 @@ const BarcodePrinterPage = () => {
   const [printCount, setPrintCount] = useState<number>(20); // ၁၀ ခုစီ ၂ ရွက်စာ ကွက်တိစမ်းသပ်ရန် Default ၂၀ ထားပါတယ်
   const [generatedList, setGeneratedList] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showVoucherCode, setShowVoucherCode] = useState(true);
 
   const previewRef = useRef<HTMLDivElement>(null);
 
@@ -384,6 +385,25 @@ const handleMobileThermalPrint = () => {
               </div>
             </div>
 
+            {isVoucherMode && (
+              <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-3 py-3">
+                <div>
+                  <p className="text-xs font-bold text-slate-200">Voucher Code / QR</p>
+                  <p className="mt-0.5 text-[10px] text-slate-500">Code ထည့်မည် / မထည့်ပါ</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showVoucherCode}
+                  aria-label="Show voucher code and QR"
+                  onClick={() => setShowVoucherCode((current) => !current)}
+                  className={`relative h-6 w-11 rounded-full transition-colors ${showVoucherCode ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                >
+                  <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-transform ${showVoucherCode ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+            )}
+
             {/* Label Size */}
             <div>
               <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Label Size (စတစ်ကာဆိုဒ်)</label>
@@ -494,7 +514,7 @@ const handleMobileThermalPrint = () => {
             </div>
           ) : isVoucherMode ? (
             <div ref={previewRef} className="flex flex-col gap-8 items-center w-full py-4">
-              {generatedList.map((id) => <BlankVoucher key={id} code={id} />)}
+              {generatedList.map((id) => <BlankVoucher key={id} code={id} showCode={showVoucherCode} />)}
             </div>
           ) : isA6Grid ? (
             /* 🌟 ၁၀၀x၁၅၀mm (10 Labels per sheet) Live Preview အသစ် */
