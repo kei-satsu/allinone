@@ -2,10 +2,64 @@
 
 import { useState, useEffect, useRef } from 'react';
 import JsBarcode from 'jsbarcode';
+import { QRCodeSVG } from 'qrcode.react';
+
+function BlankVoucher({ code }: { code: string }) {
+  const blankFieldStyle = { minHeight: '18px', flex: 1 };
+  const rowStyle = { display: 'flex', alignItems: 'flex-end', gap: '8px', marginTop: '5px' };
+  const amountRowStyle = { ...rowStyle, minHeight: '23px' };
+  const totalRowStyle = { ...rowStyle, minHeight: '30px' };
+  const labelStyle = { width: '58px', fontWeight: 700, fontSize: '11px', textAlign: 'right' as const };
+  const paymentOptionStyle = { display: 'inline-flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap' as const, fontSize: '9px', fontWeight: 700 };
+
+  return (
+    <div
+      id={`voucher-${code}`}
+      style={{ width: '4in', height: '6in', padding: '12px', boxSizing: 'border-box', background: '#fff', color: '#111', display: 'flex', flexDirection: 'column', fontFamily: 'Arial, sans-serif' }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', paddingBottom: '4px' }}>
+        <img src="/voclogo.png" alt="Logo" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
+        <strong style={{ fontSize: '16px' }}>ALL IN ONE EXPRESS</strong>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '12px' }}>
+        <span><strong>Date:</strong></span>
+        <strong style={{ fontFamily: 'monospace', letterSpacing: '1px' }}>{code}</strong>
+      </div>
+      <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start', marginTop: '7px', fontSize: '10px' }}>
+        <div style={{ flex: 1, lineHeight: 1.35 }}>
+          <div><strong>MDY Office:</strong> No.Nga-6/93, 62A, between 109 &amp; 109B, Mandalay. 09-889988856</div>
+          <div style={{ marginTop: '5px' }}><strong>YGN Office:</strong> No.280, Corner of Du Yar St. &amp; Ba La Min Htin St., 50 ward, North Dagon, Yangon.</div>
+        </div>
+        <QRCodeSVG value={code} size={52} />
+      </div>
+      <div style={{ marginTop: '8px' }}>
+        <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '11px', letterSpacing: '3px', borderTop: '1px solid #111', borderBottom: '1px solid #111', padding: '3px' }}>FROM</div>
+        <div style={rowStyle}><span style={labelStyle}>Name:</span><span style={blankFieldStyle} /></div>
+        <div style={rowStyle}><span style={labelStyle}>Phone:</span><span style={blankFieldStyle} /></div>
+        <div style={rowStyle}><span style={labelStyle}>Address:</span><span style={blankFieldStyle} /></div>
+      </div>
+      <div style={{ marginTop: '7px' }}>
+        <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '12px', letterSpacing: '3px', borderTop: '1px solid #111', borderBottom: '1px solid #111', padding: '3px' }}>TO</div>
+        <div style={rowStyle}><span style={labelStyle}>Name:</span><span style={blankFieldStyle} /></div>
+        <div style={rowStyle}><span style={labelStyle}>Phone:</span><span style={blankFieldStyle} /></div>
+        <div style={{ ...rowStyle, alignItems: 'flex-start' }}><span style={labelStyle}>Address:</span><span style={{ ...blankFieldStyle, minHeight: '48px' }} /></div>
+      </div>
+      <div style={{ marginTop: '7px', borderTop: '1px solid #111', fontSize: '12px' }}>
+        <div style={amountRowStyle}><strong style={labelStyle}>COD:</strong><span className="flex-1" /><strong></strong></div>
+        <div style={{ ...amountRowStyle, borderTop: '1px dashed #111', paddingTop: '5px' }}><strong style={labelStyle}>Deli Fee:</strong><span className="flex-1" /><span style={paymentOptionStyle}><span style={{ width: '10px', height: '10px', border: '1px solid #111', display: 'inline-block' }} />Sender Pay</span><span style={paymentOptionStyle}><span style={{ width: '10px', height: '10px', border: '1px solid #111', display: 'inline-block' }} />Receiver Pay</span></div>
+        <div style={{ ...totalRowStyle, borderTop: '1px solid #111', paddingTop: '5px', fontSize: '14px' }}><strong style={ {width: '58px', fontWeight: 700, fontSize: '15px', textAlign: 'right' as const }}>Total:</strong><span className="flex-1" /><strong></strong></div>
+      </div>
+      <div style={{ flex: 1, paddingTop: '7px', textAlign: 'center', fontSize: '12px', width: '100%', borderTop: '1px solid #111' }}>
+        <strong>မှတ်ချက်</strong>
+        <div style={{ marginTop: '4px', height: '72px', borderTop: '1px solid #111', borderBottom: '1px solid #111', boxSizing: 'border-box' }} />
+      </div>
+    </div>
+  );
+}
 
 const BarcodePrinterPage = () => {
   // --- States ---
-  const [printMode, setPrintMode] = useState<'thermal' | 'a4'>('thermal');
+  const [printMode, setPrintMode] = useState<'thermal' | 'a4' | 'voucher'>('thermal');
   const [labelSize, setLabelSize] = useState({ w: 100, h: 150 }); 
   const [printCount, setPrintCount] = useState<number>(20); // ၁၀ ခုစီ ၂ ရွက်စာ ကွက်တိစမ်းသပ်ရန် Default ၂၀ ထားပါတယ်
   const [generatedList, setGeneratedList] = useState<string[]>([]);
@@ -15,6 +69,7 @@ const BarcodePrinterPage = () => {
 
   // 🌟 A6 2-Column (၁ ရွက်လျှင် ၁၀ ခုဆန့်) စနစ် ဟုတ်မဟုတ် စစ်ဆေးခြင်း
   const isA6Grid = labelSize.w === 100 && labelSize.h === 150;
+  const isVoucherMode = printMode === 'voucher';
 
   // 💡 တစ်ရွက်စာ ၁၀ ခုစီ (2 Columns x 5 Rows) ခွဲပေးမည့် Helper Function
   const chunkArray = (arr: string[], size: number) => {
@@ -93,7 +148,11 @@ const BarcodePrinterPage = () => {
 
     let printHTML = '';
 
-    if (isA6Grid) {
+    if (isVoucherMode) {
+      printHTML = generatedList
+        .map((id) => document.getElementById(`voucher-${id}`)?.outerHTML || '')
+        .join('');
+    } else if (isA6Grid) {
       // 🌟 ၁၀၀x၁၅၀mm အတွက် တစ်ရွက်ကို ၁၀ ခုစီ အုပ်စုခွဲ၍ စီပေးခြင်း
       const pages = chunkArray(generatedList, 10);
       
@@ -134,7 +193,13 @@ const BarcodePrinterPage = () => {
       `;
     }
 
-    const printCSS = isA6Grid 
+    const printCSS = isVoucherMode
+      ? `
+        @page { size: 4in 6in; margin: 0; }
+        body { margin: 0; padding: 0; background: white; }
+        [id^="voucher-"] { page-break-after: always; }
+      `
+      : isA6Grid 
       ? `
         @page { size: 100mm 150mm; margin: 0; }
         body { margin: 0; padding: 0; background: white; font-family: sans-serif; }
@@ -274,7 +339,7 @@ const handleMobileThermalPrint = () => {
             {/* Printer Mode */}
             <div>
               <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Printer အမျိုးအစား</label>
-              <div className="grid grid-cols-2 gap-2 bg-slate-900 p-1 rounded-xl border border-slate-800">
+              <div className="grid grid-cols-3 gap-2 bg-slate-900 p-1 rounded-xl border border-slate-800">
                 <button 
                   onClick={() => setPrintMode('thermal')}
                   className={`flex items-center justify-center py-2 px-3 rounded-lg text-xs font-semibold transition-all ${printMode === 'thermal' ? 'bg-orange-500 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
@@ -291,7 +356,16 @@ const handleMobileThermalPrint = () => {
                   <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
                   </svg>
-                  Standard A4
+                   A4
+                </button>
+                <button
+                  onClick={() => setPrintMode('voucher')}
+                  className={`flex items-center justify-center py-2 px-3 rounded-lg text-xs font-semibold transition-all ${isVoucherMode ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                >
+                  <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 3.75h12A2.25 2.25 0 0120.25 6v12A2.25 2.25 0 0118 20.25H6A2.25 2.25 0 013.75 18V6A2.25 2.25 0 016 3.75zM8 8h8M8 12h8M8 16h4" />
+                  </svg>
+                  Voucher
                 </button>
               </div>
             </div>
@@ -365,9 +439,9 @@ const handleMobileThermalPrint = () => {
           
           <button 
             onClick={handleMobileThermalPrint}
-            disabled={printMode === 'a4'}
+            disabled={printMode === 'a4' || isVoucherMode}
             className="w-full py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-bold active:scale-[0.98] transition-all text-sm flex items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed border border-slate-700/50"
-            title={printMode === 'a4' ? "ဖုန်းဖြင့်ထုတ်ရန် Thermal Sticker Mode ပြောင်းပေးပါ" : "ဖုန်းဖြင့် တိုက်ရိုက်ထုတ်ရန်"}
+            title={printMode === 'a4' || isVoucherMode ? "ဖုန်းဖြင့်ထုတ်ရန် Thermal Sticker Mode ပြောင်းပေးပါ" : "ဖုန်းဖြင့် တိုက်ရိုက်ထုတ်ရန်"}
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
@@ -385,7 +459,8 @@ const handleMobileThermalPrint = () => {
           <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
             <span className="flex h-2 w-2 rounded-full bg-emerald-500"></span>
             <span>Live Preview Canvas</span>
-            {isA6Grid && <span className="ml-2 bg-orange-500/10 text-orange-400 px-2 py-0.5 rounded border border-orange-500/20 font-semibold">10 Labels / Sheet Mode ဖွင့်ထားသည်</span>}
+            {isVoucherMode && <span className="ml-2 bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20 font-semibold">Blank Voucher Mode</span>}
+            {!isVoucherMode && isA6Grid && <span className="ml-2 bg-orange-500/10 text-orange-400 px-2 py-0.5 rounded border border-orange-500/20 font-semibold">10 Labels / Sheet Mode ဖွင့်ထားသည်</span>}
           </div>
           
           <div className="flex items-center gap-2 text-[11px] bg-slate-900 px-3 py-1.5 rounded-lg text-slate-400 border border-slate-800">
@@ -402,6 +477,10 @@ const handleMobileThermalPrint = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5zM16.875 14.625a1.125 1.125 0 112.25 0 1.125 1.125 0 01-2.25 0zM16.875 19.875a1.125 1.125 0 112.25 0 1.125 1.125 0 01-2.25 0zM13.5 17.25a1.125 1.125 0 112.25 0 1.125 1.125 0 01-2.25 0zM18.75 17.25a1.125 1.125 0 112.25 0 1.125 1.125 0 01-2.25 0z" />
               </svg>
               <p className="text-sm font-medium tracking-wide">ဘားကုဒ်များ စတင်ကြည့်ရှုရန် ဘယ်ဘက်ခြမ်းရှိ Generate ခလုတ်ကို နှိပ်ပါဗျာ...</p>
+            </div>
+          ) : isVoucherMode ? (
+            <div ref={previewRef} className="flex flex-col gap-8 items-center w-full py-4">
+              {generatedList.map((id) => <BlankVoucher key={id} code={id} />)}
             </div>
           ) : isA6Grid ? (
             /* 🌟 ၁၀၀x၁၅၀mm (10 Labels per sheet) Live Preview အသစ် */

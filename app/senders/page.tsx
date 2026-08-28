@@ -1755,6 +1755,26 @@ export default function SendersDashboard() {
               </button>
             </div>
 
+            {/* KPay details for the selected sender */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-blue-600">
+                  KPay No
+                </p>
+                <p className="mt-1 text-lg font-mono font-bold text-blue-900 break-all">
+                  {getSenderKpayNo(selectedSender) || "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-blue-600">
+                  KPay Name
+                </p>
+                <p className="mt-1 text-lg font-bold text-blue-900 break-words">
+                  {getSenderKpayName(selectedSender) || "—"}
+                </p>
+              </div>
+            </div>
+
             {/* Summary Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl">
