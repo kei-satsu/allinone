@@ -9,6 +9,23 @@ import { saveAs } from 'file-saver'
 
 type RiderTab = 'deliver' | 'pickup'
 
+type RiderOrder = {
+  id?: string | number
+  item_id?: string
+  sender_name?: string
+  sender_loc?: string
+  receiver_name?: string
+  receiver_address?: string
+  received_date?: string
+  deliver_date?: string
+  cod_amount?: number | string
+  deli_fee?: number | string
+  total_amount?: number | string
+  status?: string
+  riderTab?: RiderTab
+  [key: string]: string | number | boolean | null | undefined | RiderTab | undefined
+}
+
 // Helper function to compute default date range (Prev month 26th - This month 25th)
 const getDefaultDateRange = () => {
   const now = new Date()
@@ -53,15 +70,43 @@ const getDefaultDateRange = () => {
   }
 }
 
+const fetchAllRiderOrders = async (riderId: string, riderType: 'deliver_rider_id' | 'pickup_rider_id') => {
+  const allOrders: RiderOrder[] = []
+  const pageSize = 200
+  let page = 1
+
+  while (true) {
+    const { data = [], total = 0 } = await getOrders({
+      [riderType]: riderId,
+      sortBy: 'created_at',
+      order: 'desc',
+      limit: pageSize,
+      page,
+    })
+
+    if (!data.length) break
+
+    allOrders.push(...data)
+
+    if (allOrders.length >= total || data.length < pageSize) break
+    page += 1
+  }
+
+  return allOrders
+}
+
 export default function RiderDetailPage() {
   const params = useParams()
   const router = useRouter()
   const riderId = params.id as string
 
   const [rider, setRider] = useState<{ name: string; phone: string; branch: string } | null>(null)
-  const [orders, setOrders] = useState<any[]>([])
+  const [orders, setOrders] = useState<RiderOrder[]>([])
   const [loading, setLoading] = useState(true)
-  const [userBranch, setUserBranch] = useState('')
+  const [userBranch] = useState<string>(() => {
+    if (typeof window === 'undefined') return ''
+    return window.localStorage.getItem('user_branch') ?? ''
+  })
   const [activeTab, setActiveTab] = useState<RiderTab>('deliver')
 
   // Date filter with default range
@@ -70,13 +115,11 @@ export default function RiderDetailPage() {
   const [dateTo, setDateTo] = useState(defaultRange.to)
 
   useEffect(() => {
-    const branch = localStorage.getItem('user_branch')
-    if (!branch) {
+    if (!userBranch) {
       router.push('/login')
       return
     }
-    setUserBranch(branch)
-  }, [router])
+  }, [router, userBranch])
 
   useEffect(() => {
     if (!riderId || !userBranch) return
@@ -89,15 +132,17 @@ export default function RiderDetailPage() {
         const riderData = riderList[0]
         if (!riderData) throw new Error('Rider not found')
         setRider(riderData)
-        const [{ data: deliverOrders }, { data: pickupOrders }] = await Promise.all([
-          getOrders({ deliver_rider_id: riderId, sortBy: 'created_at', order: 'desc', limit: 1000 }),
-          getOrders({ pickup_rider_id: riderId, sortBy: 'created_at', order: 'desc', limit: 1000 }),
+
+        const [deliverOrders, pickupOrders] = await Promise.all([
+          fetchAllRiderOrders(riderId, 'deliver_rider_id'),
+          fetchAllRiderOrders(riderId, 'pickup_rider_id'),
         ])
+
         setOrders([
-          ...(deliverOrders || []).map((order) => ({ ...order, riderTab: 'deliver' as const })),
-          ...(pickupOrders || []).map((order) => ({ ...order, riderTab: 'pickup' as const })),
+          ...deliverOrders.map((order) => ({ ...order, riderTab: 'deliver' as const })),
+          ...pickupOrders.map((order) => ({ ...order, riderTab: 'pickup' as const })),
         ])
-      } catch (error) {
+      } catch {
         alert('Rider not found')
         router.back()
         return
@@ -113,7 +158,7 @@ export default function RiderDetailPage() {
 
   const filteredOrders = tabOrders.filter((order) => {
     if (activeTab === 'deliver' && order.status !== 'Delivered' && order.status !== 'Settled') return false
-    const orderDate = order[dateField]
+    const orderDate = typeof order[dateField] === 'string' ? order[dateField] : ''
     if (dateFrom && orderDate && orderDate < dateFrom) return false
     if (dateTo && orderDate && orderDate > dateTo) return false
     return true
