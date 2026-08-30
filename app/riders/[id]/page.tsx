@@ -82,6 +82,7 @@ const fetchAllRiderOrders = async (riderId: string, riderType: 'deliver_rider_id
       order: 'desc',
       limit: pageSize,
       page,
+      is_deleted: false,
     })
 
     if (!data.length) break
@@ -169,7 +170,10 @@ export default function RiderDetailPage() {
   )
 
   // Calculate total deli fee and commission (50%)
-  const totalDeliFee = deliveredOrders.reduce((sum, o) => sum + (o.deli_fee || 0), 0)
+  const totalDeliFee = deliveredOrders.reduce((sum, o) => {
+    const deliFee = Number(o.deli_fee ?? 0)
+    return sum + deliFee
+  }, 0)
   const commission = Math.round(totalDeliFee * 0.5)
 
   const handleExportExcel = async () => {
