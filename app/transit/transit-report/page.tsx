@@ -52,6 +52,7 @@ export default function DailyReport() {
   const [showMobileSummary, setShowMobileSummary] = useState(false)
   const [showMobileFilters, setShowMobileFilters] = useState(false)
   const [expandedMobileCards, setExpandedMobileCards] = useState<Record<string, boolean>>({})
+  const [includeTransitToYGN, setIncludeTransitToYGN] = useState(true)
   
   // ── Right-Click Context Menu အတွက် State ──
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; order: any } | null>(null);
@@ -241,7 +242,20 @@ const fetchCities = async () => {
   };
 
   // ── Filter Logics ──
-  const filteredOrders = reportData.filter(o => {
+  const isDeliveredLikeStatus = (status: string | null | undefined) => {
+    const normalized = String(status || '').trim()
+    return normalized === 'Delivered' || normalized === 'Settled'
+  }
+
+  const getNormalizedStatus = (status: string | null | undefined) => {
+    return isDeliveredLikeStatus(status) ? 'Delivered' : String(status || '').trim() || '-'
+  }
+
+  const activeReportData = includeTransitToYGN
+    ? reportData
+    : reportData.filter(order => order.transit_to !== 'YGN')
+
+  const filteredOrders = activeReportData.filter(o => {
     if (colFilters['global_search']) {
       const query = colFilters['global_search'].toLowerCase()
       const isMatch = 
@@ -259,7 +273,14 @@ const fetchCities = async () => {
       let cellValue = ""
       if (key === 'pickup_rider') cellValue = o.pickup_rider?.name || ""
       else if (key === 'deliver_rider') cellValue = o.deliver_rider?.name || ""
-      else cellValue = String(o[key] || "")
+      else if (key === 'status') {
+        const normalizedStatus = getNormalizedStatus(o.status)
+        const normalizedFilter = filterValue === 'settled' ? 'delivered' : filterValue
+        cellValue = normalizedStatus
+        return cellValue.toLowerCase().includes(normalizedFilter)
+      } else {
+        cellValue = String(o[key] || "")
+      }
       return cellValue.toLowerCase().includes(filterValue)
     })
   })
@@ -379,9 +400,9 @@ const exportToExcel = () => {
 
   const summaryRows: any[][] = [];
   cities.forEach(city => {
-    const transitOrders = reportData.filter(o => 
+    const transitOrders = activeReportData.filter(o => 
       o.transit_to === city["C.ID"] && 
-      o.status === 'Delivered' && 
+      isDeliveredLikeStatus(o.status) && 
       o.deliver_date === selectedDate
     );
     const total = transitOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
@@ -539,13 +560,16 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
         {o.branch === 'MDY' ? 'MANDALAY' : 'YANGON'}
       </span>
     )
-    if (key === 'status') return (
-      <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wide ${
-        o.status === 'Delivered' ? 'bg-green-50 text-green-700 border border-green-200' : 
-        o.status === 'Pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 
-        o.status === 'On Way' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-gray-100 text-gray-600 border border-gray-200'
-      }`}>{o.status}</span>
-    )
+    if (key === 'status') {
+      const normalizedStatus = getNormalizedStatus(o.status)
+      return (
+        <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wide ${
+          normalizedStatus === 'Delivered' ? 'bg-green-50 text-green-700 border border-green-200' : 
+          normalizedStatus === 'Pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 
+          normalizedStatus === 'On Way' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-gray-100 text-gray-600 border border-gray-200'
+        }`}>{normalizedStatus}</span>
+      )
+    }
    if (key === 'image_url') return (
   <div className="flex items-center justify-center">
     {o.image_url ? (
@@ -614,9 +638,9 @@ if (key === 'agent_fee') {
   }
 
   // Delivered ဖြစ်ပြီးသား ပါဆယ်များအတွက် Senders နှင့် မြို့အလိုက် COD စာရင်းတွက်ချက်ခြင်း
-  const senderCodByLoc = reportData
+  const senderCodByLoc = activeReportData
     .filter(o => 
-      o.status === 'Delivered' && 
+      isDeliveredLikeStatus(o.status) && 
       o.sender_name && 
       o.deliver_date === selectedDate // 👈 ဒီ Filter အခြေအနေကို အသစ်ဖြည့်သွင်းလိုက်တာပါ
     )
@@ -631,16 +655,16 @@ if (key === 'agent_fee') {
       return acc;
     }, {});
 
-  const deliveredOrders = reportData.filter(o => o.status === 'Delivered');
+  const deliveredOrders = activeReportData.filter(o => isDeliveredLikeStatus(o.status));
   const riderSummaryTotal = deliveredOrders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
   const riderSummaryCashIn = handovers.filter(h => h.transaction_type === 'Cash-in').reduce((sum, h) => sum + (Number(h.amount) || 0), 0);
   const riderSummaryOop = handovers.filter(h => h.transaction_type === 'OOP').reduce((sum, h) => sum + (Number(h.amount) || 0), 0);
   const riderSummaryGap = riderSummaryTotal - (riderSummaryCashIn + riderSummaryOop);
 
   // ၁။ Deli Fee စုစုပေါင်းများနှင့် မြို့အလိုက် သတ်မှတ်ချက်များကို အရင်တွက်ချက်သည်
-  const tableDeliFeeTotal = reportData.reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
+  const tableDeliFeeTotal = activeReportData.reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
   const oppositeCity = userBranch === 'MDY' ? 'YGN' : 'MDY';
-  const oppositeCityDeliTotal = reportData
+  const oppositeCityDeliTotal = activeReportData
     .filter(o => o.sender_loc === oppositeCity)
     .reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
   const oppositeCityDeliHalf = oppositeCityDeliTotal / 2;
@@ -650,7 +674,7 @@ if (key === 'agent_fee') {
   const senderCodTotal = Object.values(senderCodByLoc).reduce((acc, senders) => acc + Object.values(senders).reduce((sum, amount) => sum + amount, 0), 0);
 
   // ၂။ ရုံးခွဲအလိုက် ရှင်းပြီးသား Office Paid စုစုပေါင်းကို တွက်ချက်သည်
-  const officePaidTotal = reportData
+  const officePaidTotal = activeReportData
     .filter(o => 
       o.received_date === selectedDate && 
       (o.fee_type === 'Cash' || o.fee_type === 'Kpay') && 
@@ -659,7 +683,7 @@ if (key === 'agent_fee') {
     .reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
 
   // ၃။ တစ်ဖက်မြို့က ရှင်းလိုက်သည့် Opposite Paid စုစုပေါင်းကို တွက်ချက်သည်
-  const oppositePaidTotal = reportData
+  const oppositePaidTotal = activeReportData
     .filter(o => 
       o.received_date === selectedDate && 
       (o.fee_type === 'Cash' || o.fee_type === 'Kpay') && 
@@ -668,8 +692,8 @@ if (key === 'agent_fee') {
     .reduce((sum, o) => sum + (Number(o.deli_fee) || 0), 0);
 
   // ၄။ ယနေ့ရက်စွဲအတိုင်း Delivered ဖြစ်သွားသည့် Rider ပါဆယ်များ၏ တန်ဖိုးစုစုပေါင်း (grandTotalToPay) ကို ကြိုတင်တွက်ထုတ်သည်
-  const grandTotalToPayCalculated = reportData
-    .filter(o => o.status === 'Delivered' && o.deliver_date === selectedDate)
+  const grandTotalToPayCalculated = activeReportData
+    .filter(o => isDeliveredLikeStatus(o.status) && o.deliver_date === selectedDate)
     .reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
 
   // ၅။ ✨ သင်အလိုရှိသော ပုံသေနည်းအတိုင်း ဒေတာ ၃ ခုကို ပေါင်းပြီး tableTotalAmount ကို သတ်မှတ်သည်
@@ -725,6 +749,18 @@ if (key === 'agent_fee') {
               </>
             )}
           </div>
+
+          <button
+            type="button"
+            onClick={() => setIncludeTransitToYGN(prev => !prev)}
+            className={`font-medium px-3 py-1.5 rounded-md text-xs shadow-sm transition-all border ${
+              includeTransitToYGN
+                ? 'bg-amber-100 border-amber-300 text-amber-800 hover:bg-amber-200'
+                : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            Transit to YGN: {includeTransitToYGN ? 'Included' : 'Excluded'}
+          </button>
 
           <button onClick={() => fetchData(userBranch, selectedDate)} className="bg-orange-500 hover:bg-orange-600 text-white font-medium px-3 py-1.5 rounded-md text-xs shadow-sm transition-all">
             Refresh
@@ -974,9 +1010,9 @@ const allCities = [
 ];
 
 const rows = allCities.map(city => {
-  const transitOrders = reportData.filter(o => 
+  const transitOrders = activeReportData.filter(o => 
     o.transit_to === city["C.ID"] && 
-    o.status === 'Delivered' && 
+    isDeliveredLikeStatus(o.status) && 
     o.deliver_date === selectedDate
   );
 
