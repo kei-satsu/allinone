@@ -42,6 +42,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     receiver_loc: 'MDY',
     cod_amount: 0,
     deli_fee: 0,
+    agent_fee: 0,
     fee_type: 'Deli',
     total_amount: 0,
     pickup_rider_id: '',
@@ -81,6 +82,7 @@ useEffect(() => {
       receiver_loc: orderData.receiver_loc || 'MDY',
       cod_amount: orderData.cod_amount || 0,
       deli_fee: orderData.deli_fee || 0,
+      agent_fee: orderData.agent_fee || 0,
       fee_type: orderData.fee_type || 'Deli',
       total_amount: orderData.total_amount || 0,
       pickup_rider_id: orderData.pickup_rider_id || '',
@@ -275,6 +277,9 @@ const handleUpdateSubmit = async (e: React.FormEvent) => {
   if (Number(orderData?.deli_fee || 0) !== Number(formData.deli_fee || 0)) {
     changes.push(`💵 Deli Fee: ${fmtKg(orderData?.deli_fee)} ➔ ${fmtKg(formData.deli_fee)}`);
   }
+  if (Number(orderData?.agent_fee || 0) !== Number(formData.agent_fee || 0)) {
+    changes.push(`🤝 Agent Fee: ${fmtKg(orderData?.agent_fee)} ➔ ${fmtKg(formData.agent_fee)}`);
+  }
   if ((orderData?.status || 'At Office') !== (formData.status || 'At Office')) {
     changes.push(`📦 Status: "${orderData?.status || 'At Office'}" ➔ "${formData.status}"`);
   }
@@ -307,6 +312,7 @@ const handleUpdateSubmit = async (e: React.FormEvent) => {
     barcode: formData.barcode?.trim() ? formData.barcode.trim() : null, 
     pickup_rider_id: formData.pickup_rider_id || null,
     deliver_rider_id: formData.deliver_rider_id || null,
+    agent_fee: Number(formData.agent_fee) || 0,
     deliver_date: formData.deliver_date || null,
     cleared_date: formData.cleared_date || null,
     transit_date: formData.transit_date || null,
@@ -571,8 +577,8 @@ const handleUpdateSubmit = async (e: React.FormEvent) => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-orange-600 font-bold mb-1 uppercase text-[11px] tracking-wide">Total Final</label>
-                  <div className="w-full bg-gray-900 py-2.5 px-3 rounded-lg flex items-center justify-between">
+                  <label className={labelStyle}>Total Final</label>
+                  <div className="w-full bg-gray-900 py-2.5 px-3 rounded-lg flex items-center justify-between h-[46px]">
                     <span className="font-mono font-bold text-sm text-orange-400">{formData.total_amount.toLocaleString()}</span>
                     <span className="text-[11px] font-semibold text-orange-300">Ks</span>
                   </div>
@@ -600,21 +606,35 @@ const handleUpdateSubmit = async (e: React.FormEvent) => {
                   <input type="date" value={formData.deliver_date} onChange={e => setFormData({...formData, deliver_date: e.target.value})} className={`${winInput} font-mono`} />
                 </div>
               </div>
-              <div>
-  <label className={labelStyle}>Delivery Rider</label>
-  <select 
-    value={formData.deliver_rider_id} 
-    onChange={e => setFormData({...formData, deliver_rider_id: e.target.value})} 
-    className={winSelect}
-  >
-    <option value="">Select delivery rider...</option>
-    {riders.map(r => (
-      <option key={r.id} value={r.id}>
-        {r.name}
-      </option>
-    ))}
-  </select>
-</div>
+              <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3 items-end">
+                <div>
+                  <label className={labelStyle}>Delivery Rider</label>
+                  <select 
+                    value={formData.deliver_rider_id} 
+                    onChange={e => setFormData({...formData, deliver_rider_id: e.target.value})} 
+                    className={`${winSelect} h-[46px]`}
+                  >
+                    <option value="">Select delivery rider...</option>
+                    {riders.map(r => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelStyle}>Agent Fee</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={formData.agent_fee || ''}
+                      onChange={e => setFormData({...formData, agent_fee: Number(e.target.value)})}
+                      className={`${winInput} pl-7 font-mono text-indigo-600 font-bold text-xs h-[46px]`}
+                    />
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-[10px]">K</span>
+                  </div>
+                </div>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={labelStyle}>Return Utility</label>
