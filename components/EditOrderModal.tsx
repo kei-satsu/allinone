@@ -16,6 +16,22 @@ interface EditOrderModalProps {
   onSaveSuccess: () => void;
 }
 
+const MANUAL_CITIES = [
+  { id: 'YGN', name: 'ရန်ကုန်' },
+  { id: 'MDY', name: 'မန္တလေး' },
+  { id: 'NPT', name: 'နေပြည်တော်' },
+  { id: 'TGI', name: 'တောင်ကြီး' },
+  { id: 'POL1', name: 'ပြင်ဦးလွင် SPY' },
+  { id: 'POL2', name: 'ပြင်ဦးလွင် စိုပြေ' },
+  { id: 'MGY', name: 'မကွေး' },
+  { id: 'MYW', name: 'မုံရွာ' },
+  { id: 'TDU', name: 'တံတားဦး' },
+  { id: 'KYS', name: 'ကျောက်ဆည်' },
+  { id: 'PTN', name: 'ပုသိမ်' },
+  { id: 'SGG', name: 'စစ်ကိုင်း' },
+  { id: 'SBO', name: 'ရွှေဘို' },
+]
+
 export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSuccess }: EditOrderModalProps) {
   const [loading, setLoading] = useState(false)
   const [riders, setRiders] = useState<any[]>([])
@@ -60,57 +76,57 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
   })
 
   // 1. Form အချက်အလက်များ မူရင်းအတိုင်း ဖြည့်သွင်းခြင်း
-useEffect(() => {
-  if (orderData && isOpen) {
-    // 🌟 လက်ရှိ Logged-in ဝင်ထားသော Branch Code ကို ယူမည်
-    const currentBranch = localStorage.getItem('user_branch') || orderData.branch || 'MDY';
-    const transitList = Array.isArray(orderData.transit) ? orderData.transit : [];
+  useEffect(() => {
+    if (orderData && isOpen) {
+      // 🌟 လက်ရှိ Logged-in ဝင်ထားသော Branch Code ကို ယူမည်
+      const currentBranch = localStorage.getItem('user_branch') || orderData.branch || 'MDY';
+      const transitList = Array.isArray(orderData.transit) ? orderData.transit : [];
 
-    // 🌟 transit_from === currentBranch ဖြစ်သည့် Leg ကို ရှာယူခြင်း
-    const activeLeg = transitList.find((t: any) => t.transit_from === currentBranch);
+      // 🌟 transit_from သို့မဟုတ် transit_to တွင် currentBranch ပါဝင်သည့် Leg ကို ရှာယူခြင်း
+      const activeLeg = transitList.find((t: any) => t.transit_from === currentBranch || t.transit_to === currentBranch);
 
-    setFormData({
-      barcode: orderData.barcode || '',
-      sender_id: orderData.sender_id || '',
-      received_date: orderData.received_date || '',
-      sender_name: orderData.sender_name || '',
-      sender_phone: orderData.sender_phone || '',
-      sender_loc: orderData.sender_loc || 'MDY',
-      receiver_name: orderData.receiver_name || '',
-      receiver_phone: orderData.receiver_phone || '',
-      receiver_address: orderData.receiver_address || '',
-      receiver_loc: orderData.receiver_loc || 'MDY',
-      cod_amount: orderData.cod_amount || 0,
-      deli_fee: orderData.deli_fee || 0,
-      agent_fee: orderData.agent_fee || 0,
-      fee_type: orderData.fee_type || 'Deli',
-      total_amount: orderData.total_amount || 0,
-      pickup_rider_id: orderData.pickup_rider_id || '',
-      status: orderData.status || 'At Office',
-      deliver_rider_id: orderData.deliver_rider_id || '',
-      deliver_date: orderData.deliver_date || '',
-      note: orderData.note || '',
-      cleared_date: orderData.cleared_date || '',
-      branch: orderData.branch || '',
-      image_url: orderData.image_url || '',
-      remark: orderData.remark || '',
-      
-      // 🌟 Matching Leg ရှိပါက ထို Leg ထဲမှ data ကို ယူပြမည်၊ မရှိပါက fallback ယူမည်
-      transit_date: activeLeg ? activeLeg.transit_date : (orderData.transit_date || ''),
-      transit_to: activeLeg ? activeLeg.transit_to : (orderData.transit_to || ''),
-      transit: transitList // Array မူရင်းကို သိမ်းထားမည်
-    })
+      setFormData({
+        barcode: orderData.barcode || '',
+        sender_id: orderData.sender_id || '',
+        received_date: orderData.received_date || '',
+        sender_name: orderData.sender_name || '',
+        sender_phone: orderData.sender_phone || '',
+        sender_loc: orderData.sender_loc || 'MDY',
+        receiver_name: orderData.receiver_name || '',
+        receiver_phone: orderData.receiver_phone || '',
+        receiver_address: orderData.receiver_address || '',
+        receiver_loc: orderData.receiver_loc || 'MDY',
+        cod_amount: orderData.cod_amount || 0,
+        deli_fee: orderData.deli_fee || 0,
+        agent_fee: orderData.agent_fee || 0,
+        fee_type: orderData.fee_type || 'Deli',
+        total_amount: orderData.total_amount || 0,
+        pickup_rider_id: orderData.pickup_rider_id || '',
+        status: orderData.status || 'At Office',
+        deliver_rider_id: orderData.deliver_rider_id || '',
+        deliver_date: orderData.deliver_date || '',
+        note: orderData.note || '',
+        cleared_date: orderData.cleared_date || '',
+        branch: orderData.branch || '',
+        image_url: orderData.image_url || '',
+        remark: orderData.remark || '',
+        
+        // 🌟 Matching Leg ရှိပါက ထို Leg ထဲမှ data ကို ယူပြမည်၊ မရှိပါက fallback ယူမည်
+        transit_date: activeLeg ? activeLeg.transit_date : (orderData.transit_date || ''),
+        transit_to: activeLeg ? activeLeg.transit_to : (orderData.transit_to || ''),
+        transit: transitList // Array မူရင်းကို သိမ်းထားမည်
+      })
 
-    setIsBarcodeLocked(true)
+      setIsBarcodeLocked(true)
 
-    if (orderData.fee_type === 'Bill') {
-      setOriginalCod((orderData.cod_amount || 0) + (orderData.deli_fee || 0))
-    } else {
-      setOriginalCod(orderData.cod_amount || 0)
+      if (orderData.fee_type === 'Bill') {
+        setOriginalCod((orderData.cod_amount || 0) + (orderData.deli_fee || 0))
+      } else {
+        setOriginalCod(orderData.cod_amount || 0)
+      }
+      setResetKey(Date.now())
     }
-    setResetKey(Date.now())
-  }
-}, [orderData, isOpen])
+  }, [orderData, isOpen])
 
   // 2. Senders, Cities နှင့် Riders အချက်အလက်များ ဆွဲထုတ်ခြင်း
   useEffect(() => {
@@ -130,27 +146,25 @@ useEffect(() => {
     fetchCities()
   }, [isOpen])
 
-  
-
   useEffect(() => {
-  if (!isOpen) return;
+    if (!isOpen) return;
 
-  // localStorage မှ အကောက်ဝင်ထားသော branch ကို ယူမည် (မရှိပါက formData.branch ကို fallback ထားမည်)
-  const currentBranch = localStorage.getItem('user_branch') || formData.branch;
-  if (!currentBranch) return;
+    // localStorage မှ အကောက်ဝင်ထားသော branch ကို ယူမည် (မရှိပါက formData.branch ကို fallback ထားမည်)
+    const currentBranch = localStorage.getItem('user_branch') || formData.branch;
+    if (!currentBranch) return;
 
-  async function fetchRiders() {
-    const { data, error } = await apiClient
-      .from('riders')
-      .select('*')
-      .eq('branch', currentBranch)
-      .order('name', { ascending: true });
+    async function fetchRiders() {
+      const { data, error } = await apiClient
+        .from('riders')
+        .select('*')
+        .eq('branch', currentBranch)
+        .order('name', { ascending: true });
 
-    if (!error && data) setRiders(data);
-  }
+      if (!error && data) setRiders(data);
+    }
 
-  fetchRiders();
-}, [isOpen, formData.branch]);
+    fetchRiders();
+  }, [isOpen, formData.branch]);
 
   // 3. Sender ရှာဖွေခြင်းနှင့် ရွေးချယ်ခြင်းယန္တရား
   const handleSenderNameChange = (val: string) => {
@@ -211,140 +225,161 @@ useEffect(() => {
   }
 
   // 6. Update Submission & History Log Generator
-const handleUpdateSubmit = async (e: React.FormEvent) => {
-  e.preventDefault()
+  const handleUpdateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
 
-  if (!formData.sender_name || !formData.receiver_name || !formData.receiver_phone) {
-    alert("လိုအပ်သောအချက်အလက်များ ပြည့်စုံစွာဖြည့်ပါ!")
-    return;
-  }
+    if (!formData.sender_name || !formData.receiver_name || !formData.receiver_phone) {
+      alert("လိုအပ်သောအချက်အလက်များ ပြည့်စုံစွာဖြည့်ပါ!")
+      return;
+    }
 
-  if (!formData.sender_id) {
-    alert("ကျေးဇူးပြု၍ ပေးပို့သူ (Sender) ကို List ကျလာသည့်အထဲမှ သေချာစွာ နှိပ်၍ရွေးချယ်ပေးပါ!")
-    return;
-  }
+    if (!formData.sender_id) {
+      alert("ကျေးဇူးပြု၍ ပေးပို့သူ (Sender) ကို List ကျလာသည့်အထဲမှ သေချာစွာ နှိပ်၍ရွေးချယ်ပေးပါ!")
+      return;
+    }
 
-  setLoading(true)
+    // 🌟 [ADDED] Dispatch Status "In-Transit" Validation
+    if (formData.status === 'In-Transit') {
+      if (!formData.transit_to?.trim() || !formData.transit_date) {
+        alert("Status ကို 'In-Transit' ဟု ရွေးချယ်ပါက Transit Date နှင့် Transit To (Branch) တို့ကို သေချာစွာ ဖြည့်သွင်းပေးရပါမည်!")
+        return;
+      }
+    }
 
-  // 🌟 Current Branch ကို ယူခြင်း
-  const currentBranch = localStorage.getItem('user_branch') || formData.branch || 'MDY';
+    setLoading(true)
 
-  // 🌟 Active Branch Leg တစ်ခုတည်းကိုပဲ Target ထား၍ Update/Insert လုပ်ခြင်း
-  let updatedTransitList = [...(formData.transit || [])];
-  const legIndex = updatedTransitList.findIndex((t: any) => t.transit_from === currentBranch);
+    // 🌟 Current Branch ကို ယူခြင်း
+    const currentBranch = localStorage.getItem('user_branch') || formData.branch || 'MDY';
 
-  if (legIndex >= 0) {
-    // Leg ရှိပြီးသားဖြစ်ပါက အဆိုပါ Leg ၏ transit_to / transit_date ကိုပဲ Update လုပ်မည်
-    updatedTransitList[legIndex] = {
-      ...updatedTransitList[legIndex],
-      transit_to: formData.transit_to || null,
-      transit_date: formData.transit_date || null
+    // 🌟 Active Branch Leg တစ်ခုတည်းကိုပဲ Target ထား၍ Update/Insert လုပ်ခြင်း
+    let updatedTransitList = [...(formData.transit || [])];
+    const legIndex = updatedTransitList.findIndex((t: any) => t.transit_from === currentBranch);
+
+    if (legIndex >= 0) {
+      // Leg ရှိပြီးသားဖြစ်ပါက အဆိုပါ Leg ၏ transit_to / transit_date ကိုပဲ Update လုပ်မည်
+      updatedTransitList[legIndex] = {
+        ...updatedTransitList[legIndex],
+        transit_to: formData.transit_to || null,
+        transit_date: formData.transit_date || null
+      };
+    } else if (formData.transit_to || formData.transit_date) {
+      // Leg မရှိသေးပါက Leg အသစ်အဖြစ် Current Branch အတွက် Append လုပ်မည်
+      updatedTransitList.push({
+        transit_from: currentBranch,
+        transit_to: formData.transit_to || null,
+        transit_date: formData.transit_date || null
+      });
+    }
+
+    // ==================== 🌟 HISTORY LOG CALCULATION (ပြောင်းလဲမှုများ မှတ်တမ်းတင်ခြင်း) ====================
+    let changes: string[] = [];
+    const fmtKg = (val: any) => `${(Number(val) || 0).toLocaleString()} Ks`;
+
+    if ((orderData?.barcode || '') !== (formData.barcode || '')) {
+      changes.push(`🏷️ Barcode: "${orderData?.barcode || ''}" ➔ "${formData.barcode}"`);
+    }
+    if ((orderData?.received_date || '') !== (formData.received_date || '')) {
+      changes.push(`📅 Arrival Date: "${orderData?.received_date || 'N/A'}" ➔ "${formData.received_date}"`);
+    }
+    if ((orderData?.branch || '') !== (formData.branch || '')) {
+      changes.push(`🏢 Branch: "${orderData?.branch || 'N/A'}" ➔ "${formData.branch}"`);
+    }
+    if ((orderData?.sender_name || '') !== (formData.sender_name || '')) {
+      changes.push(`📤 Sender: "${orderData?.sender_name || ''}" ➔ "${formData.sender_name}"`);
+    }
+    if ((orderData?.receiver_name || '') !== (formData.receiver_name || '')) {
+      changes.push(`📥 Receiver Name: "${orderData?.receiver_name || ''}" ➔ "${formData.receiver_name}"`);
+    }
+    if ((orderData?.receiver_phone || '') !== (formData.receiver_phone || '')) {
+      changes.push(`📞 Receiver Phone: "${orderData?.receiver_phone || ''}" ➔ "${formData.receiver_phone}"`);
+    }
+    if (Number(orderData?.cod_amount || 0) !== Number(formData.cod_amount || 0)) {
+      changes.push(`💰 COD Amount: ${fmtKg(orderData?.cod_amount)} ➔ ${fmtKg(formData.cod_amount)}`);
+    }
+    if (Number(orderData?.deli_fee || 0) !== Number(formData.deli_fee || 0)) {
+      changes.push(`💵 Deli Fee: ${fmtKg(orderData?.deli_fee)} ➔ ${fmtKg(formData.deli_fee)}`);
+    }
+    if (Number(orderData?.agent_fee || 0) !== Number(formData.agent_fee || 0)) {
+      changes.push(`🤝 Agent Fee: ${fmtKg(orderData?.agent_fee)} ➔ ${fmtKg(formData.agent_fee)}`);
+    }
+    if ((orderData?.status || 'At Office') !== (formData.status || 'At Office')) {
+      changes.push(`📦 Status: "${orderData?.status || 'At Office'}" ➔ "${formData.status}"`);
+    }
+    if ((orderData?.transit_date || '') !== (formData.transit_date || '')) {
+      changes.push(`🚚 Transit Date: "${orderData?.transit_date || 'N/A'}" ➔ "${formData.transit_date || 'Cleared'}"`);
+    }
+    if ((orderData?.transit_to || '') !== (formData.transit_to || '')) {
+      changes.push(`🚛 Transit To: "${orderData?.transit_to || 'N/A'}" ➔ "${formData.transit_to || 'Cleared'}"`);
+    }
+
+    if (changes.length === 0) {
+      changes.push("ℹ️ No fields were modified (Re-saved)");
+    }
+
+    const logNote = changes.join("\n");
+    const operatorName = currentBranch || 'Unknown Office';
+
+    const newLogEntry = {
+      timestamp: new Date().toISOString(),
+      action: "Order Updated",
+      operator: operatorName,
+      note: logNote
     };
-  } else if (formData.transit_to || formData.transit_date) {
-    // Leg မရှိသေးပါက Leg အသစ်အဖြစ် Current Branch အတွက် Append လုပ်မည်
-    updatedTransitList.push({
-      transit_from: currentBranch,
+
+    const updatedHistory = [...(orderData?.history || []), newLogEntry];
+    // =====================================================================================================
+
+    const payload = {
+      ...formData,
+      barcode: formData.barcode?.trim() ? formData.barcode.trim() : null, 
+      pickup_rider_id: formData.pickup_rider_id || null,
+      deliver_rider_id: formData.deliver_rider_id || null,
+      agent_fee: Number(formData.agent_fee) || 0,
+      deliver_date: formData.deliver_date || null,
+      cleared_date: formData.cleared_date || null,
+      transit_date: formData.transit_date || null,
       transit_to: formData.transit_to || null,
-      transit_date: formData.transit_date || null
-    });
-  }
+      transit: updatedTransitList, // 🌟 Leg ပြင်ဆင်ပြီးသား JSONB Array
+      history: updatedHistory      // 🌟 History Array အသစ်
+    }
 
-  // ==================== 🌟 HISTORY LOG CALCULATION (ပြောင်းလဲမှုများ မှတ်တမ်းတင်ခြင်း) ====================
-  let changes: string[] = [];
-  const fmtKg = (val: any) => `${(Number(val) || 0).toLocaleString()} Ks`;
+    // Keep the legacy columns aligned with the leg shown for the current branch.
+    const currentBranchLeg = updatedTransitList.find((leg: any) =>
+      leg.transit_from === currentBranch || leg.transit_to === currentBranch
+    )
+    payload.transit_date = currentBranchLeg?.transit_date || null
+    payload.transit_to = currentBranchLeg?.transit_to || null
 
-  if ((orderData?.barcode || '') !== (formData.barcode || '')) {
-    changes.push(`🏷️ Barcode: "${orderData?.barcode || ''}" ➔ "${formData.barcode}"`);
-  }
-  if ((orderData?.received_date || '') !== (formData.received_date || '')) {
-    changes.push(`📅 Arrival Date: "${orderData?.received_date || 'N/A'}" ➔ "${formData.received_date}"`);
-  }
-  if ((orderData?.branch || '') !== (formData.branch || '')) {
-    changes.push(`🏢 Branch: "${orderData?.branch || 'N/A'}" ➔ "${formData.branch}"`);
-  }
-  if ((orderData?.sender_name || '') !== (formData.sender_name || '')) {
-    changes.push(`📤 Sender: "${orderData?.sender_name || ''}" ➔ "${formData.sender_name}"`);
-  }
-  if ((orderData?.receiver_name || '') !== (formData.receiver_name || '')) {
-    changes.push(`📥 Receiver Name: "${orderData?.receiver_name || ''}" ➔ "${formData.receiver_name}"`);
-  }
-  if ((orderData?.receiver_phone || '') !== (formData.receiver_phone || '')) {
-    changes.push(`📞 Receiver Phone: "${orderData?.receiver_phone || ''}" ➔ "${formData.receiver_phone}"`);
-  }
-  if (Number(orderData?.cod_amount || 0) !== Number(formData.cod_amount || 0)) {
-    changes.push(`💰 COD Amount: ${fmtKg(orderData?.cod_amount)} ➔ ${fmtKg(formData.cod_amount)}`);
-  }
-  if (Number(orderData?.deli_fee || 0) !== Number(formData.deli_fee || 0)) {
-    changes.push(`💵 Deli Fee: ${fmtKg(orderData?.deli_fee)} ➔ ${fmtKg(formData.deli_fee)}`);
-  }
-  if (Number(orderData?.agent_fee || 0) !== Number(formData.agent_fee || 0)) {
-    changes.push(`🤝 Agent Fee: ${fmtKg(orderData?.agent_fee)} ➔ ${fmtKg(formData.agent_fee)}`);
-  }
-  if ((orderData?.status || 'At Office') !== (formData.status || 'At Office')) {
-    changes.push(`📦 Status: "${orderData?.status || 'At Office'}" ➔ "${formData.status}"`);
-  }
-  if ((orderData?.transit_date || '') !== (formData.transit_date || '')) {
-    changes.push(`🚚 Transit Date: "${orderData?.transit_date || 'N/A'}" ➔ "${formData.transit_date || 'Cleared'}"`);
-  }
-  if ((orderData?.transit_to || '') !== (formData.transit_to || '')) {
-    changes.push(`🚛 Transit To: "${orderData?.transit_to || 'N/A'}" ➔ "${formData.transit_to || 'Cleared'}"`);
-  }
+    const { error } = await apiClient
+      .from('orders')
+      .update(payload)
+      .eq('id', orderData.id)
 
-  if (changes.length === 0) {
-    changes.push("ℹ️ No fields were modified (Re-saved)");
+    setLoading(false)
+
+    if (error) {
+      alert("ပြင်ဆင်မှု မအောင်မြင်ပါ- " + error.message)
+    } else {
+      alert("Order နှင့် လှုပ်ရှားမှုမှတ်တမ်းကို အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။")
+      onSaveSuccess()
+      onClose()
+    }
   }
-
-  const logNote = changes.join("\n");
-  const operatorName = currentBranch || 'Unknown Office';
-
-  const newLogEntry = {
-    timestamp: new Date().toISOString(),
-    action: "Order Updated",
-    operator: operatorName,
-    note: logNote
-  };
-
-  const updatedHistory = [...(orderData?.history || []), newLogEntry];
-  // =====================================================================================================
-
-  const payload = {
-    ...formData,
-    barcode: formData.barcode?.trim() ? formData.barcode.trim() : null, 
-    pickup_rider_id: formData.pickup_rider_id || null,
-    deliver_rider_id: formData.deliver_rider_id || null,
-    agent_fee: Number(formData.agent_fee) || 0,
-    deliver_date: formData.deliver_date || null,
-    cleared_date: formData.cleared_date || null,
-    transit_date: formData.transit_date || null,
-    transit_to: formData.transit_to || null,
-    transit: updatedTransitList, // 🌟 Leg ပြင်ဆင်ပြီးသား JSONB Array
-    history: updatedHistory      // 🌟 History Array အသစ်
-  }
-
-  const { error } = await apiClient
-    .from('orders')
-    .update(payload)
-    .eq('id', orderData.id)
-
-  setLoading(false)
-
-  if (error) {
-    alert("ပြင်ဆင်မှု မအောင်မြင်ပါ- " + error.message)
-  } else {
-    alert("Order နှင့် လှုပ်ရှားမှုမှတ်တမ်းကို အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။")
-    onSaveSuccess()
-    onClose()
-  }
-}
 
   if (!isOpen) return null;
 
   const winInput = "w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-800 text-sm focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all shadow-sm"
   const winSelect = "w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-800 text-sm focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all cursor-pointer shadow-sm"
   const labelStyle = "block text-gray-600 font-semibold mb-1 uppercase text-[11px] tracking-wide"
+  const transitCities = [
+    ...MANUAL_CITIES,
+    ...cities
+      .filter(city => !MANUAL_CITIES.some(manualCity => manualCity.id === String(city['C.ID'])))
+      .map(city => ({ id: String(city['C.ID']), name: city.name }))
+  ]
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[100] p-4 antialiased">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[100] p-2 sm:p-4 antialiased">
       <div className="bg-[#f4f4f5] rounded-xl shadow-2xl w-full max-w-6xl flex flex-col max-h-[90vh] overflow-hidden">
         
         {/* Modal Header */}
@@ -369,18 +404,18 @@ const handleUpdateSubmit = async (e: React.FormEvent) => {
               <label className={labelStyle}>Barcode Code</label>
               <div className="flex gap-2 items-center">
                 <div className="relative flex-1">
-                <input
-  type="text"
-  value={formData.barcode}
-  onChange={e => setFormData({ ...formData, barcode: e.target.value })}
-  readOnly={isBarcodeLocked}
-  className={`${winInput} font-mono font-bold tracking-wide transition-all ${
-    isBarcodeLocked 
-      ? 'bg-gray-100 text-gray-500 border-gray-300 cursor-not-allowed select-none' 
-      : 'bg-amber-50/60 text-amber-900 border-amber-400 focus:ring-amber-200'
-  }`}
-  placeholder="Barcode ရိုက်ထည့်ပါ..."
-/>
+                  <input
+                    type="text"
+                    value={formData.barcode}
+                    onChange={e => setFormData({ ...formData, barcode: e.target.value })}
+                    readOnly={isBarcodeLocked}
+                    className={`${winInput} font-mono font-bold tracking-wide transition-all ${
+                      isBarcodeLocked 
+                        ? 'bg-gray-100 text-gray-500 border-gray-300 cursor-not-allowed select-none' 
+                        : 'bg-amber-50/60 text-amber-900 border-amber-400 focus:ring-amber-200'
+                    }`}
+                    placeholder="Barcode ရိုက်ထည့်ပါ..."
+                  />
                   {!isBarcodeLocked && (
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-amber-600 font-bold uppercase animate-pulse">
                       ⚠️ Editing
@@ -543,6 +578,28 @@ const handleUpdateSubmit = async (e: React.FormEvent) => {
               />
             </div>
 
+            {/* Voucher Image Section */}
+            <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-xs">
+              <label className={labelStyle}>Voucher Image</label>
+              {formData.image_url && (
+                <div className="mb-2 relative rounded border border-gray-200 bg-gray-50 flex items-center justify-center p-2 group">
+                  <img src={formData.image_url} alt="Current Voucher" className="max-h-24 object-contain" />
+                  <button 
+                    type="button" 
+                    onClick={() => setFormData(prev => ({ ...prev, image_url: '' }))}
+                    className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 text-xs transition-colors shadow-md"
+                    title="Remove Image"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+              <ImageUploader 
+                key={resetKey}
+                onUploadSuccess={(url) => setFormData(prev => ({ ...prev, image_url: url }))} 
+              />
+            </div>
+
           </div>
 
           {/* RIGHT COLUMN */}
@@ -673,50 +730,91 @@ const handleUpdateSubmit = async (e: React.FormEvent) => {
 
             {/* Transit Information */}
             <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-xs">
-              <h3 className="font-bold text-gray-800 uppercase text-xs mb-3 flex items-center gap-1.5 text-indigo-600">🚛 Transit Information</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className={labelStyle}>Transit Date</label>
-                  <input 
-                    type="date" 
-                    value={formData.transit_date} 
-                    onChange={e => setFormData({...formData, transit_date: e.target.value})} 
-                    className={`${winInput} font-mono`} 
-                  />
-                </div>
-                <div>
-                  <label className={labelStyle}>Transit To (Branch)</label>
-                  <input 
-                    type="text" 
-                    value={formData.transit_to} 
-                    onChange={e => setFormData({...formData, transit_to: e.target.value})} 
-                    className={winInput} 
-                    placeholder="ဥပမာ - MDY, YGN"
-                  />
-                </div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-gray-800 uppercase text-xs flex items-center gap-1.5 text-indigo-600">🚛 Transit Information</h3>
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({
+                    ...prev,
+                    transit: [...prev.transit, { transit_from: '', transit_to: '', transit_date: '' }]
+                  }))}
+                  className="px-2.5 py-1.5 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold transition-colors"
+                >
+                  + Add Transit
+                </button>
               </div>
-            </div>
 
-            {/* Voucher Image Section */}
-            <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-xs">
-              <label className={labelStyle}>Voucher Image</label>
-              {formData.image_url && (
-                <div className="mb-2 relative rounded border border-gray-200 bg-gray-50 flex items-center justify-center p-2 group">
-                  <img src={formData.image_url} alt="Current Voucher" className="max-h-24 object-contain" />
-                  <button 
-                    type="button" 
-                    onClick={() => setFormData(prev => ({ ...prev, image_url: '' }))}
-                    className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 text-xs transition-colors shadow-md"
-                    title="Remove Image"
-                  >
-                    ✕
-                  </button>
-                </div>
+              {formData.transit.length === 0 && (
+                <p className="text-xs text-gray-400 py-2">No transit legs recorded.</p>
               )}
-              <ImageUploader 
-                key={resetKey}
-                onUploadSuccess={(url) => setFormData(prev => ({ ...prev, image_url: url }))} 
-              />
+
+              <div className="space-y-3">
+                {formData.transit.map((leg: any, index: number) => (
+                  <div key={`${index}-${leg.transit_from}-${leg.transit_to}`} className="rounded-lg border border-indigo-100 bg-indigo-50/30 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-indigo-500">Transit Leg {index + 1}</span>
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({
+                          ...prev,
+                          transit: prev.transit.filter((_: any, legIndex: number) => legIndex !== index)
+                        }))}
+                        className="text-[11px] font-semibold text-red-500 hover:text-red-700"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelStyle}>From Branch</label>
+                        <select
+                          value={leg.transit_from || ''}
+                          onChange={e => setFormData(prev => ({
+                            ...prev,
+                            transit: prev.transit.map((item: any, legIndex: number) => legIndex === index
+                              ? { ...item, transit_from: e.target.value }
+                              : item)
+                          }))}
+                          className={`${winSelect} h-[46px]`}
+                        >
+                          <option value="">City မရွေးချယ်ရသေးပါ...</option>
+                          {transitCities.map(city => <option key={`from-${city.id}`} value={city.id}>{city.name}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={labelStyle}>To Branch</label>
+                        <select
+                          value={leg.transit_to || ''}
+                          onChange={e => setFormData(prev => ({
+                            ...prev,
+                            transit: prev.transit.map((item: any, legIndex: number) => legIndex === index
+                              ? { ...item, transit_to: e.target.value }
+                              : item)
+                          }))}
+                          className={`${winSelect} h-[46px]`}
+                        >
+                          <option value="">City မရွေးချယ်ရသေးပါ...</option>
+                          {transitCities.map(city => <option key={`to-${city.id}`} value={city.id}>{city.name}</option>)}
+                        </select>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className={labelStyle}>Transit Date</label>
+                        <input
+                          type="date"
+                          value={leg.transit_date || ''}
+                          onChange={e => setFormData(prev => ({
+                            ...prev,
+                            transit: prev.transit.map((item: any, legIndex: number) => legIndex === index
+                              ? { ...item, transit_date: e.target.value }
+                              : item)
+                          }))}
+                          className={`${winInput} h-[46px] font-mono text-base`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
           </div>

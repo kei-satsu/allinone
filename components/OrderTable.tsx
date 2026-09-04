@@ -183,6 +183,8 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
       <button
         type="button"
         onClick={onClick}
+        onMouseDown={(e) => e.stopPropagation()}
+        onMouseUp={(e) => e.stopPropagation()}
         className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
         title="ပုံကြည့်ရန် နှိပ်ပါ"
       >
@@ -423,6 +425,8 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); onPreviewImage(o.image_url); }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onMouseUp={(e) => e.stopPropagation()}
                         className="p-1 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
