@@ -855,7 +855,7 @@ useEffect(() => {
             </button>
 
            <button
-  onClick={() => { printVoucher(contextMenu.order.id); setContextMenu(null); }}
+  onClick={() => { printVoucher(contextMenu.order); setContextMenu(null); }}
   className="w-full text-left px-4 py-3 sm:px-3 sm:py-2 text-sm sm:text-xs text-slate-700 hover:bg-slate-50 active:bg-slate-100 font-medium flex items-center gap-3 sm:gap-2"
 >
   <svg 

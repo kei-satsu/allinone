@@ -260,7 +260,7 @@ export const ParcelDetailModal: React.FC<ParcelDetailModalProps> = ({
   
   {/* 🖨️ Print Voucher Button */}
   <button 
-    onClick={() => printVoucher(order.item_id)}
+    onClick={() => printVoucher(order)}
     className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-xl text-center shadow-md transition-colors text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
   >
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

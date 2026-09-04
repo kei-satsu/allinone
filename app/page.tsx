@@ -385,8 +385,8 @@ const handleExportExcel = async () => {
                 </div>
               </button>
 
-              {/* New Entry */}
-              <Link href="/entry" className="group relative bg-white border border-slate-200/40 rounded-[28px] p-5 hover:border-orange-300/60 hover:shadow-[0_16px_40px_rgba(249,115,22,0.1)] transition-all duration-500 flex flex-col items-center text-center gap-3 active:scale-[0.97] overflow-hidden">
+              {/* New Voucher */}
+              <Link href="/voc/form" className="group relative bg-white border border-slate-200/40 rounded-[28px] p-5 hover:border-orange-300/60 hover:shadow-[0_16px_40px_rgba(249,115,22,0.1)] transition-all duration-500 flex flex-col items-center text-center gap-3 active:scale-[0.97] overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-b from-orange-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[28px]" />
                 <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 text-white flex items-center justify-center shadow-lg shadow-orange-500/25 group-hover:shadow-orange-500/40 group-hover:scale-105 transition-all duration-300">
                   <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -394,8 +394,8 @@ const handleExportExcel = async () => {
                   </svg>
                 </div>
                 <div className="relative">
-                  <h3 className="text-sm font-bold text-slate-800 group-hover:text-orange-700 transition-colors">New Entry</h3>
-                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">အော်ဒါအသစ်သွင်းရန်</p>
+                  <h3 className="text-sm font-bold text-slate-800 group-hover:text-orange-700 transition-colors">New Voucher</h3>
+                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">ဘောက်ချာ အသစ်ထုတ်ရန်</p>
                 </div>
               </Link>
 

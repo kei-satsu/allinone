@@ -1,7 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { apiClient } from "@/lib/databaseApi";
 import { toPng } from "html-to-image";
 
 export default function VoucherTemplate() {
@@ -10,7 +9,7 @@ export default function VoucherTemplate() {
   const [editFormData, setEditFormData] = useState<any>(null);  // temporary editing data
   const [isEditing, setIsEditing] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [isPrintMode, setIsPrintMode] = useState(false);
   const [printTrigger, setPrintTrigger] = useState(false);
 
   const [pcIp, setPcIp] = useState<string>("salary-months-copper-framed.trycloudflare.com"); // PC ရဲ့ Local IP
@@ -27,6 +26,23 @@ useEffect(() => {
   const savedIp = localStorage.getItem("pc_print_server_ip");
   if (savedIp) setPcIp(savedIp);
 }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("print") !== "1") return;
+
+    setIsPrintMode(true);
+    const savedData = localStorage.getItem("voc_print_data");
+    if (!savedData) return;
+
+    try {
+      setVoucherData(JSON.parse(savedData));
+    } catch (error) {
+      console.error("Print voucher data is invalid:", error);
+    } finally {
+      localStorage.removeItem("voc_print_data");
+    }
+  }, []);
 
 const PROTOCOL = "https";
 // 1. fetchPCPrinters ပြင်ဆင်ရန်
@@ -130,51 +146,6 @@ const handleSendToPCPrint = useCallback(async () => {
   }
 }, [pcIp, selectedPrinter, voucherData]);
 
-  // ─── Fetch Order from apiClient ────────────────
-  useEffect(() => {
-    async function loadVoucherData() {
-      const savedData = localStorage.getItem("print_order_data");
-      if (!savedData) {
-        setLoading(false);
-        return;
-      }
-
-      let orderId = savedData.replace(/"/g, "");
-
-      try {
-        // Try with primary key 'id'
-        const { data, error } = await apiClient
-          .from("orders")
-          .select("*")
-          .eq("id", orderId)
-          .single();
-
-        if (error) {
-          console.error("First attempt failed, trying with item_id...", error);
-          const { data: retryData } = await apiClient
-            .from("orders")
-            .select("*")
-            .eq("item_id", orderId)
-            .single();
-
-          if (retryData) {
-            setVoucherData(retryData);
-          } else {
-            console.error("No data found.");
-          }
-        } else if (data) {
-          setVoucherData(data);
-        }
-      } catch (e) {
-        console.error("Fetch error:", e);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadVoucherData();
-  }, []);
-
   // When voucherData arrives (first time), show the decision dialog
   useEffect(() => {
     if (voucherData && !showDialog && !isEditing) {
@@ -271,33 +242,16 @@ const handleSaveAsImage = useCallback(() => {
     });
 }, [fields.itemId]);
 
-  // ─── Loading State ────────────────────────────
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center text-white font-sans">
-        <div className="text-center space-y-2">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
-          <p className="text-sm text-gray-400">Loading Voucher From apiClient...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // ─── No Data Found ────────────────────────────
   if (!voucherData) {
-    return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center text-white font-sans p-4">
-        <div className="text-center bg-gray-800 p-6 rounded-xl max-w-sm border border-red-500">
-          <p className="text-red-400 font-bold mb-2">❌ ပါဆယ်ဒေတာ ရှာမတွေ့ပါ</p>
-          <p className="text-xs text-gray-400 break-all">
-            ID: {localStorage.getItem("print_order_data")}
-          </p>
-          <p className="text-[11px] text-amber-400 mt-2">
-            apiClient Table နာမည် (သို့မဟုတ်) ID Column မတူညီခြင်း ဖြစ်နိုင်ပါသည်။
-          </p>
+    if (isPrintMode) {
+      return (
+        <div className="min-h-screen bg-white flex items-center justify-center text-slate-700 font-sans">
+          Voucher data မရရှိပါ။ Order List မှ Print Voucher ကို ပြန်နှိပ်ပါ။
         </div>
-      </div>
-    );
+      );
+    }
+
+    return null;
   }
 
   
@@ -642,7 +596,7 @@ const handleSaveAsImage = useCallback(() => {
               <span className="font-bold">Date:</span>{" "}
               <span className="font-mono">{fields.receiveDate}</span>
             </div>
-            <div className="text-[12px] font-black font-mono tracking-wider">{fields.itemId}</div>
+            <div className="font-mono text-[12px] font-bold tracking-wider">{fields.itemId}</div>
           </div>
 
           <div className="flex justify-between gap-1 items-start mt-1.5 text-[10px]">
