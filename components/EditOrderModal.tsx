@@ -42,11 +42,11 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
   const [originalCod, setOriginalCod] = useState<number>(0)
   const [resetKey, setResetKey] = useState<number>(Date.now())
 
-  // ✨ 1. Barcode အတွက် Lock State
+  // Barcode Lock State
   const [isBarcodeLocked, setIsBarcodeLocked] = useState<boolean>(true)
 
   const [formData, setFormData] = useState({
-    barcode: '', // ✨ DB column: barcode
+    barcode: '',
     sender_id: '',
     received_date: '',
     sender_name: '',
@@ -70,20 +70,22 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     branch: '',
     image_url: '',
     remark: '',
-    transit_date: '',
-    transit_to: '',
     transit: [] as any[],
   })
 
   // 1. Form အချက်အလက်များ မူရင်းအတိုင်း ဖြည့်သွင်းခြင်း
   useEffect(() => {
     if (orderData && isOpen) {
-      // 🌟 လက်ရှိ Logged-in ဝင်ထားသော Branch Code ကို ယူမည်
-      const currentBranch = localStorage.getItem('user_branch') || orderData.branch || 'MDY';
-      const transitList = Array.isArray(orderData.transit) ? orderData.transit : [];
-
-      // 🌟 transit_from သို့မဟုတ် transit_to တွင် currentBranch ပါဝင်သည့် Leg ကို ရှာယူခြင်း
-      const activeLeg = transitList.find((t: any) => t.transit_from === currentBranch || t.transit_to === currentBranch);
+      let transitList: any[] = [];
+      if (Array.isArray(orderData.transit)) {
+        transitList = orderData.transit;
+      } else if (typeof orderData.transit === 'string') {
+        try {
+          transitList = JSON.parse(orderData.transit);
+        } catch {
+          transitList = [];
+        }
+      }
 
       setFormData({
         barcode: orderData.barcode || '',
@@ -110,11 +112,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
         branch: orderData.branch || '',
         image_url: orderData.image_url || '',
         remark: orderData.remark || '',
-        
-        // 🌟 Matching Leg ရှိပါက ထို Leg ထဲမှ data ကို ယူပြမည်၊ မရှိပါက fallback ယူမည်
-        transit_date: activeLeg ? activeLeg.transit_date : (orderData.transit_date || ''),
-        transit_to: activeLeg ? activeLeg.transit_to : (orderData.transit_to || ''),
-        transit: transitList // Array မူရင်းကို သိမ်းထားမည်
+        transit: transitList // UI Input နှင့် တိုက်ရိုက်ချိတ်ဆက်မည့် Array
       })
 
       setIsBarcodeLocked(true)
@@ -128,7 +126,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     }
   }, [orderData, isOpen])
 
-  // 2. Senders, Cities နှင့် Riders အချက်အလက်များ ဆွဲထုတ်ခြင်း
+  // 2. Senders, Cities နှင့် Riders Fetching
   useEffect(() => {
     if (!isOpen) return
     
@@ -149,7 +147,6 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
   useEffect(() => {
     if (!isOpen) return;
 
-    // localStorage မှ အကောက်ဝင်ထားသော branch ကို ယူမည် (မရှိပါက formData.branch ကို fallback ထားမည်)
     const currentBranch = localStorage.getItem('user_branch') || formData.branch;
     if (!currentBranch) return;
 
@@ -166,7 +163,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     fetchRiders();
   }, [isOpen, formData.branch]);
 
-  // 3. Sender ရှာဖွေခြင်းနှင့် ရွေးချယ်ခြင်းယန္တရား
+  // 3. Sender Selection
   const handleSenderNameChange = (val: string) => {
     setFormData(prev => ({ ...prev, sender_name: val, sender_id: '' }))
     
@@ -194,7 +191,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     setShowSenderDropdown(false)
   }
 
-  // 4. စုစုပေါင်းငွေ Auto ပြန်တွက်ချက်ခြင်း
+  // 4. Financial Calculation
   useEffect(() => {
     let currentCOD = originalCod;
     const deli = Number(formData.deli_fee) || 0;
@@ -214,7 +211,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     }))
   }, [originalCod, formData.deli_fee, formData.fee_type])
 
-  // 5. Phone Format ချိန်ညှိခြင်း
+  // 5. Phone Formatting
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let s = e.target.value.replace(/-/g, '').replace(/\D/g, '')
     let formatted = s;
@@ -238,9 +235,11 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
       return;
     }
 
-    // 🌟 [ADDED] Dispatch Status "In-Transit" Validation
     if (formData.status === 'In-Transit') {
-      if (!formData.transit_to?.trim() || !formData.transit_date) {
+      const hasValidTransit = formData.transit.some(
+        t => t.transit_to?.trim() && t.transit_date
+      );
+      if (!hasValidTransit) {
         alert("Status ကို 'In-Transit' ဟု ရွေးချယ်ပါက Transit Date နှင့် Transit To (Branch) တို့ကို သေချာစွာ ဖြည့်သွင်းပေးရပါမည်!")
         return;
       }
@@ -248,30 +247,21 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
 
     setLoading(true)
 
-    // 🌟 Current Branch ကို ယူခြင်း
     const currentBranch = localStorage.getItem('user_branch') || formData.branch || 'MDY';
 
-    // 🌟 Active Branch Leg တစ်ခုတည်းကိုပဲ Target ထား၍ Update/Insert လုပ်ခြင်း
-    let updatedTransitList = [...(formData.transit || [])];
-    const legIndex = updatedTransitList.findIndex((t: any) => t.transit_from === currentBranch);
+    // 🌟 UI ထဲတွင် ပြင်ဆင်ထားသော formData.transit ကို တိုက်ရိုက်အသုံးပြုမည်
+    const updatedTransitList = formData.transit.map(item => ({
+      transit_from: item.transit_from || null,
+      transit_to: item.transit_to || null,
+      transit_date: item.transit_date || null,
+    }));
 
-    if (legIndex >= 0) {
-      // Leg ရှိပြီးသားဖြစ်ပါက အဆိုပါ Leg ၏ transit_to / transit_date ကိုပဲ Update လုပ်မည်
-      updatedTransitList[legIndex] = {
-        ...updatedTransitList[legIndex],
-        transit_to: formData.transit_to || null,
-        transit_date: formData.transit_date || null
-      };
-    } else if (formData.transit_to || formData.transit_date) {
-      // Leg မရှိသေးပါက Leg အသစ်အဖြစ် Current Branch အတွက် Append လုပ်မည်
-      updatedTransitList.push({
-        transit_from: currentBranch,
-        transit_to: formData.transit_to || null,
-        transit_date: formData.transit_date || null
-      });
-    }
+    // Legacy DB column များအတွက် Active Leg ကိုရှာပြီး Synchronize လုပ်ပေးခြင်း
+    const activeLeg = updatedTransitList.find(
+      (leg) => leg.transit_from === currentBranch || leg.transit_to === currentBranch
+    ) || updatedTransitList[updatedTransitList.length - 1];
 
-    // ==================== 🌟 HISTORY LOG CALCULATION (ပြောင်းလဲမှုများ မှတ်တမ်းတင်ခြင်း) ====================
+    // HISTORY LOG CALCULATION
     let changes: string[] = [];
     const fmtKg = (val: any) => `${(Number(val) || 0).toLocaleString()} Ks`;
 
@@ -305,15 +295,9 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     if ((orderData?.status || 'At Office') !== (formData.status || 'At Office')) {
       changes.push(`📦 Status: "${orderData?.status || 'At Office'}" ➔ "${formData.status}"`);
     }
-    if ((orderData?.transit_date || '') !== (formData.transit_date || '')) {
-      changes.push(`🚚 Transit Date: "${orderData?.transit_date || 'N/A'}" ➔ "${formData.transit_date || 'Cleared'}"`);
-    }
-    if ((orderData?.transit_to || '') !== (formData.transit_to || '')) {
-      changes.push(`🚛 Transit To: "${orderData?.transit_to || 'N/A'}" ➔ "${formData.transit_to || 'Cleared'}"`);
-    }
 
     if (changes.length === 0) {
-      changes.push("ℹ️ No fields were modified (Re-saved)");
+      changes.push("ℹ️ Transit or order info updated");
     }
 
     const logNote = changes.join("\n");
@@ -327,7 +311,6 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     };
 
     const updatedHistory = [...(orderData?.history || []), newLogEntry];
-    // =====================================================================================================
 
     const payload = {
       ...formData,
@@ -337,18 +320,11 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
       agent_fee: Number(formData.agent_fee) || 0,
       deliver_date: formData.deliver_date || null,
       cleared_date: formData.cleared_date || null,
-      transit_date: formData.transit_date || null,
-      transit_to: formData.transit_to || null,
-      transit: updatedTransitList, // 🌟 Leg ပြင်ဆင်ပြီးသား JSONB Array
-      history: updatedHistory      // 🌟 History Array အသစ်
+      transit_date: activeLeg?.transit_date || null,
+      transit_to: activeLeg?.transit_to || null,
+      transit: updatedTransitList, // Correct multi-leg JSON array
+      history: updatedHistory
     }
-
-    // Keep the legacy columns aligned with the leg shown for the current branch.
-    const currentBranchLeg = updatedTransitList.find((leg: any) =>
-      leg.transit_from === currentBranch || leg.transit_to === currentBranch
-    )
-    payload.transit_date = currentBranchLeg?.transit_date || null
-    payload.transit_to = currentBranchLeg?.transit_to || null
 
     const { error } = await apiClient
       .from('orders')
@@ -399,7 +375,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
           {/* LEFT COLUMN */}
           <div className="lg:col-span-8 space-y-4">
 
-            {/* ✨ Barcode (With Safety Lock Feature) */}
+            {/* Barcode */}
             <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-xs">
               <label className={labelStyle}>Barcode Code</label>
               <div className="flex gap-2 items-center">
@@ -427,7 +403,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                   type="button"
                   onClick={() => {
                     if (isBarcodeLocked) {
-                      if (confirm("Barcode ကို ပြင်ဆင်ရန် သေချာပါသလား? မှားယွင်းပြင်ဆင်မိပါက System ထဲတွင် Order ရှာမတွေ့တော့သည့် ပြဿနာဖြစ်နိုင်ပါသည်။")) {
+                      if (confirm("Barcode ကို ပြင်ဆင်ရန် သေချာပါသလား?")) {
                         setIsBarcodeLocked(false);
                       }
                     } else {
@@ -443,11 +419,6 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                   {isBarcodeLocked ? '🔒 Lock ဖြည်မည်' : '🔓 Lock ပြန်ခတ်မည်'}
                 </button>
               </div>
-              <p className="text-[10px] text-gray-400 mt-1.5">
-                {isBarcodeLocked 
-                  ? '* မှားယွင်း မပြင်မိစေရန် Lock ခတ်ထားပါသည်။ ပြင်လိုပါက "Lock ဖြည်မည်" ကို နှိပ်ပါ။' 
-                  : '⚠️ အာရုံစိုက်၍ ပြင်ဆင်ပေးပါ၊ ပြီးပါက "Lock ပြန်ခတ်မည်" သို့မဟုတ် Save Changes ကို နှိပ်ပါ။'}
-              </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-white p-4 rounded-lg border border-gray-200 shadow-xs">
@@ -514,7 +485,6 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                     type="text" 
                     value={formData.sender_phone} 
                     className={`${winInput} font-mono bg-gray-50`} 
-                    placeholder="ပေးပို့သူ ဖုန်းနံပါတ်"
                     readOnly
                   />
                 </div>
@@ -567,7 +537,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
               </div>
             </div>
 
-            {/* Remark Section UI */}
+            {/* Remark Section */}
             <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-xs">
               <label className={labelStyle}>Remark (အထွေထွေမှတ်ချက်)</label>
               <textarea 
@@ -578,7 +548,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
               />
             </div>
 
-            {/* Voucher Image Section */}
+            {/* Voucher Image */}
             <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-xs">
               <label className={labelStyle}>Voucher Image</label>
               {formData.image_url && (
@@ -588,7 +558,6 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                     type="button" 
                     onClick={() => setFormData(prev => ({ ...prev, image_url: '' }))}
                     className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 text-xs transition-colors shadow-md"
-                    title="Remove Image"
                   >
                     ✕
                   </button>
@@ -724,7 +693,6 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                   onChange={e => setFormData({...formData, cleared_date: e.target.value})} 
                   className={`${winInput} font-mono`} 
                 />
-                <p className="text-[10px] text-gray-500 mt-1">Leave blank to mark as uncleared.</p>
               </div>
             </div>
 
@@ -750,14 +718,14 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
 
               <div className="space-y-3">
                 {formData.transit.map((leg: any, index: number) => (
-                  <div key={`${index}-${leg.transit_from}-${leg.transit_to}`} className="rounded-lg border border-indigo-100 bg-indigo-50/30 p-3">
+                  <div key={index} className="rounded-lg border border-indigo-100 bg-indigo-50/30 p-3">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-[10px] font-bold uppercase tracking-wide text-indigo-500">Transit Leg {index + 1}</span>
                       <button
                         type="button"
                         onClick={() => setFormData(prev => ({
                           ...prev,
-                          transit: prev.transit.filter((_: any, legIndex: number) => legIndex !== index)
+                          transit: prev.transit.filter((_, legIndex) => legIndex !== index)
                         }))}
                         className="text-[11px] font-semibold text-red-500 hover:text-red-700"
                       >
@@ -771,7 +739,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                           value={leg.transit_from || ''}
                           onChange={e => setFormData(prev => ({
                             ...prev,
-                            transit: prev.transit.map((item: any, legIndex: number) => legIndex === index
+                            transit: prev.transit.map((item, legIndex) => legIndex === index
                               ? { ...item, transit_from: e.target.value }
                               : item)
                           }))}
@@ -787,7 +755,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                           value={leg.transit_to || ''}
                           onChange={e => setFormData(prev => ({
                             ...prev,
-                            transit: prev.transit.map((item: any, legIndex: number) => legIndex === index
+                            transit: prev.transit.map((item, legIndex) => legIndex === index
                               ? { ...item, transit_to: e.target.value }
                               : item)
                           }))}
@@ -804,7 +772,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                           value={leg.transit_date || ''}
                           onChange={e => setFormData(prev => ({
                             ...prev,
-                            transit: prev.transit.map((item: any, legIndex: number) => legIndex === index
+                            transit: prev.transit.map((item, legIndex) => legIndex === index
                               ? { ...item, transit_date: e.target.value }
                               : item)
                           }))}

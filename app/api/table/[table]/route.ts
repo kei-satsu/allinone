@@ -6,6 +6,16 @@ export const dynamic = 'force-dynamic'
 const TABLES = new Set(['orders', 'senders', 'riders', 'cities', 'cash_handovers'])
 
 function responseError(error: unknown, status = 500) {
+  if (error && typeof error === 'object') {
+    const databaseError = error as { message?: string; code?: string; details?: string; hint?: string }
+    return NextResponse.json({
+      error: databaseError.message || 'Database request failed',
+      code: databaseError.code,
+      details: databaseError.details,
+      hint: databaseError.hint,
+    }, { status })
+  }
+
   return NextResponse.json({ error: error instanceof Error ? error.message : 'Database request failed' }, { status })
 }
 
