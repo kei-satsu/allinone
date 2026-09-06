@@ -15,6 +15,35 @@ const initialForm = {
   fee_type: "Deli",
   total_amount: "0",
   note: "",
+  remark_font_size: "normal",
+  remark_bold: false,
+  remark_italic: false,
+};
+
+const remarkPresetValues = {
+  small: 12,
+  normal: 18,
+  medium: 26,
+  large: 36,
+} as const;
+
+type RemarkPreset = keyof typeof remarkPresetValues;
+
+const normalizeRemarkPreset = (value: unknown): RemarkPreset => {
+  if (typeof value === "string" && value in remarkPresetValues) {
+    return value as RemarkPreset;
+  }
+
+  const numericValue = Number(value);
+  if (Number.isFinite(numericValue)) {
+    return (Object.entries(remarkPresetValues).reduce((closest, current) =>
+      Math.abs(current[1] - numericValue) < Math.abs(closest[1] - numericValue)
+        ? current
+        : closest
+    )[0] as RemarkPreset);
+  }
+
+  return "normal";
 };
 
 // Field များ၏ Enter Navigation အစီအစဉ်
@@ -46,8 +75,12 @@ export default function VoucherFormPage() {
     >
   ) => {
     const { name, value } = event.target;
+    const nextValue =
+      event.target instanceof HTMLInputElement && event.target.type === "checkbox"
+        ? event.target.checked
+        : value;
     setFormData((current) => {
-      const next = { ...current, [name]: value };
+      const next = { ...current, [name]: nextValue };
       if (
         name === "cod_amount" ||
         name === "deli_fee" ||
@@ -120,6 +153,9 @@ export default function VoucherFormPage() {
       "voc_print_data",
       JSON.stringify({
         ...formData,
+        remark_font_size: normalizeRemarkPreset(formData.remark_font_size),
+        remark_bold: Boolean(formData.remark_bold),
+        remark_italic: Boolean(formData.remark_italic),
         item_id: `66${Date.now().toString().slice(-11)}`,
       })
     );
@@ -386,6 +422,47 @@ export default function VoucherFormPage() {
                   placeholder="မှတ်ချက်များ ရေးရန် (ဥပမာ - ပစ္စည်းခွဲပို့ရန်၊ ဂိတ်ချပေးရန်)..."
                   className={fieldInput}
                 />
+                <div
+                  className="mt-3 flex flex-wrap items-center text-sm text-slate-300"
+                  style={{ columnGap: "18px", rowGap: "8px" }}
+                >
+                  <label htmlFor="remark_font_size" className="text-xs font-bold text-slate-400 whitespace-nowrap">
+                    Remark Size
+                  </label>
+                  <select
+                    id="remark_font_size"
+                    name="remark_font_size"
+                    value={normalizeRemarkPreset(formData.remark_font_size)}
+                    onChange={handleChange}
+                    className="h-9 rounded-lg border-2 border-slate-700 bg-slate-950 px-2 text-sm font-bold text-orange-400 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/25"
+                    aria-label="Remark font size preset"
+                  >
+                    <option value="normal">Normal</option>
+                    <option value="small">Small</option>
+                    <option value="medium">Medium</option>
+                    <option value="large">Large</option>
+                  </select>
+                  <label className="flex items-center cursor-pointer" style={{ gap: "8px" }}>
+                    <input
+                      type="checkbox"
+                      name="remark_bold"
+                      checked={Boolean(formData.remark_bold)}
+                      onChange={handleChange}
+                      className="h-4 w-4 accent-orange-500"
+                    />
+                    <span className="font-bold">Bold</span>
+                  </label>
+                  <label className="flex items-center cursor-pointer" style={{ gap: "8px" }}>
+                    <input
+                      type="checkbox"
+                      name="remark_italic"
+                      checked={Boolean(formData.remark_italic)}
+                      onChange={handleChange}
+                      className="h-4 w-4 accent-orange-500"
+                    />
+                    <span className="italic">Italic</span>
+                  </label>
+                </div>
               </div>
               {/* Shortcut Hint */}
               <div className="mt-4 flex items-center gap-3 text-xs text-slate-500 bg-slate-950 border border-slate-800 rounded-lg p-3">

@@ -57,6 +57,25 @@ const COLUMN_DEFS = [
   
 ]
 
+const TRANSIT_AGE_OPTIONS = [
+  { value: '7_days', label: '7 ရက်ကျော်', days: 7 },
+  { value: '2_weeks', label: '2 ပတ်ကျော်', days: 14 },
+  { value: '3_weeks', label: '3 ပတ်ကျော်', days: 21 },
+  { value: '1_month', label: '1 လကျော်', days: 30 },
+]
+
+const getTransitAgeDays = (transitDate: unknown) => {
+  if (!transitDate) return null
+
+  const date = new Date(String(transitDate))
+  if (Number.isNaN(date.getTime())) return null
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  date.setHours(0, 0, 0, 0)
+  return Math.floor((today.getTime() - date.getTime()) / 86_400_000)
+}
+
 
 
 
@@ -179,6 +198,8 @@ const fetchData = useCallback(async ({ append = false } = {}) => {
 
 const start = append ? ordersRef.current.length : 0;
   const end = start + 99;
+  const transitAgeFilter = TRANSIT_AGE_OPTIONS.find(option => option.value === colFilters['transit_age']);
+  const hasTransitAgeFilter = Boolean(transitAgeFilter);
 
   // 🌟 ၁။ transitFilterObj ကို တည်ဆောက်ခြင်း
   const transitFilterObj: any = { transit_from: activeBranch.toUpperCase() };
@@ -203,14 +224,17 @@ const start = append ? ordersRef.current.length : 0;
     .eq('is_deleted', false)
     .filter('transit', 'cs', transitSearchFilter)
     .order('created_at', { ascending: false })
-    .range(start, end);
+
+  if (!hasTransitAgeFilter) query = query.range(start, end);
+  if (hasTransitAgeFilter) query = query.in('status', ['Via-Agent', 'In-Transit', 'Arrived']);
 
   // Dynamic Filters
   Object.entries(colFilters).forEach(([key, value]) => {
     if (!value || (Array.isArray(value) && value.length === 0)) return;
     
     // ✅ ပြင်ဆင်ချက် ၂: global_search ကိုပါ loop ထဲမှ ကျော်ပေးပါ (transit_to, transit_date နည်းတူ)
-    if (['transit_to', 'transit_date', 'global_search'].includes(key)) return;
+    if (['transit_to', 'transit_date', 'transit_age', 'global_search'].includes(key)) return;
+    if (hasTransitAgeFilter && key === 'status') return;
 
     if (Array.isArray(value)) {
       const values = value.filter(Boolean);
@@ -259,12 +283,19 @@ const start = append ? ordersRef.current.length : 0;
       };
     });
 
-    if (append) setOrders(prev => [...prev, ...formattedOrders]);
-    else setOrders(formattedOrders);
+    const filteredOrders = hasTransitAgeFilter
+      ? formattedOrders.filter((order: any) => {
+          const ageDays = getTransitAgeDays(order.transit_date)
+          return ageDays !== null && ageDays >= transitAgeFilter!.days
+        })
+      : formattedOrders;
+
+    if (append) setOrders(prev => [...prev, ...filteredOrders]);
+    else setOrders(filteredOrders);
     
     // 🟢 ordersRef.current.length ကို သုံး၍ setHasMore စစ်ဆေးပါ
-    const currentLength = append ? ordersRef.current.length + data.length : data.length;
-    setHasMore((count ?? 0) > currentLength);
+    const currentLength = append ? ordersRef.current.length + filteredOrders.length : filteredOrders.length;
+    setHasMore(!hasTransitAgeFilter && (count ?? 0) > currentLength);
   }
 
   setLoading(false);
@@ -512,6 +543,19 @@ const start = append ? ordersRef.current.length : 0;
   </select>
 </div>
 
+<div className="relative min-w-[130px] sm:min-w-[150px]">
+  <select
+    value={colFilters['transit_age'] || ''}
+    onChange={(e) => handleFilterChange('transit_age', e.target.value)}
+    className="w-full bg-gray-50 border border-gray-300 focus:border-orange-500 focus:bg-white focus:outline-none px-2.5 py-1.5 text-xs text-gray-700 font-medium rounded-md transition-all shadow-sm cursor-pointer"
+  >
+    <option value="">Transit Age ရွေးချယ်ပါ</option>
+    {TRANSIT_AGE_OPTIONS.map(option => (
+      <option key={option.value} value={option.value}>{option.label}</option>
+    ))}
+  </select>
+</div>
+
 
           {/* ── Columns Show/Hide Dropdown ── */}
 
@@ -618,12 +662,27 @@ const start = append ? ordersRef.current.length : 0;
   />
 </div>
       <div>
+        <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Transit Age</label>
+        <select
+          className="w-full text-xs p-1.5 bg-white border border-gray-200 rounded-md text-gray-700"
+          value={colFilters['transit_age'] || ''}
+          onChange={e => handleFilterChange('transit_age', e.target.value)}
+        >
+          <option value="">All Ages</option>
+          {TRANSIT_AGE_OPTIONS.map(option => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      </div>
+      <div>
         <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Status</label>
         <select className="w-full text-xs p-1.5 bg-white border border-gray-200 rounded-md" value={colFilters['status'] || ''} onChange={e => handleFilterChange('status', e.target.value)}>
           <option value="">All Status</option>
           <option value="At Office">At Office</option>
           <option value="On Way">On Way</option>
           <option value="Delivered">Delivered</option>
+          <option value="Arrived">Arrived</option>
+          <option value="Via-Agent">Via-Agent</option>
           <option value="In-Transit">In-Transit</option>
         </select>
       </div>

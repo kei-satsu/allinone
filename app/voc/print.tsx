@@ -4,6 +4,35 @@ import { QRCodeSVG } from "qrcode.react";
 import { apiClient } from "@/lib/databaseApi";
 import { toPng } from "html-to-image";
 
+const remarkFontSizes: Record<string, number> = {
+  small: 12,
+  normal: 18,
+  medium: 26,
+  large: 36,
+};
+
+const normalizeRemarkPreset = (value: unknown) => {
+  if (typeof value === "string" && value in remarkFontSizes) return value;
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return "normal";
+  return Object.entries(remarkFontSizes).reduce((closest, current) =>
+    Math.abs(current[1] - numericValue) < Math.abs(closest[1] - numericValue)
+      ? current
+      : closest
+  )[0];
+};
+
+const getRemarkFontSize = (value: unknown) => {
+  if (typeof value === "string" && value in remarkFontSizes) {
+    return remarkFontSizes[value];
+  }
+
+  return Math.min(remarkFontSizes.large, Math.max(8, Number(value) || remarkFontSizes.normal));
+};
+
+const getRemarkBoolean = (value: unknown) =>
+  value === true || value === 1 || value === "true";
+
 export default function VoucherTemplate() {
   // ─── State ────────────────────────────────────
   const [voucherData, setVoucherData] = useState<any>(null);   // final data for printing
@@ -223,10 +252,18 @@ const handleSendToPCPrint = useCallback(async () => {
 
   // ─── Field change for editing form ────────────
   const handleEditChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
   ) => {
     const { name, value } = e.target;
-    setEditFormData((prev: any) => ({ ...prev, [name]: value }));
+    const nextValue =
+      e.target instanceof HTMLInputElement && e.target.type === "checkbox"
+        ? e.target.checked
+        : name === "remark_font_size"
+        ? normalizeRemarkPreset(value)
+        : value;
+    setEditFormData((prev: any) => ({ ...prev, [name]: nextValue }));
   };
 
   // ─── Derive display data ──────────────────────
@@ -249,6 +286,9 @@ const handleSendToPCPrint = useCallback(async () => {
     payType: displayData?.fee_type || displayData?.payType || "COLLECT",
     totalAmount: displayData?.total_amount ?? displayData?.totalAmount ?? "0",
     remarkText: displayData?.note || displayData?.remark || "",
+    remarkFontSize: getRemarkFontSize(displayData?.remark_font_size),
+    remarkBold: getRemarkBoolean(displayData?.remark_bold),
+    remarkItalic: getRemarkBoolean(displayData?.remark_italic),
   };
 
    // ─── Ref for Voucher Capture ──────────────────
@@ -562,6 +602,46 @@ const handleSaveAsImage = useCallback(() => {
                   onChange={handleEditChange}
                   className="w-full mt-1 px-3 py-1.5 border rounded-md focus:ring focus:ring-blue-200"
                 />
+                <span
+                  className="mt-2 flex flex-wrap items-center text-sm"
+                  style={{ columnGap: "18px", rowGap: "8px" }}
+                >
+                  <label htmlFor="edit_remark_font_size" className="text-xs font-semibold">
+                    Remark Size
+                  </label>
+                  <select
+                    id="edit_remark_font_size"
+                    name="remark_font_size"
+                    value={normalizeRemarkPreset(editFormData.remark_font_size)}
+                    onChange={handleEditChange}
+                    className="px-2 py-1 border rounded-md focus:ring focus:ring-blue-200"
+                  >
+                    <option value="normal">Normal</option>
+                    <option value="small">Small</option>
+                    <option value="medium">Medium</option>
+                    <option value="large">Large</option>
+                  </select>
+                  <label className="flex items-center cursor-pointer" style={{ gap: "8px" }}>
+                    <input
+                      type="checkbox"
+                      name="remark_bold"
+                      checked={getRemarkBoolean(editFormData.remark_bold)}
+                      onChange={handleEditChange}
+                      className="h-4 w-4 accent-blue-600"
+                    />
+                    <span className="font-bold">Bold</span>
+                  </label>
+                  <label className="flex items-center cursor-pointer" style={{ gap: "8px" }}>
+                    <input
+                      type="checkbox"
+                      name="remark_italic"
+                      checked={getRemarkBoolean(editFormData.remark_italic)}
+                      onChange={handleEditChange}
+                      className="h-4 w-4 accent-blue-600"
+                    />
+                    <span className="italic">Italic</span>
+                  </label>
+                </span>
               </label>
             </div>
 
@@ -861,16 +941,29 @@ const handleSaveAsImage = useCallback(() => {
           <div className="border-b border-dotted border-gray-400 w-full mt-0.5"></div>
           <div
             className="w-full h-[55px] flex items-center justify-center text-center px-2 overflow-hidden"
-            style={{ fontFamily: "Pyidaungsu, Arial, sans-serif" }}
+            style={{
+              fontFamily: "Pyidaungsu, Arial, sans-serif",
+              alignItems: "center",
+              display: "flex",
+              justifyContent: "center",
+              fontSize: `${fields.remarkFontSize}px`,
+              fontWeight: fields.remarkBold ? 700 : 400,
+              fontStyle: fields.remarkItalic ? "italic" : "normal",
+              lineHeight: 1.1,
+              overflowWrap: "anywhere",
+            }}
           >
             <span
-              className={`text-black break-all leading-tight max-h-full ${
-                fields.remarkText.length > 50
-                  ? "text-[10px]"
-                  : fields.remarkText.length > 25
-                  ? "text-[12px]"
-                  : "text-[20px]"
-              }`}
+              className="text-black leading-tight max-w-full"
+              style={{
+                fontSize: `${fields.remarkFontSize}px`,
+                fontWeight: fields.remarkBold ? 700 : 400,
+                fontStyle: fields.remarkItalic ? "italic" : "normal",
+                lineHeight: 1.05,
+                overflowWrap: "anywhere",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}
             >
               {fields.remarkText || "---"}
             </span>
