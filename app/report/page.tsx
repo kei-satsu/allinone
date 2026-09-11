@@ -30,6 +30,8 @@ const COLUMN_DEFS = [
   { key: "transit_to", label: "Transit To", defaultVisible: false },
 ];
 
+const REPORT_VISIBLE_COLUMNS_KEY = "report_visible_columns_v2";
+
 export default function DailyReport() {
   const router = useRouter();
   const today = new Date().toISOString().split("T")[0];
@@ -70,8 +72,41 @@ export default function DailyReport() {
       return initialState;
     },
   );
+  const [visibleColsLoaded, setVisibleColsLoaded] = useState(false);
   const [showColDropdown, setShowColDropdown] = useState(false);
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    try {
+      const savedColumns = localStorage.getItem(REPORT_VISIBLE_COLUMNS_KEY);
+      if (savedColumns) {
+        const parsedColumns = JSON.parse(savedColumns);
+        if (parsedColumns && typeof parsedColumns === "object") {
+          setVisibleCols((current) => {
+            const restored = { ...current };
+            COLUMN_DEFS.forEach((col) => {
+              if (typeof parsedColumns[col.key] === "boolean") {
+                restored[col.key] = parsedColumns[col.key];
+              }
+            });
+            return restored;
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Column preferences could not be loaded:", error);
+    } finally {
+      setVisibleColsLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!visibleColsLoaded) return;
+    localStorage.setItem(
+      REPORT_VISIBLE_COLUMNS_KEY,
+      JSON.stringify(visibleCols),
+    );
+  }, [visibleCols, visibleColsLoaded]);
 
   // Edit / Handover/ Image Preview States
   const [editingOrder, setEditingOrder] = useState<any>(null);
