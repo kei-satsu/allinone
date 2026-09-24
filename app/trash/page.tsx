@@ -3,12 +3,19 @@ import { useState, useEffect } from 'react'
 import { apiClient } from '@/lib/databaseApi'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { ParcelDetailModal, type OrderHistoryEntry, type ParcelOrder } from '@/components/ParcelDetailModal'
 
 export default function TrashList() {
   const router = useRouter()
-  const [deletedOrders, setDeletedOrders] = useState<any[]>([])
+  const [deletedOrders, setDeletedOrders] = useState<ParcelOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [userBranch, setUserBranch] = useState<string>('')
+  const [viewingDetailOrder, setViewingDetailOrder] = useState<ParcelOrder | null>(null)
+
+  const getDeletedBy = (history?: OrderHistoryEntry[]) => {
+    const deleteEntries = history?.filter(entry => entry.action === 'Order Soft Deleted') || []
+    return deleteEntries.at(-1)?.operator || '-'
+  }
 
   // အမှိုက်ပုံးထဲက ဒေတာတွေပဲ ဆွဲထုတ်မည့် Function (is_deleted = true)
   const fetchData = async (branchCode?: string) => {
@@ -39,7 +46,9 @@ export default function TrashList() {
   }, [router])
 
   // 🔄 မှတ်တမ်းကို မူလစာရင်းထဲ ပြန်ဆယ်မည့် Function (Restore)
-  const handleRestore = async (orderId: string) => {
+  const handleRestore = async (orderId: string | number | undefined) => {
+    if (orderId === undefined) return
+
     if (confirm("ဒီမှတ်တမ်းကို မူလစာရင်းထဲသို့ ပြန်ထည့်ရန် သေချာပါသလား?")) {
       const { error } = await apiClient
         .from('orders')
@@ -55,7 +64,7 @@ export default function TrashList() {
     }
   }
 
-const handlePermanentDelete = async (order: any) => {
+const handlePermanentDelete = async (order: ParcelOrder) => {
   if (confirm("⚠️ သတိပြုရန်!\nဒီမှတ်တမ်းကို အပြီးတိုင်ဖျက်ပါက ဘယ်လိုမှ ပြန်ယူ၍ ရတော့မည်မဟုတ်ပါ။ ဖြတ်ရန် သေချာပါသလား?")) {
     setLoading(true)
     try {
@@ -77,8 +86,8 @@ const handlePermanentDelete = async (order: any) => {
 
       alert("မှတ်တမ်းနှင့် ပုံကို အပြီးတိုင် ဖျက်ဆီးလိုက်ပါပြီ။");
       fetchData();
-    } catch (error: any) {
-      alert(error.message);
+    } catch (error: unknown) {
+      alert(error instanceof Error ? error.message : 'Unable to permanently delete this record.');
     } finally {
       setLoading(false);
     }
@@ -110,27 +119,42 @@ const handlePermanentDelete = async (order: any) => {
               <th className="py-2.5 px-3">Sender</th>
               <th className="py-2.5 px-3">Receiver</th>
               <th className="py-2.5 px-3">Deleted At</th>
+              <th className="py-2.5 px-3">Deleted By</th>
               <th className="py-2.5 px-4 text-center">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading ? (
               <tr>
-                <td colSpan={5} className="p-20 text-center text-gray-400">Loading Trash Records...</td>
+                <td colSpan={6} className="p-20 text-center text-gray-400">Loading Trash Records...</td>
               </tr>
             ) : deletedOrders.length === 0 ? (
               <tr>
-                <td colSpan={5} className="p-16 text-center text-gray-400 font-medium">အမှိုက်ပုံးထဲတွင် မည်သည့်မှတ်တမ်းမှ မရှိပါ။</td>
+                <td colSpan={6} className="p-16 text-center text-gray-400 font-medium">အမှိုက်ပုံးထဲတွင် မည်သည့်မှတ်တမ်းမှ မရှိပါ။</td>
               </tr>
             ) : deletedOrders.map((o) => (
-              <tr key={o.id} className="hover:bg-red-50/30 transition-colors">
+              <tr
+                key={o.id}
+                onDoubleClick={() => setViewingDetailOrder(o)}
+                className="hover:bg-red-50/30 transition-colors cursor-pointer"
+                title="Double-click to view full parcel details"
+              >
                 <td className="py-2.5 px-4 font-mono font-medium text-gray-900">{o.item_id}</td>
                 <td className="py-2.5 px-3 text-gray-700">{o.sender_name} ({o.sender_loc})</td>
                 <td className="py-2.5 px-3 text-gray-700">{o.receiver_name} ({o.receiver_loc})</td>
                 <td className="py-2.5 px-3 text-red-500 font-medium">
                   {o.deleted_at ? new Date(o.deleted_at).toLocaleString() : '-'}
                 </td>
+                <td className="py-2.5 px-3 text-gray-700 font-medium">
+                  {getDeletedBy(o.history)}
+                </td>
                 <td className="py-2.5 px-4 text-center flex items-center justify-center gap-2">
+                  <button 
+                    onClick={() => setViewingDetailOrder(o)}
+                    className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-2.5 py-1 rounded text-[11px] font-semibold transition-all"
+                  >
+                    View Details
+                  </button>
                   {/* ပြန်ဆယ်ရန် Button */}
                   <button 
                     onClick={() => handleRestore(o.id)}
@@ -151,6 +175,11 @@ const handlePermanentDelete = async (order: any) => {
           </tbody>
         </table>
       </div>
+
+      <ParcelDetailModal
+        order={viewingDetailOrder}
+        onClose={() => setViewingDetailOrder(null)}
+      />
     </div>
   )
 }

@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect, useRef } from 'react'
 import { apiClient } from '@/lib/databaseApi'
+import { softDeleteOrder } from '@/lib/softDeleteOrder'
 import * as XLSX from 'xlsx'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -583,13 +584,7 @@ useEffect(() => {
 
   const handleDeleteOrder = async (orderId: string) => {
     if (confirm("ဒီမှတ်တမ်းကို အမှိုက်ပုံး (Recently Deleted) ထဲသို့ ထည့်ရန် သေချာပါသလား?")) {
-      const { error } = await apiClient
-        .from('orders')
-        .update({ 
-          is_deleted: true, 
-          deleted_at: new Date().toISOString() 
-        })
-        .eq('id', orderId)
+      const { error } = await softDeleteOrder(orderId)
 
       if (error) alert(error.message)
       else fetchData({ append: false })

@@ -10,6 +10,7 @@ import { useOrderSelection } from '@/hooks/useOrderSelection'
 import SelectionSummaryBar from '@/components/SelectionSummaryBar'
 import OrderTable from '@/components/OrderTable'
 import DailyOSreport from "@/components/DailyOSreport";
+import { softDeleteOrder } from '@/lib/softDeleteOrder'
 
 const COLUMN_DEFS = [
   { key: 'image_url', label: 'Photo', defaultVisible: true }, 
@@ -472,13 +473,7 @@ useEffect(() => {
 
   const handleDeleteOrder = async (orderId: string) => {
     if (confirm("ဒီမှတ်တမ်းကို အမှိုက်ပုံး (Recently Deleted) ထဲသို့ ထည့်ရန် သေချာပါသလား?")) {
-      const { error } = await apiClient
-        .from('orders')
-        .update({ 
-          is_deleted: true, 
-          deleted_at: new Date().toISOString() 
-        })
-        .eq('id', orderId)
+      const { error } = await softDeleteOrder(orderId)
 
       if (error) alert(error.message)
       else fetchData({ append: false })

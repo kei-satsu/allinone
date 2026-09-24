@@ -24,11 +24,21 @@ export interface ParcelOrder {
   deliver_rider?: { name: string };
   received_date?: string;
   deliver_date?: string;
-  cleard_date?: string;
+  cleared_date?: string;
   created_at?: string | Date;
   image_url?: string;
   note?: string;
   remark?: string;
+  deleted_at?: string | Date | null;
+  is_deleted?: boolean;
+  history?: OrderHistoryEntry[];
+}
+
+export interface OrderHistoryEntry {
+  timestamp?: string | Date;
+  action?: string;
+  operator?: string;
+  note?: string;
 }
 
 interface ParcelDetailModalProps {
@@ -215,7 +225,7 @@ export const ParcelDetailModal: React.FC<ParcelDetailModalProps> = ({
             </div>
             <div>
               <span className="text-[10px] text-gray-400 font-bold uppercase block mb-0.5">Cleared Date</span>
-              <span className="font-medium text-gray-700 font-mono break-words">{order.cleard_date || '-'}</span>
+              <span className="font-medium text-gray-700 font-mono break-words">{order.cleared_date || '-'}</span>
             </div>
             <div>
               <span className="text-[10px] text-gray-400 font-bold uppercase block mb-0.5">Created At</span>
