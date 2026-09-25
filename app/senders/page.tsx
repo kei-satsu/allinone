@@ -510,12 +510,6 @@ export default function SendersDashboard() {
       bold: true,
       color: { argb: "FFFFFF" },
     };
-    const fontSection = {
-      name: "Calibri",
-      size: 11,
-      bold: true,
-      color: { argb: "0F172A" },
-    };
     const fontBold = { name: "Calibri", size: 11, bold: true };
     const fontNormal = { name: "Calibri", size: 11 };
 
@@ -547,11 +541,7 @@ export default function SendersDashboard() {
     worksheet.addRow([]);
 
     // ─── Helper Function: Render Dynamic Tables with Custom Colors ───
-    const renderTable = (
-      sectionTitle: string,
-      ordersList: any[],
-      isReturned = false,
-    ) => {
+    const renderTable = (ordersList: any[], isReturned = false) => {
       const sortedOrders = [...ordersList].sort((a, b) => {
         const dateA = a.received_date
           ? String(a.received_date).split("T")[0]
@@ -565,16 +555,6 @@ export default function SendersDashboard() {
         if (!dateB) return -1;
         return dateA.localeCompare(dateB);
       });
-
-      // Section Title Banner
-      const secRow = worksheet.addRow([sectionTitle]);
-      worksheet.mergeCells(`A${secRow.number}:J${secRow.number}`);
-      secRow.getCell(1).font = fontSection;
-      secRow.getCell(1).fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: isReturned ? colors.retSectionBg : colors.sectionBg },
-      };
 
       // Table Header (Column 10 ခု - Row Number + Way Data)
       const headRow = worksheet.addRow([
@@ -678,16 +658,8 @@ export default function SendersDashboard() {
     };
 
     // Render Both Tables
-    renderTable(
-      `ရိုးရိုး Way များ (${normalOrders.length} ခု)`,
-      normalOrders,
-      false,
-    );
-    renderTable(
-      `Returned Way များ (${returnedOrdersList.length} ခု)`,
-      returnedOrdersList,
-      true,
-    );
+    renderTable(normalOrders, false);
+    renderTable(returnedOrdersList, true);
 
     // ─── Row Height အားလုံး 20 သို့ သတ်မှတ်ခြင်း ───
     worksheet.eachRow({ includeEmpty: true }, (row) => {
