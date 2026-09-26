@@ -174,7 +174,7 @@ export default function DailyReport() {
     }
 
     setUserBranch(storedBranch);
-    fetchRiders();
+    fetchRiders(storedBranch);
 
     // LocalStorage ထဲတွင် ရွေးခဲ့ဖူးသော Date ရှိမရှိ စစ်ဆေးခြင်း
     const savedDate = localStorage.getItem("report_selected_date");
@@ -302,8 +302,8 @@ export default function DailyReport() {
     }
   };
 
-  const fetchRiders = async () => {
-    const { data, error } = await apiClient.from("riders").select("*");
+  const fetchRiders = async (branch: string) => {
+    const { data, error } = await apiClient.from("riders").select("*").eq("branch", branch);
     if (data) setRiders(data);
   };
 

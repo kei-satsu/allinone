@@ -120,7 +120,7 @@ export default function DailyReport() {
     }
     
     setUserBranch(storedBranch)
-    fetchRiders()
+    fetchRiders(storedBranch)
     fetchCities()
 
     // LocalStorage ထဲတွင် ရွေးခဲ့ဖူးသော Date ရှိမရှိ စစ်ဆေးခြင်း
@@ -219,8 +219,8 @@ if (ordersError) {
     }
   }
 
-const fetchRiders = async () => {
-  const { data, error } = await apiClient.from('riders').select('*')
+const fetchRiders = async (branch: string) => {
+  const { data, error } = await apiClient.from('riders').select('*').eq('branch', branch)
   if (data) setRiders(data)
 }
 

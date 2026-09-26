@@ -336,8 +336,8 @@ useEffect(() => {
     setLoadingMore(false);
   }
 
-  const fetchRiders = async () => {
-    const { data } = await apiClient.from('riders').select('*')
+  const fetchRiders = async (branch: string) => {
+    const { data } = await apiClient.from('riders').select('*').eq('branch', branch)
     if (data) setRiders(data)
   }
 
@@ -347,7 +347,7 @@ useEffect(() => {
       router.push('/login')
     } else {
       setUserBranch(storedBranch)
-      fetchRiders()
+      fetchRiders(storedBranch)
     }
   }, [router])
 
