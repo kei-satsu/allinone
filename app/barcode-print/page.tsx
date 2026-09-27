@@ -3,9 +3,19 @@
 import { useState, useEffect, useRef } from 'react';
 import JsBarcode from 'jsbarcode';
 import { QRCodeSVG } from 'qrcode.react';
+import { getSenders } from '@/lib/sendersApi';
 
-function BlankVoucher({ code, showCode }: { code: string; showCode: boolean }) {
+type VoucherSender = {
+  id: string;
+  name: string;
+  phone: string | null;
+  Address: string | null;
+  LOC: string | null;
+};
+
+function BlankVoucher({ code, showCode, sender }: { code: string; showCode: boolean; sender?: VoucherSender }) {
   const blankFieldStyle = { minHeight: '18px', flex: 1 };
+  const senderInfoStyle = { ...blankFieldStyle, fontSize: '11px' };
   const rowStyle = { display: 'flex', alignItems: 'flex-end', gap: '8px', marginTop: '5px' };
   const amountRowStyle = { ...rowStyle, minHeight: '23px' };
   const totalRowStyle = { ...rowStyle, minHeight: '30px' };
@@ -36,9 +46,9 @@ function BlankVoucher({ code, showCode }: { code: string; showCode: boolean }) {
       </div>
       <div style={{ marginTop: '8px' }}>
         <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '11px', letterSpacing: '3px', borderTop: '1px solid #111', borderBottom: '1px solid #111', padding: '3px' }}>FROM</div>
-        <div style={rowStyle}><span style={labelStyle}>Name:</span><span style={blankFieldStyle} /></div>
-        <div style={rowStyle}><span style={labelStyle}>Phone:</span><span style={blankFieldStyle} /></div>
-        <div style={rowStyle}><span style={labelStyle}>Address:</span><span style={blankFieldStyle} /></div>
+        <div style={rowStyle}><span style={labelStyle}>Name:</span><span style={senderInfoStyle}>{sender?.name}</span></div>
+        <div style={rowStyle}><span style={labelStyle}>Phone:</span><span style={senderInfoStyle}>{sender?.phone}</span></div>
+        <div style={rowStyle}><span style={labelStyle}>Address:</span><span style={senderInfoStyle}>{sender?.Address}</span></div>
       </div>
       <div style={{ marginTop: '7px' }}>
         <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '12px', letterSpacing: '3px', borderTop: '1px solid #111', borderBottom: '1px solid #111', padding: '3px' }}>TO</div>
@@ -67,12 +77,35 @@ const BarcodePrinterPage = () => {
   const [generatedList, setGeneratedList] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showVoucherCode, setShowVoucherCode] = useState(true);
+  const [senders, setSenders] = useState<VoucherSender[]>([]);
+  const [selectedSenderId, setSelectedSenderId] = useState('');
+  const [senderSearch, setSenderSearch] = useState('');
+  const [isSenderDropdownOpen, setIsSenderDropdownOpen] = useState(false);
+  const [senderLoadError, setSenderLoadError] = useState('');
 
   const previewRef = useRef<HTMLDivElement>(null);
 
   // 🌟 A6 2-Column (၁ ရွက်လျှင် ၁၀ ခုဆန့်) စနစ် ဟုတ်မဟုတ် စစ်ဆေးခြင်း
   const isA6Grid = labelSize.w === 100 && labelSize.h === 150;
   const isVoucherMode = printMode === 'voucher';
+  const selectedSender = senders.find((sender) => String(sender.id) === selectedSenderId);
+  const normalizedSenderSearch = senderSearch.trim().toLocaleLowerCase();
+  const filteredSenders = senders.filter((sender) =>
+    [sender.name, sender.phone, sender.Address, sender.LOC].some((value) =>
+      String(value || '').toLocaleLowerCase().includes(normalizedSenderSearch),
+    ),
+  );
+
+  useEffect(() => {
+    if (!isVoucherMode) return;
+
+    getSenders()
+      .then(({ data }) => {
+        setSenders(data || []);
+        setSenderLoadError('');
+      })
+      .catch(() => setSenderLoadError('Sender စာရင်းကို ရယူ၍မရပါ။'));
+  }, [isVoucherMode]);
 
   // 💡 တစ်ရွက်စာ ၁၀ ခုစီ (2 Columns x 5 Rows) ခွဲပေးမည့် Helper Function
   const chunkArray = (arr: string[], size: number) => {
@@ -386,21 +419,92 @@ const handleMobileThermalPrint = () => {
             </div>
 
             {isVoucherMode && (
-              <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-3 py-3">
+              <div className="flex flex-col gap-3">
                 <div>
-                  <p className="text-xs font-bold text-slate-200">Voucher Code / QR</p>
-                  <p className="mt-0.5 text-[10px] text-slate-500">Code ထည့်မည် / မထည့်ပါ</p>
+                  <label htmlFor="voucher-sender-search" className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Sender အချက်အလက်</label>
+                  <div
+                    className="relative"
+                    onBlur={(event) => {
+                      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                        setIsSenderDropdownOpen(false);
+                      }
+                    }}
+                  >
+                    <input
+                      id="voucher-sender-search"
+                      type="search"
+                      value={senderSearch}
+                      onChange={(event) => {
+                        setSenderSearch(event.target.value);
+                        setIsSenderDropdownOpen(Boolean(event.target.value.trim()));
+                      }}
+                      onFocus={() => {
+                        if (senderSearch.trim()) setIsSenderDropdownOpen(true);
+                      }}
+                      placeholder="အမည်၊ ဖုန်း၊ လိပ်စာဖြင့် ရှာရန်"
+                      aria-label="Search senders"
+                      aria-expanded={isSenderDropdownOpen && Boolean(senderSearch.trim())}
+                      aria-controls="voucher-sender-results"
+                      role="combobox"
+                      aria-autocomplete="list"
+                      className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl p-3 text-sm outline-none focus:border-orange-500"
+                    />
+                    {isSenderDropdownOpen && senderSearch.trim() && (
+                      <div id="voucher-sender-results" role="listbox" className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 py-1 shadow-xl">
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={!selectedSenderId}
+                          onClick={() => {
+                            setSelectedSenderId('');
+                            setSenderSearch('');
+                            setIsSenderDropdownOpen(false);
+                          }}
+                          className="w-full px-3 py-2 text-left text-sm text-slate-300 hover:bg-slate-800"
+                        >
+                          လုံးဝအလွတ် Voucher
+                        </button>
+                        {filteredSenders.length > 0 ? filteredSenders.map((sender) => (
+                          <button
+                            key={sender.id}
+                            type="button"
+                            role="option"
+                            aria-selected={String(sender.id) === selectedSenderId}
+                            onClick={() => {
+                              setSelectedSenderId(String(sender.id));
+                              setSenderSearch('');
+                              setIsSenderDropdownOpen(false);
+                            }}
+                            className="flex w-full flex-col px-3 py-2 text-left text-sm text-slate-200 hover:bg-slate-800"
+                          >
+                            <span>{sender.name} · {sender.phone || 'ဖုန်းမရှိ'}</span>
+                            {(sender.Address || sender.LOC) && <span className="mt-0.5 text-xs text-slate-400">{[sender.Address, sender.LOC].filter(Boolean).join(' · ')}</span>}
+                          </button>
+                        )) : (
+                          <p className="px-3 py-2 text-sm text-slate-500">Sender မတွေ့ပါ</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {selectedSender && <p className="mt-2 text-xs text-emerald-400">ရွေးထားသည်: {selectedSender.name}</p>}
+                  {senderLoadError && <p className="mt-1 text-xs text-rose-400">{senderLoadError}</p>}
                 </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={showVoucherCode}
-                  aria-label="Show voucher code and QR"
-                  onClick={() => setShowVoucherCode((current) => !current)}
-                  className={`relative h-6 w-11 rounded-full transition-colors ${showVoucherCode ? 'bg-emerald-500' : 'bg-slate-700'}`}
-                >
-                  <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-transform ${showVoucherCode ? 'translate-x-6' : 'translate-x-1'}`} />
-                </button>
+                <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-3 py-3">
+                  <div>
+                    <p className="text-xs font-bold text-slate-200">Voucher Code / QR</p>
+                    <p className="mt-0.5 text-[10px] text-slate-500">Code ထည့်မည် / မထည့်ပါ</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={showVoucherCode}
+                    aria-label="Show voucher code and QR"
+                    onClick={() => setShowVoucherCode((current) => !current)}
+                    className={`relative h-6 w-11 rounded-full transition-colors ${showVoucherCode ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                  >
+                    <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-transform ${showVoucherCode ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
               </div>
             )}
 
@@ -514,7 +618,7 @@ const handleMobileThermalPrint = () => {
             </div>
           ) : isVoucherMode ? (
             <div ref={previewRef} className="flex flex-col gap-8 items-center w-full py-4">
-              {generatedList.map((id) => <BlankVoucher key={id} code={id} showCode={showVoucherCode} />)}
+              {generatedList.map((id) => <BlankVoucher key={id} code={id} showCode={showVoucherCode} sender={selectedSender} />)}
             </div>
           ) : isA6Grid ? (
             /* 🌟 ၁၀၀x၁၅၀mm (10 Labels per sheet) Live Preview အသစ် */
