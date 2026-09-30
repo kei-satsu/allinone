@@ -36,9 +36,13 @@ const COLUMN_DEFS: ColumnDef[] = [
   { key: 'item_id', label: 'Item ID', defaultVisible: true },
   { key: 'status', label: 'Status', defaultVisible: true },
   { key: 'last_check', label: 'Last Check', defaultVisible: true },
+  { key: 'sender_name', label: 'Sender', defaultVisible: true },
   { key: 'receiver_name', label: 'Receiver', defaultVisible: true },
   { key: 'receiver_phone', label: 'Phone', defaultVisible: true },
   { key: 'receiver_loc', label: 'R. City', defaultVisible: true },
+  { key: 'cod_amount', label: 'COD (Ks)', defaultVisible: true },
+  { key: 'deli_fee', label: 'Deli Fee (Ks)', defaultVisible: true },
+  { key: 'total_amount', label: 'Total (Ks)', defaultVisible: true },
   { key: 'transit_to', label: 'Last Transit To', defaultVisible: true },
   { key: 'branch', label: 'Origin', defaultVisible: false },
 ]
@@ -84,15 +88,13 @@ function belongsInStockCheck(order: StockOrder, branch: string) {
   const origin = String(order.branch || '').trim().toUpperCase()
   const currentBranch = branch.trim().toUpperCase()
   const status = String(order.status || '').trim()
-  const lastDestination = String(getLastTransitLeg(order)?.transit_to || '').trim().toUpperCase()
+  const transitLegs = getTransitLegs(order.transit)
 
-  if (origin === currentBranch) {
-    return status === 'At Office'
-      || status === 'On Way'
-      || (status === 'Arrived' && lastDestination === currentBranch)
-  }
+  if (origin === currentBranch && status === 'At Office') return true
+  if (origin === currentBranch && status === 'On Way' && transitLegs.length === 0) return true
 
-  return lastDestination === currentBranch && (status === 'Arrived' || status === 'On Way')
+  const lastDestination = String(transitLegs.at(-1)?.transit_to || '').trim().toUpperCase()
+  return lastDestination === currentBranch && (status === 'On Way' || status === 'Arrived')
 }
 
 async function fetchAllPages(createQuery: QueryFactory) {

@@ -410,6 +410,7 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
 
                 {mobileCompact ? (
                   <div className="grid grid-cols-2 gap-x-3 gap-y-2 border-y border-slate-200 py-2 text-xs">
+                    <div className="min-w-0"><span className="mb-0.5 block text-[10px] font-bold uppercase text-slate-500">Sender</span><span className="block truncate font-semibold text-slate-800">{o.sender_name || '-'}</span></div>
                     <div className="min-w-0"><span className="mb-0.5 block text-[10px] font-bold uppercase text-slate-500">Receiver</span><span className="block truncate font-semibold text-slate-800">{o.receiver_name || '-'}</span></div>
                     <div className="min-w-0"><span className="mb-0.5 block text-[10px] font-bold uppercase text-slate-500">Last Check</span><span className="block truncate font-semibold text-slate-800">{renderCell(o, 'last_check')}</span></div>
                     <div className="min-w-0"><span className="mb-0.5 block text-[10px] font-bold uppercase text-slate-500">Transit To</span><span className="block truncate font-semibold text-slate-800">{renderCell(o, 'transit_to')}</span></div>
@@ -435,6 +436,12 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
                       </a>
                     </div>
                   )}
+                </div>}
+
+                {mobileCompact && <div className="grid grid-cols-3 gap-2 py-1.5 text-[10px]">
+                  <div className="min-w-0"><span className="block text-slate-500">COD</span><span className="block truncate font-bold tabular-nums text-slate-800">{Number(o.cod_amount || 0).toLocaleString()} Ks</span></div>
+                  <div className="min-w-0"><span className="block text-slate-500">Deli Fee</span><span className="block truncate font-bold tabular-nums text-slate-800">{Number(o.deli_fee || 0).toLocaleString()} Ks</span></div>
+                  <div className="min-w-0 text-right"><span className="block text-slate-500">Total</span><span className="block truncate font-bold tabular-nums text-slate-950">{Number(o.total_amount || 0).toLocaleString()} Ks</span></div>
                 </div>}
 
                 {mobileCompact && onCheckOrder ? (
