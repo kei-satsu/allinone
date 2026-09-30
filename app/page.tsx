@@ -49,9 +49,9 @@ export default function Dashboard() {
         limit: 20,
       })
       const matchedOrder = matchingOrders.find(
-      (o) =>
-        String(o.item_id).trim() === String(scannedCode).trim() ||
-        String(o.barcode).trim() === String(scannedCode).trim()
+        (order) => [order.id, order.item_id, order.barcode].some(
+          (value) => String(value || '').trim().toLocaleLowerCase() === scannedCode.trim().toLocaleLowerCase(),
+        ),
       )
       if (matchedOrder) {
         setSelectedOrder(matchedOrder)

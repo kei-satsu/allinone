@@ -63,9 +63,20 @@ export async function GET(request: Request) {
     if (excludeStatus) query = query.not('status', 'in', `(${excludeStatus.split(',').join(',')})`)
     if (search) {
       const escapedSearch = search.replace(/[%(),]/g, '')
-      query = query.or(
-        `id.ilike.%${escapedSearch}%,item_id.ilike.%${escapedSearch}%,barcode.ilike.%${escapedSearch}%,receiver_name.ilike.%${escapedSearch}%,receiver_phone.ilike.%${escapedSearch}%,receiver_loc.ilike.%${escapedSearch}%,receiver_address.ilike.%${escapedSearch}%`,
-      )
+      const searchConditions = [
+        `item_id.ilike.%${escapedSearch}%`,
+        `barcode.ilike.%${escapedSearch}%`,
+        `receiver_name.ilike.%${escapedSearch}%`,
+        `receiver_phone.ilike.%${escapedSearch}%`,
+        `receiver_loc.ilike.%${escapedSearch}%`,
+        `receiver_address.ilike.%${escapedSearch}%`,
+      ]
+
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(escapedSearch)) {
+        searchConditions.unshift(`id.eq.${escapedSearch}`)
+      }
+
+      query = query.or(searchConditions.join(','))
     }
 
     const { data, count, error } = await query
