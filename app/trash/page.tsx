@@ -25,7 +25,11 @@ export default function TrashList() {
     setLoading(true)
     const { data, error } = await apiClient
       .from('orders')
-      .select('*')
+      .select(`
+        *,
+        pickup_rider:riders!orders_pickup_rider_id_fkey(name),
+        deliver_rider:riders!orders_deliver_rider_id_fkey(name)
+      `)
       .eq('branch', activeBranch)
       .eq('is_deleted', true) // 🗑️ ဖျက်ထားတဲ့ မှတ်တမ်းတွေပဲ ပြမယ်
       .order('deleted_at', { ascending: false }) // လတ်တလောဖျက်ထားတာ အပေါ်ဆုံးပြမယ်

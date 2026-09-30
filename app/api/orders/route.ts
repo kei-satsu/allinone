@@ -44,7 +44,11 @@ export async function GET(request: Request) {
 
     let query = supabaseServer
       .from('orders')
-      .select('*', { count: 'exact' })
+      .select(`
+        *,
+        pickup_rider:riders!orders_pickup_rider_id_fkey(name),
+        deliver_rider:riders!orders_deliver_rider_id_fkey(name)
+      `, { count: 'exact' })
       .order(sortBy, { ascending })
       .range(from, to)
 

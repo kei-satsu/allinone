@@ -105,8 +105,8 @@ const handleExportExcel = async () => {
         .from('orders')
         .select(`
           *,
-          pickup_rider:riders!pickup_rider_id(name),
-          deliver_rider:riders!deliver_rider_id(name)
+          pickup_rider:riders!orders_pickup_rider_id_fkey(name),
+          deliver_rider:riders!orders_deliver_rider_id_fkey(name)
         `)
         // 🔴 is_deleted true မဟုတ်သော (null သို့မဟုတ် false ဖြစ်သော) Record များကိုသာ ဆွဲမည်
         .or('is_deleted.is.null,is_deleted.eq.false');
