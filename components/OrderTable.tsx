@@ -42,6 +42,7 @@ interface OrderTableProps {
   isOrderChecked?: (order: CheckableOrder) => boolean;
   checkingOrderIds?: Set<string>;
   mobileCompact?: boolean;
+  fullBleed?: boolean;
 }
 
 // forwardRef ဖြင့် Component ကို ပတ်ပေးပါ
@@ -72,6 +73,7 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
   isOrderChecked,
   checkingOrderIds,
   mobileCompact = false,
+  fullBleed = false,
 }, ref) => {
 
   const horizontalScrollRef = useRef<HTMLDivElement>(null);
@@ -222,7 +224,7 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
 
   return (
     // Parent မှ ရောက်လာသော ref ကို ဒီနေရာတွင် တပ်ဆင်ပေးပါ
-    <div ref={ref} className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-white sm:mx-5 sm:my-3 sm:rounded-xl sm:border sm:border-gray-400 sm:shadow-sm">
+    <div ref={ref} className={`relative flex min-h-0 flex-1 flex-col overflow-hidden bg-white ${fullBleed ? '' : 'sm:mx-5 sm:my-3 sm:rounded-xl sm:border sm:border-gray-400 sm:shadow-sm'}`}>
       
       {/* 💻 Desktop Table View */}
       <div

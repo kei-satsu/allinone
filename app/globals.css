@@ -19,6 +19,16 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+.stock-check-mobile-only {
+  display: block;
+}
+
+@media (min-width: 64rem) {
+  .stock-check-mobile-only {
+    display: none;
+  }
+}
+
 @font-face {
   font-family: 'Pyidaungsu';
   src: url('/font/Pyidaungsu-2.5.3_Regular.ttf') format('truetype');

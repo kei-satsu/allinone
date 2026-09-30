@@ -29,6 +29,7 @@ type StockOrder = {
 }
 
 type StockStatus = 'All' | 'At Office' | 'On Way' | 'Arrived' | 'Checked'
+type StockColumnFilters = Record<string, string | string[]>
 type QueryResult = { data: StockOrder[] | StockOrder | null; error: Error | null }
 type QueryFactory = (from: number, to: number) => PromiseLike<QueryResult>
 
@@ -131,6 +132,8 @@ export default function StockCheckPage() {
   const userBranch = useSyncExternalStore(subscribeToBranch, getBranchSnapshot, getServerBranchSnapshot)
   const [orders, setOrders] = useState<StockOrder[]>([])
   const [statusFilter, setStatusFilter] = useState<StockStatus>('All')
+  const [columnFilters, setColumnFilters] = useState<StockColumnFilters>({})
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
@@ -199,6 +202,7 @@ export default function StockCheckPage() {
     return () => { isCurrent = false }
   }, [refreshKey, router, userBranch])
 
+  const visibleCols = useMemo(() => Object.fromEntries(COLUMN_DEFS.map((column) => [column.key, column.defaultVisible])), [])
   const visibleOrders = useMemo(() => {
     const query = search.trim().toLocaleLowerCase()
     return orders.filter((order) => {
@@ -207,12 +211,17 @@ export default function StockCheckPage() {
         || (statusFilter === 'Checked' ? checkedToday : !checkedToday && order.status === statusFilter)
       const searchableValues = [order.item_id, order.barcode, order.sender_name, order.receiver_name, order.receiver_phone]
       const matchesSearch = !query || searchableValues.some((value) => String(value || '').toLocaleLowerCase().includes(query))
-      return matchesStatus && matchesSearch
+      const matchesColumns = COLUMN_DEFS.filter((column) => visibleCols[column.key]).every((column) => {
+        const filterValue = columnFilters[column.key]
+        const cellValue = String(order[column.key] ?? '').toLocaleLowerCase()
+        if (Array.isArray(filterValue)) return filterValue.length === 0 || filterValue.some((value) => cellValue === value.toLocaleLowerCase())
+        return !filterValue?.trim() || cellValue.includes(filterValue.trim().toLocaleLowerCase())
+      })
+      return matchesStatus && matchesSearch && matchesColumns
     })
-  }, [orders, search, statusFilter])
+  }, [columnFilters, orders, search, statusFilter, visibleCols])
 
   const selection = useOrderSelection(orders)
-  const visibleCols = useMemo(() => Object.fromEntries(COLUMN_DEFS.map((column) => [column.key, column.defaultVisible])), [])
   const statusCounts = useMemo(() => orders.reduce<Record<StockStatus, number>>((counts, order) => {
     if (hasBeenCheckedToday(order)) counts.Checked += 1
     else if (order.status === 'At Office' || order.status === 'On Way' || order.status === 'Arrived') counts[order.status] += 1
@@ -256,21 +265,36 @@ export default function StockCheckPage() {
     setRefreshKey((current) => current + 1)
   }
 
+  const handleColumnFilterChange = (key: string, value: string | string[]) => {
+    setColumnFilters((current) => ({ ...current, [key]: value }))
+  }
+
+  const activeColumnFilterCount = Object.values(columnFilters).filter((value) => Array.isArray(value) ? value.length > 0 : Boolean(value.trim())).length
+
   const statusOptions: StockStatus[] = ['All', 'At Office', 'On Way', 'Arrived', 'Checked']
+  const renderStatusTabs = () => (
+    <nav aria-label="Stock status" className="flex items-center gap-1">
+      {statusOptions.map((status) => (
+        <button key={status} type="button" onClick={() => setStatusFilter(status)} aria-pressed={statusFilter === status} className={`flex min-h-8 shrink-0 items-center gap-1.5 border px-2.5 text-[11px] font-semibold transition ${statusFilter === status ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-900'}`}>
+          {status}<span className={`tabular-nums ${statusFilter === status ? 'text-white/70' : 'text-slate-400'}`}>{statusCounts[status]}</span>
+        </button>
+      ))}
+    </nav>
+  )
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#f3f4f1] text-slate-900">
-      <header className="shrink-0 border-b border-slate-200 bg-white px-3 py-2 sm:px-6 sm:py-4">
-        <div className="mx-auto flex max-w-[1600px] flex-row items-center justify-between gap-2 sm:items-end sm:gap-4">
+      <header className="z-30 shrink-0 border-b border-slate-200 bg-white px-3 py-2 sm:px-4 sm:py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
-            <div className="mb-0.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-emerald-700 sm:mb-1 sm:gap-2 sm:text-[11px] sm:tracking-[0.14em]">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-emerald-700 sm:gap-2 sm:text-[11px] sm:tracking-[0.14em]">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
               {branchName(userBranch)} Branch
             </div>
-            <h1 className="text-lg font-bold leading-tight text-slate-950 sm:text-3xl">Stock Check</h1>
-            <p className="mt-1 hidden text-sm text-slate-500 sm:block">လက်ရှိ branch မှာ ရှိနေတဲ့ ပါဆယ်စာရင်း</p>
+            <h1 className="text-lg font-bold leading-tight text-slate-950 sm:text-xl">Stock Check</h1>
           </div>
-          <div className="flex w-auto min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
+          <div className="hidden lg:block">{renderStatusTabs()}</div>
+          <div className="ml-auto flex w-auto min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
             <label className="relative hidden min-w-0 flex-1 sm:block sm:w-72 sm:flex-none">
               <span className="sr-only">Search orders</span>
               <svg aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path strokeLinecap="round" d="m20 20-4-4" /></svg>
@@ -288,15 +312,28 @@ export default function StockCheckPage() {
         </div>
       </header>
 
-      <main className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col px-2 py-3 sm:px-4 sm:py-4">
-        <section aria-label="Stock status filters" className="mb-3 flex shrink-0 gap-2 overflow-x-auto px-1 pb-1 sm:mb-4">
-          {statusOptions.map((status) => (
-            <button key={status} type="button" onClick={() => setStatusFilter(status)} aria-pressed={statusFilter === status} className={`flex min-h-9 shrink-0 items-center gap-1.5 border px-2.5 text-[11px] font-semibold transition sm:min-h-10 sm:gap-2 sm:px-4 sm:text-xs ${statusFilter === status ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-900'}`}>
-              {status}<span className={`tabular-nums ${statusFilter === status ? 'text-white/70' : 'text-slate-400'}`}>{statusCounts[status]}</span>
-            </button>
-          ))}
-          <span className="ml-auto hidden self-center whitespace-nowrap text-xs text-slate-500 sm:block">{visibleOrders.length} parcels</span>
-        </section>
+      <main className="flex min-h-0 w-full flex-1 flex-col">
+        <div className="stock-check-mobile-only shrink-0 px-3 pt-2">
+          <div className="overflow-x-auto pb-1">{renderStatusTabs()}</div>
+        </div>
+
+        <details className="stock-check-mobile-only mx-3 mb-2 shrink-0 border border-slate-200 bg-white" open={mobileFiltersOpen} onToggle={(event) => setMobileFiltersOpen(event.currentTarget.open)}>
+          <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3 text-xs font-semibold text-slate-700">
+            <span>Filter columns{activeColumnFilterCount ? ` (${activeColumnFilterCount})` : ''}</span>
+            <span className="flex items-center gap-2 text-slate-400">
+              {activeColumnFilterCount > 0 && <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setColumnFilters({}) }} className="text-[11px] font-semibold text-emerald-700">Clear</button>}
+              <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" /></svg>
+            </span>
+          </summary>
+          <div className="grid grid-cols-2 gap-2 border-t border-slate-200 p-3">
+            {COLUMN_DEFS.filter((column) => visibleCols[column.key]).map((column) => (
+              <label key={column.key} className="min-w-0 text-[10px] font-semibold text-slate-500">
+                <span className="mb-1 block truncate">{column.label}</span>
+                <input value={typeof columnFilters[column.key] === 'string' ? columnFilters[column.key] as string : ''} onChange={(event) => handleColumnFilterChange(column.key, event.target.value)} placeholder={`Filter ${column.label}`} className="h-9 w-full border border-slate-300 px-2 text-xs font-normal text-slate-800 outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-100" />
+              </label>
+            ))}
+          </div>
+        </details>
 
         {scanMessage && <div aria-live="polite" className="mb-2 flex shrink-0 items-center justify-between gap-3 px-2 text-xs text-slate-600 sm:mb-3 sm:text-sm">
           <span className="min-w-0 truncate">{scanMessage}</span>
@@ -304,7 +341,7 @@ export default function StockCheckPage() {
         </div>}
 
         {errorMessage && (
-          <div role="alert" className="mb-3 flex shrink-0 items-center justify-between gap-3 border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          <div role="alert" className="mx-3 mb-3 flex shrink-0 items-center justify-between gap-3 border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
             <span>{errorMessage}</span>
             <button type="button" onClick={handleRefresh} className="shrink-0 font-bold underline underline-offset-2">ပြန်စမ်းရန်</button>
           </div>
@@ -314,9 +351,9 @@ export default function StockCheckPage() {
           orders={visibleOrders}
           columnDefs={COLUMN_DEFS}
           visibleCols={visibleCols}
-          showFilterBar={false}
-          colFilters={{}}
-          onFilterChange={() => {}}
+          showFilterBar={true}
+          colFilters={columnFilters}
+          onFilterChange={handleColumnFilterChange}
           riders={[]}
           locationOptions={[]}
           loading={loading}
@@ -337,6 +374,7 @@ export default function StockCheckPage() {
           isOrderChecked={hasBeenCheckedToday}
           checkingOrderIds={checkingOrderIds}
           mobileCompact
+          fullBleed
         />
       </main>
 
