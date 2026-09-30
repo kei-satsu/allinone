@@ -165,6 +165,15 @@ const MENU_ITEMS: MenuItem[] = [
     ),
   },
   {
+    name: "Stock Check",
+    path: "/stock-check",
+    icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5 12 3l9 4.5M4.5 8.25V18L12 21l7.5-3V8.25M12 12v9m-7.5-12L12 13.5 19.5 9M8 5l9 4.5" />
+      </svg>
+    ),
+  },
+  {
     name: "User Management",
     path: "/admin/users",
     adminOnly: true,

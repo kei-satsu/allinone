@@ -9,6 +9,8 @@ export interface ColumnDef {
   defaultVisible: boolean;
 }
 
+type CheckableOrder = Record<string, unknown> & { id: string }
+
 interface OrderTableProps {
   orders: any[];
   columnDefs: ColumnDef[];
@@ -36,6 +38,10 @@ interface OrderTableProps {
   onRowClick: (order: any) => void;
   onRowContextMenu: (e: React.MouseEvent, order: any) => void;
   onPreviewImage: (url: string) => void;
+  onCheckOrder?: (order: CheckableOrder) => void;
+  isOrderChecked?: (order: CheckableOrder) => boolean;
+  checkingOrderIds?: Set<string>;
+  mobileCompact?: boolean;
 }
 
 // forwardRef ဖြင့် Component ကို ပတ်ပေးပါ
@@ -62,6 +68,10 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
   onRowClick,
   onRowContextMenu,
   onPreviewImage,
+  onCheckOrder,
+  isOrderChecked,
+  checkingOrderIds,
+  mobileCompact = false,
 }, ref) => {
 
   const horizontalScrollRef = useRef<HTMLDivElement>(null);
@@ -236,6 +246,7 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
                   {col.label}
                 </th>
               ))}
+              {onCheckOrder && <th className="border-l border-orange-200 px-3 py-2 text-center align-middle">Check</th>}
             </tr>
 
             {showFilterBar && (
@@ -291,7 +302,7 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
           <tbody className="divide-y divide-slate-300">
             {loading ? (
               <tr>
-                <td colSpan={columnDefs.length + 1} className="p-20 text-center">
+                <td colSpan={columnDefs.filter(col => visibleCols[col.key]).length + 1 + Number(Boolean(onCheckOrder))} className="p-20 text-center">
                   <div className="inline-flex items-center gap-3 text-gray-400 font-medium text-sm">
                     <span className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
                     Loading Records...
@@ -326,11 +337,16 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
                         {renderCell(o, col.key)}
                       </td>
                     ))}
+                    {onCheckOrder && <td className="border-l border-slate-300 px-2 py-2 text-center align-middle">
+                      <button type="button" onClick={() => onCheckOrder(o)} disabled={isOrderChecked?.(o) || checkingOrderIds?.has(o.id)} className="min-h-9 min-w-20 border border-emerald-700 px-3 text-xs font-bold text-emerald-800 transition hover:bg-emerald-700 hover:text-white disabled:cursor-default disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-transparent disabled:hover:text-slate-400">
+                        {isOrderChecked?.(o) ? 'Checked' : checkingOrderIds?.has(o.id) ? 'Checking...' : 'Check'}
+                      </button>
+                    </td>}
                   </tr>
                 ))}
                 {hasMore && (
                   <tr>
-                    <td colSpan={columnDefs.filter(col => visibleCols[col.key]).length + 1} className="px-3 py-3">
+                    <td colSpan={columnDefs.filter(col => visibleCols[col.key]).length + 1 + Number(Boolean(onCheckOrder))} className="px-3 py-3">
                       <button
                         onClick={onLoadMore}
                         disabled={loadingMore}
@@ -392,7 +408,14 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 rounded-md border border-slate-300 bg-slate-50/70 px-2 py-2 text-xs">
+                {mobileCompact ? (
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-2 border-y border-slate-200 py-2 text-xs">
+                    <div className="min-w-0"><span className="mb-0.5 block text-[10px] font-bold uppercase text-slate-500">Receiver</span><span className="block truncate font-semibold text-slate-800">{o.receiver_name || '-'}</span></div>
+                    <div className="min-w-0"><span className="mb-0.5 block text-[10px] font-bold uppercase text-slate-500">Last Check</span><span className="block truncate font-semibold text-slate-800">{renderCell(o, 'last_check')}</span></div>
+                    <div className="min-w-0"><span className="mb-0.5 block text-[10px] font-bold uppercase text-slate-500">Transit To</span><span className="block truncate font-semibold text-slate-800">{renderCell(o, 'transit_to')}</span></div>
+                    {o.receiver_phone && <a href={`tel:${o.receiver_phone}`} className="self-end text-right text-[11px] font-semibold text-orange-700" onClick={(e) => e.stopPropagation()}>{o.receiver_phone}</a>}
+                  </div>
+                ) : <div className="grid grid-cols-2 gap-2 rounded-md border border-slate-300 bg-slate-50/70 px-2 py-2 text-xs">
                   <div>
                     <span className="mb-0.5 block text-[11px] font-extrabold uppercase tracking-wide text-slate-600">Sender</span>
                     <span className="block truncate text-[13px] font-bold text-slate-800">{o.sender_name || '-'} ({o.sender_loc || '-'})</span>
@@ -412,9 +435,13 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
                       </a>
                     </div>
                   )}
-                </div>
+                </div>}
 
-                <div className="flex items-center justify-between pt-1 text-[13px] font-medium">
+                {mobileCompact && onCheckOrder ? (
+                  <button type="button" onClick={(e) => { e.stopPropagation(); onCheckOrder(o); }} disabled={isOrderChecked?.(o) || checkingOrderIds?.has(o.id)} className="flex min-h-11 w-full items-center justify-center border border-emerald-700 bg-emerald-50 text-sm font-bold text-emerald-800 transition active:bg-emerald-100 disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400">
+                    {isOrderChecked?.(o) ? 'Checked' : checkingOrderIds?.has(o.id) ? 'Checking...' : 'Check'}
+                  </button>
+                ) : <div className="flex items-center justify-between pt-1 text-[13px] font-medium">
                   <div className="flex gap-4 text-gray-500 text-[11px]">
                     <span>COD: <strong className="text-gray-700">{o.cod_amount?.toLocaleString() || 0} Ks</strong></span>
                     <span>Deli: <strong className="text-gray-700">{o.deli_fee?.toLocaleString() || 0} Ks</strong></span>
@@ -442,7 +469,7 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
                       </span>
                     )}
                   </div>
-                </div>
+                </div>}
 
               </div>
             ))}
