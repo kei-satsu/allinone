@@ -340,8 +340,8 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
                       </td>
                     ))}
                     {onCheckOrder && <td className="border-l border-slate-300 px-2 py-2 text-center align-middle">
-                      <button type="button" onClick={() => onCheckOrder(o)} disabled={isOrderChecked?.(o) || checkingOrderIds?.has(o.id)} className="min-h-9 min-w-20 border border-emerald-700 px-3 text-xs font-bold text-emerald-800 transition hover:bg-emerald-700 hover:text-white disabled:cursor-default disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-transparent disabled:hover:text-slate-400">
-                        {isOrderChecked?.(o) ? 'Checked' : checkingOrderIds?.has(o.id) ? 'Checking...' : 'Check'}
+                      <button type="button" onClick={() => onCheckOrder(o)} disabled={checkingOrderIds?.has(o.id)} className={`min-h-9 min-w-20 border px-3 text-xs font-bold transition disabled:cursor-wait disabled:opacity-60 ${isOrderChecked?.(o) ? 'border-amber-600 text-amber-800 hover:bg-amber-600 hover:text-white' : 'border-emerald-700 text-emerald-800 hover:bg-emerald-700 hover:text-white'}`}>
+                        {checkingOrderIds?.has(o.id) ? 'Saving...' : isOrderChecked?.(o) ? 'Uncheck' : 'Check'}
                       </button>
                     </td>}
                   </tr>
@@ -447,8 +447,8 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
                 </div>}
 
                 {mobileCompact && onCheckOrder ? (
-                  <button type="button" onClick={(e) => { e.stopPropagation(); onCheckOrder(o); }} disabled={isOrderChecked?.(o) || checkingOrderIds?.has(o.id)} className="flex min-h-11 w-full items-center justify-center border border-emerald-700 bg-emerald-50 text-sm font-bold text-emerald-800 transition active:bg-emerald-100 disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400">
-                    {isOrderChecked?.(o) ? 'Checked' : checkingOrderIds?.has(o.id) ? 'Checking...' : 'Check'}
+                  <button type="button" onClick={(e) => { e.stopPropagation(); onCheckOrder(o); }} disabled={checkingOrderIds?.has(o.id)} className={`flex min-h-11 w-full items-center justify-center border text-sm font-bold transition disabled:cursor-wait disabled:opacity-60 ${isOrderChecked?.(o) ? 'border-amber-600 bg-amber-50 text-amber-800 active:bg-amber-100' : 'border-emerald-700 bg-emerald-50 text-emerald-800 active:bg-emerald-100'}`}>
+                    {checkingOrderIds?.has(o.id) ? 'Saving...' : isOrderChecked?.(o) ? 'Uncheck' : 'Check'}
                   </button>
                 ) : <div className="flex items-center justify-between pt-1 text-[13px] font-medium">
                   <div className="flex gap-4 text-gray-500 text-[11px]">

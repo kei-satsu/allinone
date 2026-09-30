@@ -229,15 +229,19 @@ export default function StockCheckPage() {
   }, { All: orders.length, 'At Office': 0, 'On Way': 0, Arrived: 0, Checked: 0 }), [orders])
 
   const handleCheckOrder = async (order: StockOrder) => {
-    if (checkingOrderIds.has(order.id) || hasBeenCheckedToday(order)) return
+    if (checkingOrderIds.has(order.id)) return
+    const isCheckedToday = hasBeenCheckedToday(order)
+    const nextLastCheck = isCheckedToday ? null : getTodayDate()
     setCheckingOrderIds((current) => new Set(current).add(order.id))
     setErrorMessage('')
 
     try {
-      const { error } = await apiClient.from('orders').update({ last_check: getTodayDate() }).eq('id', order.id)
+      const { error } = await apiClient.from('orders').update({ last_check: nextLastCheck }).eq('id', order.id)
       if (error) throw error
-      setOrders((current) => current.map((item) => item.id === order.id ? { ...item, last_check: getTodayDate() } : item))
-      setScanMessage(`${order.item_id || 'Order'} ကို ဒီနေ့စစ်ပြီးပါပြီ။ Checked ထဲသို့ ရွှေ့ထားပါတယ်။`)
+      setOrders((current) => current.map((item) => item.id === order.id ? { ...item, last_check: nextLastCheck } : item))
+      setScanMessage(isCheckedToday
+        ? `${order.item_id || 'Order'} ကို Uncheck လုပ်ပြီး Stock list ထဲပြန်ရွှေ့ထားပါတယ်။`
+        : `${order.item_id || 'Order'} ကို ဒီနေ့စစ်ပြီးပါပြီ။ Checked ထဲသို့ ရွှေ့ထားပါတယ်။`)
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'စစ်ဆေးမှုကို သိမ်း၍မရပါ။')
     } finally {
