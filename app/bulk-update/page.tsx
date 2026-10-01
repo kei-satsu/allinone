@@ -573,6 +573,7 @@ const resolveBulkStatus = (selectedStatus: string, selectedCityId: string) => {
                   <option value="At Office">📍 At Office</option>
                   <option value="On Way">🚵 On Way</option>
                   <option value="Delivered">✅ Delivered</option>
+                  <option value="Handover">🤝 Handover</option>
                   <option value="In-Transit">🚚 In-Transit</option>
                   <option value="Returned">↗️ Returned</option>
                 </select>

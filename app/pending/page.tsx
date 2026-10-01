@@ -588,7 +588,7 @@ setOcrWords([]);
   }
 
   const handleStatusChange = (status: string) => {
-    const isDateRelevant = ['On Way', 'Delivered', 'Returned'].includes(status)
+    const isDateRelevant = ['On Way', 'Delivered', 'Handover', 'Returned'].includes(status)
     const nextDeliverDate = isDateRelevant
       ? formData.deliver_date || today
       : ''
@@ -1439,6 +1439,7 @@ if (updatedPending.length > 0) {
               <option value="At Office">📦 At Office</option>
               <option value="On Way">🚵 On Way</option>
               <option value="Delivered">✅ Delivered</option>
+              <option value="Handover">🤝 Handover</option>
               <option value="In-Transit">🚚 In-Transit</option>
               <option value="Via-Agent">🚐 Via-Agent</option>
             </select>
@@ -1449,8 +1450,8 @@ if (updatedPending.length > 0) {
               type="date"
               value={formData.deliver_date}
               onChange={e => setFormData({...formData, deliver_date: e.target.value})}
-              className={`${winInput} font-mono ${!['On Way', 'Delivered', 'Returned'].includes(formData.status) ? 'bg-gray-50 text-gray-400 cursor-not-allowed border-gray-200' : ''}`}
-              disabled={!selectedItem || !['On Way', 'Delivered', 'Returned'].includes(formData.status)}
+              className={`${winInput} font-mono ${!['On Way', 'Delivered', 'Handover', 'Returned'].includes(formData.status) ? 'bg-gray-50 text-gray-400 cursor-not-allowed border-gray-200' : ''}`}
+              disabled={!selectedItem || !['On Way', 'Delivered', 'Handover', 'Returned'].includes(formData.status)}
             />
           </div>
         </div>

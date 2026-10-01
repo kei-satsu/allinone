@@ -230,7 +230,7 @@ useEffect(() => {
   }
 
   const handleStatusChange = (status: string) => {
-    const isDateRelevant = ['On Way', 'Delivered', 'Returned'].includes(status)
+    const isDateRelevant = ['On Way', 'Delivered', 'Handover', 'Returned'].includes(status)
     const nextDeliverDate = isDateRelevant
       ? formData.deliver_date || today
       : ''
@@ -716,6 +716,7 @@ useEffect(() => {
                      <option value="At Office">📦 At Office</option>
                       <option value="On Way">🚵 On Way</option>
                       <option value="Delivered">✅ Delivered</option>
+                      <option value="Handover">🤝 Handover</option>
                       <option value="In-Transit">🚚 In-Transit</option>
                       <option value="Via-Agent">🚐 Via-Agent</option>
                       <option value="Returned">↗️ Returned</option>
@@ -727,8 +728,8 @@ useEffect(() => {
                     type="date"
                     value={formData.deliver_date}
                     onChange={e => setFormData({...formData, deliver_date: e.target.value})}
-                    className={`${winInput} font-mono ${!['On Way', 'Delivered', 'Returned'].includes(formData.status) ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                    disabled={!['On Way', 'Delivered', 'Returned'].includes(formData.status)}
+                    className={`${winInput} font-mono ${!['On Way', 'Delivered', 'Handover', 'Returned'].includes(formData.status) ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    disabled={!['On Way', 'Delivered', 'Handover', 'Returned'].includes(formData.status)}
                   />
                 </div>
               </div>
