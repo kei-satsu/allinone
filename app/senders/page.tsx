@@ -327,7 +327,7 @@ export default function SendersDashboard() {
       deliFee: order.deli_fee,
       feeType: order.fee_type,
       total: order.total_amount,
-      deliverDate: order.deliver_date || orderDate,
+      deliverDate: order.deliver_date || "",
       status: order.status,
       clearedDate: clearedDateVal,
       refundDate: order.refund_date,
@@ -1565,10 +1565,7 @@ export default function SendersDashboard() {
                                     : "0"}
                                 </td>
                                 <td className="px-3 py-2 font-mono text-slate-500 border-b border-slate-200 border-r border-slate-100 text-sm">
-                                  {order.deliver_date ||
-                                    new Date(
-                                      order.created_at,
-                                    ).toLocaleDateString()}
+                                  {order.deliver_date || "—"}
                                 </td>
                                 <td className="px-3 py-2 text-center border-b border-slate-200 border-r border-slate-100">
                                   {getStatusBadge(order.status)}
