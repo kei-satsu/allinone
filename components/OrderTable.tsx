@@ -335,7 +335,7 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
                       />
                     </td>
                     {columnDefs.map(col => visibleCols[col.key] && (
-                      <td key={`${o.id}-${col.key}`} className={`border-l border-slate-300 px-2 py-2 align-middle text-[13px] font-semibold text-slate-700 ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right tabular-nums' : ''}`}>
+                      <td key={`${o.id}-${col.key}`} className={`border-l border-slate-300 px-2 py-2 align-middle text-[13px] font-semibold text-slate-700 ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right tabular-nums' : ''} ${col.key === 'receiver_address' ? 'w-64 max-w-64 whitespace-normal break-words' : ''}`}>
                         {renderCell(o, col.key)}
                       </td>
                     ))}
@@ -414,6 +414,7 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
                   <div className="grid grid-cols-2 gap-x-3 gap-y-2 border-y border-slate-200 py-2 text-xs">
                     <div className="min-w-0"><span className="mb-0.5 block text-[10px] font-bold uppercase text-slate-500">Sender</span><span className="block truncate font-semibold text-slate-800">{o.sender_name || '-'}</span></div>
                     <div className="min-w-0"><span className="mb-0.5 block text-[10px] font-bold uppercase text-slate-500">Receiver</span><span className="block truncate font-semibold text-slate-800">{o.receiver_name || '-'}</span></div>
+                    <div className="col-span-2 min-w-0"><span className="mb-0.5 block text-[10px] font-bold uppercase text-slate-500">Receiver Address</span><span className="block whitespace-normal break-words font-semibold leading-relaxed text-slate-800">{o.receiver_address || '-'}</span></div>
                     <div className="min-w-0"><span className="mb-0.5 block text-[10px] font-bold uppercase text-slate-500">Last Check</span><span className="block truncate font-semibold text-slate-800">{renderCell(o, 'last_check')}</span></div>
                     <div className="min-w-0"><span className="mb-0.5 block text-[10px] font-bold uppercase text-slate-500">Transit To</span><span className="block truncate font-semibold text-slate-800">{renderCell(o, 'transit_to')}</span></div>
                     {o.receiver_phone && <a href={`tel:${o.receiver_phone}`} className="self-end text-right text-[11px] font-semibold text-orange-700" onClick={(e) => e.stopPropagation()}>{o.receiver_phone}</a>}

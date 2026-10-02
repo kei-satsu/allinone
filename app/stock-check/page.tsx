@@ -39,6 +39,7 @@ const COLUMN_DEFS: ColumnDef[] = [
   { key: 'last_check', label: 'Last Check', defaultVisible: true },
   { key: 'sender_name', label: 'Sender', defaultVisible: true },
   { key: 'receiver_name', label: 'Receiver', defaultVisible: true },
+  { key: 'receiver_address', label: 'Receiver Address', defaultVisible: true },
   { key: 'receiver_phone', label: 'Phone', defaultVisible: true },
   { key: 'receiver_loc', label: 'R. City', defaultVisible: true },
   { key: 'cod_amount', label: 'COD (Ks)', defaultVisible: true },
@@ -82,7 +83,14 @@ function getTransitLegs(transit: unknown): TransitLeg[] {
 
 function getLastTransitLeg(order: StockOrder) {
   const legs = getTransitLegs(order.transit)
-  return legs.length ? legs[legs.length - 1] : null
+  if (!legs.length) return null
+
+  const datedLegs = legs
+    .map((leg) => ({ leg, timestamp: Date.parse(leg.transit_date || '') }))
+    .filter((entry) => Number.isFinite(entry.timestamp))
+
+  if (!datedLegs.length) return legs[legs.length - 1]
+  return datedLegs.reduce((latest, entry) => entry.timestamp >= latest.timestamp ? entry : latest).leg
 }
 
 function belongsInStockCheck(order: StockOrder, branch: string) {
@@ -94,7 +102,7 @@ function belongsInStockCheck(order: StockOrder, branch: string) {
   if (origin === currentBranch && status === 'At Office') return true
   if (origin === currentBranch && status === 'On Way' && transitLegs.length === 0) return true
 
-  const lastDestination = String(transitLegs.at(-1)?.transit_to || '').trim().toUpperCase()
+  const lastDestination = String(getLastTransitLeg(order)?.transit_to || '').trim().toUpperCase()
   return lastDestination === currentBranch && (status === 'On Way' || status === 'Arrived')
 }
 
