@@ -24,7 +24,7 @@ export async function getUsersList() {
       username: profile?.username || authUser.user_metadata?.username || authUser.email?.split('@')[0] || '',
       role: profile?.role || authUser.app_metadata?.role || 'staff',
       branch: profile?.branch || authUser.app_metadata?.branch || authUser.user_metadata?.branch || 'MDY',
-      rider_id: profile?.rider_id || authUser.user_metadata?.rider_id || null, // 👈 rider_id ကို ပါးပေးလိုက်သည်
+      rider_id: profile?.rider_id || null,
       created_at: authUser.created_at,
     }
   })
@@ -32,24 +32,50 @@ export async function getUsersList() {
   return mergedUsers
 }
 
-// ၂။ User အသစ်ဖွင့်ချိန်တွင် Username, Role, Branch, Rider ID အတူတကွ သတ်မှတ်ခြင်း
+export async function getRidersList() {
+  const { data, error } = await supabaseAdmin
+    .from('riders')
+    .select('id, name')
+    .order('name', { ascending: true })
+
+  if (error) throw new Error(error.message)
+  return data ?? []
+}
+
+async function validateRiderId(riderId: string | null) {
+  if (!riderId) return null
+
+  const { data, error } = await supabaseAdmin
+    .from('riders')
+    .select('id')
+    .eq('id', riderId)
+    .maybeSingle()
+
+  if (error) return error.message
+  if (!data) return 'ရွေးချယ်ထားသော Rider ကို မတွေ့ပါ။'
+  return null
+}
+
+// ၂။ User အသစ်ဖွင့်ချိန်တွင် Username, Role, Branch နှင့် Rider ချိတ်ဆက်မှု သတ်မှတ်ခြင်း
 export async function createNewUser(formData: {
   email: string
   pass: string
   username: string
   role: string
   branch: string
-  rider_id?: string
+  rider_id?: string | null
 }) {
-  // 👈 1. rider_id ကိုပါ formData ကနေ ဆွဲထုတ်လိုက်သည်
-  const { email, pass, username, role, branch, rider_id } = formData
+  const { email, pass, username, role, branch } = formData
+  const riderId = formData.rider_id?.trim() || null
+  const riderError = await validateRiderId(riderId)
+  if (riderError) return { success: false, message: riderError }
 
   const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
     email,
     password: pass,
     email_confirm: true,
     app_metadata: { role, branch },
-    user_metadata: { username, branch, rider_id: role === 'rider' ? rider_id : null },
+    user_metadata: { username, branch, rider_id: riderId },
   })
 
   if (authError) return { success: false, message: authError.message }
@@ -64,7 +90,7 @@ export async function createNewUser(formData: {
           username: username || email.split('@')[0],
           role,
           branch,
-          rider_id: role === 'rider' ? (rider_id || null) : null, // 👈 2. profiles table ထဲသို့ rider_id ထည့်ပေးလိုက်သည်
+          rider_id: riderId,
         },
         { onConflict: 'id' },
       )
@@ -84,7 +110,12 @@ export async function updateUserProfile(
   newUsername: string,
   newRole: string,
   newBranch: string,
+  riderId: string | null,
 ) {
+  const normalizedRiderId = riderId?.trim() || null
+  const riderError = await validateRiderId(normalizedRiderId)
+  if (riderError) return { success: false, message: riderError }
+
   const { data: userData } = await supabaseAdmin.auth.admin.getUserById(userId)
   const userEmail = userData?.user?.email || ''
 
@@ -97,6 +128,7 @@ export async function updateUserProfile(
         username: newUsername,
         role: newRole,
         branch: newBranch,
+        rider_id: normalizedRiderId,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'id' },
@@ -106,7 +138,7 @@ export async function updateUserProfile(
 
   const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
     app_metadata: { role: newRole, branch: newBranch },
-    user_metadata: { username: newUsername, branch: newBranch },
+    user_metadata: { username: newUsername, branch: newBranch, rider_id: normalizedRiderId },
   })
 
   if (authError) return { success: false, message: authError.message }
@@ -144,50 +176,5 @@ export async function sendResetPasswordEmail(email: string) {
   return {
     success: true,
     message: `${email} ထံသို့ Password ပြောင်းရန် Link ကို အောင်မြင်စွာ ပို့ပေးလိုက်ပါပြီ။`,
-  }
-}
-
-// ၆။ riders table ထဲမှ ID ဖြင့် Rider အမည်ရှာခြင်း
-export async function getRiderById(id: string) {
-  const riderId = id.trim()
-
-  if (!riderId) {
-    return {
-      success: false,
-      rider: null,
-      message: 'Rider ID ဖြည့်စွက်ပေးပါ။',
-    }
-  }
-
-  const { data, error } = await supabaseAdmin
-    .from('riders')
-    .select('id, name')
-    .eq('id', riderId)
-    .maybeSingle()
-
-  if (error) {
-    console.error('getRiderById error:', error)
-    return {
-      success: false,
-      rider: null,
-      message: 'Rider အချက်အလက် ရှာဖွေရာတွင် အမှားရှိပါသည်။',
-    }
-  }
-
-  if (!data) {
-    return {
-      success: false,
-      rider: null,
-      message: 'ဤ Rider ID မတွေ့ပါ။',
-    }
-  }
-
-  return {
-    success: true,
-    rider: {
-      id: data.id,
-      name: data.name,
-    },
-    message: 'Rider အမည် ရရှိပါပြီ။',
   }
 }

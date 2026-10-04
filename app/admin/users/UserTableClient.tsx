@@ -1,7 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { createNewUser, updateUserProfile, deleteUser, sendResetPasswordEmail, getRiderById } from "@/app/actions/admin"
+import { createNewUser, updateUserProfile, deleteUser, sendResetPasswordEmail } from "@/app/actions/admin"
+
+interface RiderOption {
+  id: string
+  name: string
+}
 
 export interface UserProfile {
   id: string
@@ -9,11 +14,17 @@ export interface UserProfile {
   username?: string
   role?: string
   branch?: string
-  rider_id?: string // 👈 rider_id ထည့်သွင်းထားသည်
+  rider_id?: string
   created_at?: string
 }
 
-export default function UserTableClient({ initialUsers }: { initialUsers: UserProfile[] }) {
+export default function UserTableClient({
+  initialUsers,
+  initialRiders,
+}: {
+  initialUsers: UserProfile[]
+  initialRiders: RiderOption[]
+}) {
   const [users, setUsers] = useState<UserProfile[]>(initialUsers)
   const [loading, setLoading] = useState(false)
   const [resettingEmail, setResettingEmail] = useState<string | null>(null)
@@ -26,41 +37,16 @@ export default function UserTableClient({ initialUsers }: { initialUsers: UserPr
   const [username, setUsername] = useState("")
   const [role, setRole] = useState("staff")
   const [branch, setBranch] = useState("MDY")
+  const [isRider, setIsRider] = useState(false)
   const [riderId, setRiderId] = useState("")
-  const [riderLookupLoading, setRiderLookupLoading] = useState(false)
 
   // Edit Form State
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null)
   const [editUsername, setEditUsername] = useState("")
   const [editRole, setEditRole] = useState("staff")
   const [editBranch, setEditBranch] = useState("MDY")
-
-  const handleRiderIdLookup = async (value: string) => {
-    const normalizedId = value.trim()
-    setRiderId(value)
-
-    if (role !== "rider" || !normalizedId) {
-      if (!normalizedId) setUsername("")
-      return
-    }
-
-    setRiderLookupLoading(true)
-    setMessage(null)
-    try {
-      const res = await getRiderById(normalizedId)
-      if (res.success && res.rider?.name) {
-        setUsername(res.rider.name)
-      } else {
-        setUsername("")
-        setMessage({ type: "error", text: res.message || "ဤ Rider ID မတွေ့ပါ။" })
-      }
-    } catch (err: any) {
-      setUsername("")
-      setMessage({ type: "error", text: err.message || "Rider ID ရှာဖွေရာတွင် အမှားအယွင်းရှိပါသည်။" })
-    } finally {
-      setRiderLookupLoading(false)
-    }
-  }
+  const [editIsRider, setEditIsRider] = useState(false)
+  const [editRiderId, setEditRiderId] = useState("")
 
   // 🟢 1. User အကောင့်သစ် ဆောက်ခြင်း
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -69,12 +55,8 @@ export default function UserTableClient({ initialUsers }: { initialUsers: UserPr
       setMessage({ type: "error", text: "Email နှင့် Password ဖြည့်စွက်ပေးပါ။" })
       return
     }
-    if (role === "rider" && !riderId.trim()) {
-      setMessage({ type: "error", text: "Rider ID ဖြည့်စွက်ပေးပါ။" })
-      return
-    }
-    if (role === "rider" && !username.trim()) {
-      setMessage({ type: "error", text: "မှန်ကန်သော Rider ID ဖြည့်ပြီး Rider အမည်ကို ရယူပေးပါ။" })
+    if (isRider && !riderId) {
+      setMessage({ type: "error", text: "Rider ကို ရွေးချယ်ပေးပါ။" })
       return
     }
 
@@ -82,14 +64,13 @@ export default function UserTableClient({ initialUsers }: { initialUsers: UserPr
     setMessage(null)
 
     try {
-      // 👇 ဒီနေရာတွင် rider_id ကို createNewUser ထံ ထည့်သွင်းပေးလိုက်ပါသည်
       const res = await createNewUser({
         email,
         pass,
         username,
         role,
         branch,
-        rider_id: role === "rider" ? riderId.trim() : undefined
+        rider_id: isRider ? riderId : null,
       })
 
       if (res.success) {
@@ -99,14 +80,18 @@ export default function UserTableClient({ initialUsers }: { initialUsers: UserPr
         setUsername("")
         setRole("staff")
         setBranch("MDY")
+        setIsRider(false)
         setRiderId("")
         setShowModal(false)
         window.location.reload()
       } else {
         setMessage({ type: "error", text: res.message || "User ဖန်တီးရာတွင် အမှားအယွင်းရှိနေပါသည်။" })
       }
-    } catch (err: any) {
-      setMessage({ type: "error", text: err.message || "An unexpected error occurred." })
+    } catch (err: unknown) {
+      setMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "An unexpected error occurred.",
+      })
     } finally {
       setLoading(false)
     }
@@ -115,19 +100,24 @@ export default function UserTableClient({ initialUsers }: { initialUsers: UserPr
   // 🟢 2. User Profile ပြောင်းလဲခြင်း
   const handleUpdateProfile = async () => {
     if (!editingUser) return
+    if (editIsRider && !editRiderId) {
+      setMessage({ type: "error", text: "Rider ကို ရွေးချယ်ပေးပါ။" })
+      return
+    }
 
     setLoading(true)
     setMessage(null)
 
     try {
-      const res = await updateUserProfile(editingUser.id, editUsername, editRole, editBranch)
+      const riderId = editIsRider ? editRiderId : null
+      const res = await updateUserProfile(editingUser.id, editUsername, editRole, editBranch, riderId)
 
       if (res.success) {
         setMessage({ type: "success", text: res.message })
         setUsers(prev =>
           prev.map(u =>
             u.id === editingUser.id
-              ? { ...u, username: editUsername, role: editRole, branch: editBranch }
+              ? { ...u, username: editUsername, role: editRole, branch: editBranch, rider_id: riderId || undefined }
               : u
           )
         )
@@ -135,8 +125,8 @@ export default function UserTableClient({ initialUsers }: { initialUsers: UserPr
       } else {
         setMessage({ type: "error", text: res.message || "ပြင်ဆင်၍ မရပါ" })
       }
-    } catch (err: any) {
-      setMessage({ type: "error", text: err.message })
+    } catch (err: unknown) {
+      setMessage({ type: "error", text: err instanceof Error ? err.message : "ပြင်ဆင်၍ မရပါ" })
     } finally {
       setLoading(false)
     }
@@ -161,8 +151,11 @@ export default function UserTableClient({ initialUsers }: { initialUsers: UserPr
       } else {
         setMessage({ type: "error", text: res.message })
       }
-    } catch (err: any) {
-      setMessage({ type: "error", text: err.message })
+    } catch (err: unknown) {
+      setMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "Password Reset Link ပို့ရာတွင် အမှားအယွင်းရှိပါသည်။",
+      })
     } finally {
       setResettingEmail(null)
     }
@@ -183,8 +176,8 @@ export default function UserTableClient({ initialUsers }: { initialUsers: UserPr
       } else {
         setMessage({ type: "error", text: res.message || "ဖျက်၍ မရပါ" })
       }
-    } catch (err: any) {
-      setMessage({ type: "error", text: err.message })
+    } catch (err: unknown) {
+      setMessage({ type: "error", text: err instanceof Error ? err.message : "ဖျက်၍ မရပါ" })
     } finally {
       setLoading(false)
     }
@@ -289,6 +282,8 @@ export default function UserTableClient({ initialUsers }: { initialUsers: UserPr
                             setEditUsername(u.username || "")
                             setEditRole(u.role || "staff")
                             setEditBranch(u.branch || "MDY")
+                            setEditIsRider(Boolean(u.rider_id))
+                            setEditRiderId(u.rider_id || "")
                           }}
                           className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors"
                         >
@@ -319,26 +314,6 @@ export default function UserTableClient({ initialUsers }: { initialUsers: UserPr
 
             <form onSubmit={handleCreateUser} className="space-y-4">
 
-              {role === "rider" && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">Rider ID</label>
-                  <input
-                    type="text"
-                    required
-                    value={riderId}
-                    onChange={e => setRiderId(e.target.value)}
-                    onBlur={e => handleRiderIdLookup(e.target.value)}
-                    placeholder="riders table ထဲရှိ ID ထည့်ပါ"
-                    className="w-full px-3.5 py-2.5 text-sm rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
-                  />
-                  <p className="mt-1 text-[11px] text-slate-400">
-                    {riderLookupLoading
-                      ? "Rider အမည်ရှာဖွေနေသည်..."
-                      : "ID ဖြည့်ပြီး အပြင်ဘက်ကိုနှိပ်ပါ။ Username တွင် Rider အမည် အလိုအလျောက်ဖြည့်ပါမည်။"}
-                  </p>
-                </div>
-              )}
-              
               <div>
                 <label className="block text-xs font-bold text-slate-600 mb-1">Username</label>
                 <input
@@ -382,11 +357,6 @@ export default function UserTableClient({ initialUsers }: { initialUsers: UserPr
                     onChange={e => {
                       const nextRole = e.target.value
                       setRole(nextRole)
-                      if (nextRole !== "rider") {
-                        setRiderId("")
-                      } else {
-                        setUsername("")
-                      }
                     }}
                     className="w-full px-3 py-2.5 text-sm rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 bg-white"
                   >
@@ -409,6 +379,39 @@ export default function UserTableClient({ initialUsers }: { initialUsers: UserPr
                     <option value="ADMIN">ADMIN</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={isRider}
+                    onChange={e => {
+                      setIsRider(e.target.checked)
+                      if (!e.target.checked) setRiderId("")
+                    }}
+                    className="h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
+                  />
+                  Rider နှင့် ချိတ်ဆက်မည်
+                </label>
+                {isRider && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">Rider အမည်</label>
+                    <select
+                      required
+                      value={riderId}
+                      onChange={e => setRiderId(e.target.value)}
+                      className="w-full px-3 py-2.5 text-sm rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 bg-white"
+                    >
+                      <option value="">Rider ကို ရွေးချယ်ပါ</option>
+                      {initialRiders.map(rider => (
+                        <option key={rider.id} value={rider.id}>
+                          {rider.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-2 pt-2">
@@ -474,6 +477,39 @@ export default function UserTableClient({ initialUsers }: { initialUsers: UserPr
                   <option value="YGN">YGN</option>
                   <option value="ADMIN">ADMIN</option>
                 </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={editIsRider}
+                    onChange={e => {
+                      setEditIsRider(e.target.checked)
+                      if (!e.target.checked) setEditRiderId("")
+                    }}
+                    className="h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
+                  />
+                  Rider နှင့် ချိတ်ဆက်မည်
+                </label>
+                {editIsRider && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">Rider အမည်</label>
+                    <select
+                      required
+                      value={editRiderId}
+                      onChange={e => setEditRiderId(e.target.value)}
+                      className="w-full px-3 py-2.5 text-sm rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 bg-white"
+                    >
+                      <option value="">Rider ကို ရွေးချယ်ပါ</option>
+                      {initialRiders.map(rider => (
+                        <option key={rider.id} value={rider.id}>
+                          {rider.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             </div>
 

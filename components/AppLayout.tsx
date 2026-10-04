@@ -87,6 +87,18 @@ const MENU_ITEMS: MenuItem[] = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
       </svg>
     ),
+    children: [
+      {
+        name: "Live Tracking",
+        path: "/riders/live-map",
+        icon: (
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s7-5.2 7-12a7 7 0 1 0-14 0c0 6.8 7 12 7 12Z" />
+            <circle cx="12" cy="9" r="2.3" />
+          </svg>
+        ),
+      },
+    ],
   },
   {
     name: "Status Updater",
