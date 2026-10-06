@@ -2,7 +2,6 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
-import { getRiders } from "@/lib/databaseApi";
 import { supabase } from "@/lib/supabase";
 import { useMobileDockVisibility } from "@/components/AppLayout";
 import type { RiderPosition } from "@/components/LiveRiderMap";
@@ -16,7 +15,8 @@ const LiveRiderMap = dynamic(() => import("@/components/LiveRiderMap"), {
   ),
 });
 
-const RIDER_TIMEOUT_MS = 30_000;
+// Mobile App ၏ Heartbeat မှာ ၁၅ စက္ကန့် ဖြစ်သောကြောင့် အနည်းဆုံး ၆၀ စက္ကန့် (၁ မိနစ်) အတွင်း Update ရရှိပါက Active ဟု သတ်မှတ်မည်
+const RIDER_ACTIVE_TIMEOUT_MS = 60_000;
 
 type ConnectionState = "connecting" | "connected" | "disconnected";
 
@@ -50,13 +50,15 @@ function timeAgo(timestamp: number, now: number): string {
   if (seconds < 60) return `${seconds}s ago`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
-  return `${Math.floor(minutes / 60)}h ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }
 
 export default function RiderLiveMapPage() {
   const { setHideMobileDock } = useMobileDockVisibility();
   const [ridersById, setRidersById] = useState<Map<string, RiderPosition>>(
-    () => new Map(),
+    () => new Map()
   );
   const [riderNames, setRiderNames] = useState<Record<string, string>>({});
   const [now, setNow] = useState(() => Date.now());
@@ -70,59 +72,81 @@ export default function RiderLiveMapPage() {
     return () => setHideMobileDock(false);
   }, [setHideMobileDock]);
 
+  // အချိန်အတိအကျ ပုံမှန် Update လုပ်ရန်
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
 
+  // ၁။ Page စဖွင့်ဖွင့်ချင်း Database (`riders` table) မှ ရိုင်ဒါများ၏ Last Known Location ကို ဆွဲယူခြင်း
   useEffect(() => {
     let cancelled = false;
 
-    const loadRiderNames = async () => {
+    const fetchInitialRiders = async () => {
       try {
+        const { data, error } = await supabase
+          .from("riders")
+          .select("id, name, last_latitude, last_longitude, last_seen_at");
+
+        if (error) {
+          console.error("Failed to load initial riders from DB:", error);
+          return;
+        }
+
+        if (cancelled || !data) return;
+
         const names: Record<string, string> = {};
-        const limit = 1000;
-        let page = 1;
-        let total = 0;
-        let loadedCount = 0;
+        const initialMap = new Map<string, RiderPosition>();
 
-        do {
-          const result = await getRiders({
-            select: "id,name",
-            limit,
-            page,
-          });
-
-          if (result.data.length === 0) break;
-          loadedCount += result.data.length;
-
-          for (const rider of result.data) {
-            if (
-              (typeof rider.id === "string" || typeof rider.id === "number") &&
-              typeof rider.name === "string" &&
-              rider.name.trim()
-            ) {
-              names[String(rider.id)] = rider.name.trim();
-            }
+        for (const rider of data) {
+          const riderId = String(rider.id);
+          if (rider.name?.trim()) {
+            names[riderId] = rider.name.trim();
           }
 
-          total = result.total;
-          page += 1;
-          if (cancelled) return;
-        } while (loadedCount < total);
+          // Database ထဲတွင် Last Location ရှိပါက Initial Position အဖြစ် ထည့်သွင်းမည်
+          if (
+            typeof rider.last_latitude === "number" &&
+            typeof rider.last_longitude === "number" &&
+            rider.last_seen_at
+          ) {
+            const timestamp = new Date(rider.last_seen_at).getTime();
+            if (!isNaN(timestamp)) {
+              initialMap.set(riderId, {
+                rider_id: riderId,
+                latitude: rider.last_latitude,
+                longitude: rider.last_longitude,
+                timestamp,
+              });
+            }
+          }
+        }
 
         setRiderNames(names);
-      } catch (error) {
-        console.error("Failed to load rider names:", error);
+        setRidersById((current) => {
+          // Realtime ရရှိပြီးသား Data ရှိပါက မဖျက်ဘဲ အသစ်ဆုံး တည်နေရာကို ဦးစားပေးမည်
+          const merged = new Map(initialMap);
+          current.forEach((val, key) => {
+            const existing = merged.get(key);
+            if (!existing || val.timestamp > existing.timestamp) {
+              merged.set(key, val);
+            }
+          });
+          return merged;
+        });
+      } catch (err) {
+        console.error("Error fetching initial riders:", err);
       }
     };
 
-    void loadRiderNames();
+    void fetchInitialRiders();
+
     return () => {
       cancelled = true;
     };
   }, []);
 
+  // ၂။ Supabase Realtime Broadcast ကို နားထောင်၍ တိုက်ရိုက် တည်နေရာ Update လုပ်ခြင်း
   useEffect(() => {
     const channel = supabase
       .channel("online-riders-stream")
@@ -168,15 +192,21 @@ export default function RiderLiveMapPage() {
       ),
     [ridersById]
   );
+
+  // Active ဖြစ်နေသော (60s အတွင်း Broadcast ရောက်ထားသော) ရိုင်ဒါများ
   const activeRiders = useMemo(
     () =>
-      allRiders.filter((rider) => now - rider.timestamp <= RIDER_TIMEOUT_MS),
+      allRiders.filter(
+        (rider) => now - rider.timestamp <= RIDER_ACTIVE_TIMEOUT_MS
+      ),
     [allRiders, now]
   );
+
   const activeRiderIds = useMemo(
     () => new Set(activeRiders.map(({ rider_id }) => rider_id)),
     [activeRiders]
   );
+
   const selectedRiderPosition = selectedRiderId
     ? ridersById.get(selectedRiderId)
     : undefined;
@@ -191,7 +221,7 @@ export default function RiderLiveMapPage() {
       {/* Fullscreen Live Rider Map */}
       <div className="absolute inset-0 z-0 h-full w-full">
         <LiveRiderMap
-          riders={activeRiders}
+          riders={allRiders} // Map ပေါ်တွင် Last Known Location ရှိသော ရိုင်ဒါအားလုံးကို ပြသပေးမည်
           riderNames={riderNames}
           selectedRiderId={selectedRiderId}
           selectedRiderPosition={selectedRiderPosition}
@@ -210,7 +240,11 @@ export default function RiderLiveMapPage() {
         }`}
       >
         {/* Floating Header */}
-        <div className={`flex items-center justify-between ${isMinimized ? "" : "border-b border-slate-100 p-3"}`}>
+        <div
+          className={`flex items-center justify-between ${
+            isMinimized ? "" : "border-b border-slate-100 p-3"
+          }`}
+        >
           {!isMinimized && (
             <div className="flex items-center gap-2">
               <span
@@ -218,12 +252,12 @@ export default function RiderLiveMapPage() {
                   connection === "connected"
                     ? "bg-emerald-500"
                     : connection === "connecting"
-                      ? "animate-pulse bg-amber-500"
-                      : "bg-rose-500"
+                    ? "animate-pulse bg-amber-500"
+                    : "bg-rose-500"
                 }`}
               />
               <span className="text-xs font-bold text-slate-800">
-                Riders ({activeRiders.length})
+                Online ({activeRiders.length} / {allRiders.length})
               </span>
             </div>
           )}
@@ -235,12 +269,32 @@ export default function RiderLiveMapPage() {
             title={isMinimized ? "Expand Rider List" : "Minimize"}
           >
             {isMinimized ? (
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M13 5l7 7-7 7M5 5l7 7-7 7"
+                />
               </svg>
             ) : (
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
+                />
               </svg>
             )}
           </button>
@@ -251,7 +305,7 @@ export default function RiderLiveMapPage() {
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {allRiders.length === 0 ? (
               <div className="py-6 text-center text-xs text-slate-400">
-                No riders online
+                No riders found
               </div>
             ) : (
               <ul className="space-y-1">
@@ -296,7 +350,9 @@ export default function RiderLiveMapPage() {
                             {riderNames[rider.rider_id] ?? rider.rider_id}
                           </span>
                           <span className="block truncate text-[10px] text-slate-400">
-                            {timeAgo(rider.timestamp, now)}
+                            {isActive
+                              ? `Active • ${timeAgo(rider.timestamp, now)}`
+                              : `Last seen ${timeAgo(rider.timestamp, now)}`}
                           </span>
                         </span>
                       </button>
