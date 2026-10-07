@@ -230,7 +230,7 @@ useEffect(() => {
   }
 
   const handleStatusChange = (status: string) => {
-    const isDateRelevant = ['On Way', 'Delivered', 'Handover', 'Returned'].includes(status)
+    const isDateRelevant = ['On Way', 'On Hold', 'Delivered', 'Handover', 'Returned'].includes(status)
     const nextDeliverDate = isDateRelevant
       ? formData.deliver_date || today
       : ''
@@ -301,8 +301,8 @@ useEffect(() => {
       return
     }
 
-    if ((formData.status === 'On Way' || formData.status === 'Delivered') && !formData.deliver_date) {
-      alert("On Way နဲ့ Delivered အခြေအနေများအတွက် delivery date ထည့်ရေးရန်လိုပါသည်။")
+    if ((formData.status === 'On Way' || formData.status === 'On Hold' || formData.status === 'Delivered') && !formData.deliver_date) {
+      alert("On Way, On Hold နဲ့ Delivered အခြေအနေများအတွက် delivery date ထည့်ရေးရန်လိုပါသည်။")
       return
     }
 
@@ -316,7 +316,7 @@ useEffect(() => {
         cleared_date: formData.cleared_date || null,
       }
 
-      if (formData.status === 'On Way' || formData.status === 'Delivered') {
+      if (formData.status === 'On Way' || formData.status === 'On Hold' || formData.status === 'Delivered') {
         baseOrder.deliver_date = formData.deliver_date || null
       } else {
         delete baseOrder.deliver_date
@@ -715,7 +715,8 @@ useEffect(() => {
                   <select value={formData.status} onChange={e => handleStatusChange(e.target.value)} className={winSelect}>
                      <option value="At Office">📦 At Office</option>
                       <option value="On Way">🚵 On Way</option>
-                      <option value="Delivered">✅ Delivered</option>
+                     <option value="On Hold">⏸️ On Hold</option>
+                     <option value="Delivered">✅ Delivered</option>
                       <option value="Handover">🤝 Handover</option>
                       <option value="In-Transit">🚚 In-Transit</option>
                       <option value="Via-Agent">🚐 Via-Agent</option>
@@ -728,8 +729,8 @@ useEffect(() => {
                     type="date"
                     value={formData.deliver_date}
                     onChange={e => setFormData({...formData, deliver_date: e.target.value})}
-                    className={`${winInput} font-mono ${!['On Way', 'Delivered', 'Handover', 'Returned'].includes(formData.status) ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                    disabled={!['On Way', 'Delivered', 'Handover', 'Returned'].includes(formData.status)}
+                    className={`${winInput} font-mono ${!['On Way', 'On Hold', 'Delivered', 'Handover', 'Returned'].includes(formData.status) ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    disabled={!['On Way', 'On Hold', 'Delivered', 'Handover', 'Returned'].includes(formData.status)}
                   />
                 </div>
               </div>

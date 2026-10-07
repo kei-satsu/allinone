@@ -103,7 +103,7 @@ export default function BulkUpdatePage() {
     .from('orders')
     .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
     .or(`branch.eq.${branch},transit.cs.[{"transit_to":"${branch}"}]`) // 👈 branch parameter အမှန်အတိုင်း သုံးထားသည်
-    .in('status', ['At Office', 'Pending', 'In-Transit', 'Via-Agent', 'On Way'])
+    .in('status', ['At Office', 'Pending', 'In-Transit', 'Via-Agent', 'On Way', 'On Hold'])
     .order('created_at', { ascending: false })
     .limit(40)
 
@@ -476,7 +476,7 @@ const resolveBulkStatus = (selectedStatus: string, selectedCityId: string) => {
             </span>
             <div>
               <h1 className="text-base font-semibold text-gray-900 tracking-wide uppercase">📦 Bulk Status Update Control</h1>
-              <p className="text-[11px] text-gray-500 font-medium">ပါဆယ်အများကြီးကို တစ်ပြိုင်တည်း Rider သတ်မှတ်ခြင်းနှင့် On Way / Delivered ပြောင်းလဲခြင်း</p>
+              <p className="text-[11px] text-gray-500 font-medium">ပါဆယ်အများကြီးကို တစ်ပြိုင်တည်း Rider သတ်မှတ်ခြင်းနှင့် Status ပြောင်းလဲခြင်း</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -572,6 +572,7 @@ const resolveBulkStatus = (selectedStatus: string, selectedCityId: string) => {
                 }} className={winSelect}>
                   <option value="At Office">📍 At Office</option>
                   <option value="On Way">🚵 On Way</option>
+                  <option value="On Hold">⏸️ On Hold</option>
                   <option value="Delivered">✅ Delivered</option>
                   <option value="Handover">🤝 Handover</option>
                   <option value="In-Transit">🚚 In-Transit</option>
@@ -696,7 +697,7 @@ const resolveBulkStatus = (selectedStatus: string, selectedCityId: string) => {
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wide ${
                             o.status === 'At Office' ? 'bg-slate-100 text-slate-700 border border-slate-200' :
                             o.status === 'Pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                            o.status === 'On Way' ? 'bg-sky-50 text-sky-700 border border-sky-200' :
+                            o.status === 'On Way' || o.status === 'On Hold' ? 'bg-sky-50 text-sky-700 border border-sky-200' :
                             o.status === 'In-Transit' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
                             o.status === 'Via-Agent' ? 'bg-violet-50 text-violet-700 border border-violet-200' :
                             o.status === 'Delivered' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :

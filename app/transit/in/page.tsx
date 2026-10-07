@@ -595,6 +595,7 @@ const filteredOrders = orders.filter(o => {
           <option value="">All Status</option>
           <option value="At Office">At Office</option>
           <option value="On Way">On Way</option>
+          <option value="On Hold">On Hold</option>
           <option value="Delivered">Delivered</option>
           <option value="In-Transit">In-Transit</option>
         </select>

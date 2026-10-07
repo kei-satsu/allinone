@@ -620,6 +620,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                   <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className={winSelect}>
                       <option value="At Office">📦 At Office</option>
                       <option value="On Way">🚵 On Way</option>
+                      <option value="On Hold">⏸️ On Hold</option>
                       <option value="Delivered">✅ Delivered</option>
                       <option value="Handover">🤝 Handover</option>
                       <option value="In-Transit">🚚 In-Transit</option>

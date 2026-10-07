@@ -80,7 +80,7 @@ export default function BulkUpdatePage() {
       .from('orders')
       .select(`*, pickup_rider:riders!orders_pickup_rider_id_fkey(name), deliver_rider:riders!orders_deliver_rider_id_fkey(name)`)
       .or(`branch.eq.${branch},transit_to.eq.${branch}`)
-      .in('status', ['At Office', 'Pending', 'In-Transit','On Way'])
+      .in('status', ['At Office', 'Pending', 'In-Transit', 'On Way', 'On Hold'])
       .order('created_at', { ascending: false })
       .limit(40)
 
@@ -490,6 +490,7 @@ export default function BulkUpdatePage() {
         }} className={winSelect}>
           <option value="At Office">📦 At Office</option>
           <option value="On Way">🚵 On Way</option>
+          <option value="On Hold">⏸️ On Hold</option>
           <option value="Delivered">✅ Delivered</option>
           <option value="In-Transit">🚚 In-Transit</option>
         </select>

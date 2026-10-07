@@ -566,7 +566,7 @@ if (key === 'sender_loc' || key === 'receiver_loc') {
         <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wide ${
           normalizedStatus === 'Delivered' ? 'bg-green-50 text-green-700 border border-green-200' : 
           normalizedStatus === 'Pending' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 
-          normalizedStatus === 'On Way' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-gray-100 text-gray-600 border border-gray-200'
+          normalizedStatus === 'On Way' || normalizedStatus === 'On Hold' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-gray-100 text-gray-600 border border-gray-200'
         }`}>{normalizedStatus}</span>
       )
     }
@@ -848,6 +848,7 @@ if (key === 'agent_fee') {
                 <option value="">All Status</option>
                 <option value="At Office">At Office</option>
                 <option value="On Way">On Way</option>
+                <option value="On Hold">On Hold</option>
                 <option value="Delivered">Delivered</option>
                 <option value="In-Transit">In-Transit</option>
               </select>
@@ -1221,6 +1222,7 @@ const rows = allCities.map(city => {
                           <option value="">All Status</option>
                           <option value="At Office">At Office</option>
                           <option value="On Way">On Way</option>
+                          <option value="On Hold">On Hold</option>
                           <option value="Delivered">Delivered</option>
                           <option value="In-Transit">In-Transit</option>
                         </select>

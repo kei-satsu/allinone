@@ -581,7 +581,7 @@ export default function DailyReport() {
               ? "bg-green-50 text-green-700 border border-green-200"
               : o.status === "Settled"
                 ? "bg-blue-50 text-blue-700 border border-blue-200"
-                : o.status === "On Way"
+                : o.status === "On Way" || o.status === "On Hold"
                   ? "bg-amber-50 text-amber-700 border border-amber-200"
                   : "bg-gray-50 text-gray-700 border border-gray-200"
           }`}
@@ -1283,6 +1283,7 @@ export default function DailyReport() {
                 <option value="">All Status</option>
                 <option value="At Office">At Office</option>
                 <option value="On Way">On Way</option>
+                <option value="On Hold">On Hold</option>
                 <option value="Delivered">Delivered</option>
                 <option value="In-Transit">In-Transit</option>
                 <option value="Settled">Settled</option>
@@ -2037,6 +2038,7 @@ export default function DailyReport() {
                           <option value="">All Status</option>
                           <option value="At Office">At Office</option>
                           <option value="On Way">On Way</option>
+                          <option value="On Hold">On Hold</option>
                           <option value="Delivered">Delivered</option>
                           <option value="In-Transit">In-Transit</option>
                           <option value="Settled">Settled</option>

@@ -117,6 +117,7 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
       case 'Pending':
         return 'bg-amber-50 text-amber-700 border border-amber-200';
       case 'On Way':
+      case 'On Hold':
         return 'bg-sky-50 text-sky-700 border border-sky-200';
       case 'In-Transit':
         return 'bg-indigo-50 text-indigo-700 border border-indigo-200';

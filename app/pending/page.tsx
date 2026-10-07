@@ -588,7 +588,7 @@ setOcrWords([]);
   }
 
   const handleStatusChange = (status: string) => {
-    const isDateRelevant = ['On Way', 'Delivered', 'Handover', 'Returned'].includes(status)
+    const isDateRelevant = ['On Way', 'On Hold', 'Delivered', 'Handover', 'Returned'].includes(status)
     const nextDeliverDate = isDateRelevant
       ? formData.deliver_date || today
       : ''
@@ -681,7 +681,7 @@ const logNote = [
     cleared_date: formData.cleared_date || null,
   }
 
-    if (formData.status === 'On Way' || formData.status === 'Delivered') {
+    if (formData.status === 'On Way' || formData.status === 'On Hold' || formData.status === 'Delivered') {
       baseOrderPayload.deliver_date = formData.deliver_date || null
     } else {
       delete baseOrderPayload.deliver_date
@@ -1362,7 +1362,6 @@ if (updatedPending.length > 0) {
     onChange={e => setFormData({...formData, receiver_loc: e.target.value})} 
     className={winSelect}  
     disabled={!selectedItem} 
-    onFocus={handleSelectFocus}
   >
     <option value="">-- Select City --</option>
     {cities.map((city) => (
@@ -1438,6 +1437,7 @@ if (updatedPending.length > 0) {
             <select value={formData.status} onChange={e => handleStatusChange(e.target.value)} className={winSelect} disabled={!selectedItem} onFocus={handleSelectFocus}>
               <option value="At Office">📦 At Office</option>
               <option value="On Way">🚵 On Way</option>
+              <option value="On Hold">⏸️ On Hold</option>
               <option value="Delivered">✅ Delivered</option>
               <option value="Handover">🤝 Handover</option>
               <option value="In-Transit">🚚 In-Transit</option>
@@ -1450,8 +1450,8 @@ if (updatedPending.length > 0) {
               type="date"
               value={formData.deliver_date}
               onChange={e => setFormData({...formData, deliver_date: e.target.value})}
-              className={`${winInput} font-mono ${!['On Way', 'Delivered', 'Handover', 'Returned'].includes(formData.status) ? 'bg-gray-50 text-gray-400 cursor-not-allowed border-gray-200' : ''}`}
-              disabled={!selectedItem || !['On Way', 'Delivered', 'Handover', 'Returned'].includes(formData.status)}
+              className={`${winInput} font-mono ${!['On Way', 'On Hold', 'Delivered', 'Handover', 'Returned'].includes(formData.status) ? 'bg-gray-50 text-gray-400 cursor-not-allowed border-gray-200' : ''}`}
+              disabled={!selectedItem || !['On Way', 'On Hold', 'Delivered', 'Handover', 'Returned'].includes(formData.status)}
             />
           </div>
         </div>

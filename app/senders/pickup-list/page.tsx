@@ -836,6 +836,7 @@ useEffect(() => {
           options={[
             { label: 'At Office', value: 'At Office' },
             { label: 'On Way', value: 'On Way' },
+            { label: 'On Hold', value: 'On Hold' },
             { label: 'Delivered', value: 'Delivered' },
             { label: 'In-Transit', value: 'In-Transit' },
           ]}
