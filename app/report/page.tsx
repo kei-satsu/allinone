@@ -1686,7 +1686,7 @@ export default function DailyReport() {
                   <>
                     <div className="flex w-full flex-col rounded border border-blue-200 bg-white mx-1 mb-1 z-10 shadow-inner sm:flex-1 sm:min-h-0">
                       {/* 🟢 အပေါ်ဘက်ခြမ်း: Table Area */}
-                      <div className="overflow-x-auto overscroll-contain touch-pan-x custom-scrollbar sm:flex-1 sm:min-h-0 sm:overflow-visible">
+                      <div className="overflow-x-auto overscroll-contain touch-pan-x custom-scrollbar sm:flex-1 sm:min-h-0 sm:overflow-y-auto">
                         <table className="min-w-[640px] sm:min-w-0 w-full text-left text-[11px] sm:text-[10px] whitespace-nowrap table-fixed">
                           <thead className="bg-blue-50/50 text-gray-600 font-bold uppercase text-[9px] sm:text-[8px] tracking-wider border-b border-blue-100 sticky top-0 z-10">
                             <tr>
