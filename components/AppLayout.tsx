@@ -433,7 +433,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => { setMounted(true) }, [])
 
   const isAdmin = realBranch === "ADMIN" || userRole === "admin"
-  const isCustomerService = userRole === "customer_service"
+  const isRestrictedRole = userRole === "customer_service" || userRole === "rider"
 
   // Title Update
   useEffect(() => {
@@ -476,10 +476,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [isReady, pathname, isAdmin, router])
 
   useEffect(() => {
-    if (isReady && isCustomerService && pathname !== "/customer-service") {
+    if (isReady && isRestrictedRole && pathname !== "/customer-service") {
       router.replace("/customer-service")
     }
-  }, [isReady, isCustomerService, pathname, router])
+  }, [isReady, isRestrictedRole, pathname, router])
 
   // Keybindings
   useEffect(() => {
@@ -508,7 +508,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (!mounted || !isReady) return <div className="w-full h-screen bg-[#f3f3f3]" />
   if (isPublicPage) return <div className="w-full min-h-screen">{children}</div>
   if (!isAuthenticated) return <div className="w-full min-h-screen bg-[#f3f3f3]" />
-  if (isCustomerService) return <div className="w-full min-h-screen">{children}</div>
+  if (isRestrictedRole) return <div className="w-full min-h-screen">{children}</div>
 
   if (!isAdmin && (pathname === "/trash" || pathname.startsWith("/admin"))) {
     return <div className="w-full h-screen bg-[#f3f3f3]" />

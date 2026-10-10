@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase"
 export default function CustomerServicePage() {
   const router = useRouter()
   const [isChecking, setIsChecking] = useState(true)
+  const [isRider, setIsRider] = useState(false)
 
   useEffect(() => {
     const verifyRole = async () => {
@@ -16,11 +17,13 @@ export default function CustomerServicePage() {
         return
       }
 
-      if (session.user.app_metadata?.role !== "customer_service") {
+      const role = session.user.app_metadata?.role
+      if (role !== "customer_service" && role !== "rider") {
         router.replace("/")
         return
       }
 
+      setIsRider(role === "rider")
       setIsChecking(false)
     }
 
@@ -45,10 +48,16 @@ export default function CustomerServicePage() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 9.75h7.5m-7.5 3h4.5m-9 6.75h13.5A2.25 2.25 0 0019.5 17.25V6.75A2.25 2.25 0 0017.25 4.5H6.75A2.25 2.25 0 004.5 6.75v10.5a2.25 2.25 0 002.25 2.25z" />
           </svg>
         </div>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.24em] text-orange-300">Customer Service Access</p>
-        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">AIO In-take app တွင်သာ အသုံးပြုပါ</h1>
+        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.24em] text-orange-300">
+          {isRider ? "Rider Access" : "Customer Service Access"}
+        </p>
+        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+          {isRider ? "သက်ဆိုင်ရာ Rider app တွင်သာ အသုံးပြုပါ" : "AIO In-take app တွင်သာ အသုံးပြုပါ"}
+        </h1>
         <p className="mx-auto mt-5 max-w-md text-sm leading-7 text-slate-300">
-          သင့်အကောင့်သည် Customer Service role ဖြစ်သောကြောင့် AIO In-take app အတွင်းတွင်သာ Login ဝင်ပြီး အသုံးပြုနိုင်ပါသည်။
+          {isRider
+            ? "သင့်အကောင့်သည် Rider role ဖြစ်သောကြောင့် ဒီ app တွင် အသုံးပြု၍မရပါ။ သက်ဆိုင်ရာ Rider app ကို အသုံးပြုပါ။"
+            : "သင့်အကောင့်သည် Customer Service role ဖြစ်သောကြောင့် AIO In-take app အတွင်းတွင်သာ Login ဝင်ပြီး အသုံးပြုနိုင်ပါသည်။"}
         </p>
         <button
           type="button"

@@ -8,6 +8,12 @@ import { supabase } from "@/lib/supabase"
 // ── 🖼️ Replace this path with your own background image ──
 const BACKGROUND_IMAGE = "/loginbackground.png"
 
+function getPostLoginPath(role?: string) {
+  return role === "customer_service" || role === "rider"
+    ? "/customer-service"
+    : "/"
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -29,9 +35,7 @@ export default function LoginPage() {
           const activeUser = session.user
           const assignedBranch = activeUser?.user_metadata?.branch || "MDY"
           localStorage.setItem("user_branch", assignedBranch)
-          window.location.href = activeUser.app_metadata?.role === "customer_service"
-            ? "/customer-service"
-            : "/"
+          window.location.href = getPostLoginPath(activeUser.app_metadata?.role)
           return
         }
       } catch (err) {
@@ -79,9 +83,7 @@ export default function LoginPage() {
       if (loggedInUser) {
         const assignedBranch = loggedInUser.user_metadata?.branch || "MDY"
         localStorage.setItem("user_branch", assignedBranch)
-        window.location.href = loggedInUser.app_metadata?.role === "customer_service"
-          ? "/customer-service"
-          : "/"
+        window.location.href = getPostLoginPath(loggedInUser.app_metadata?.role)
       }
     } catch (err) {
       setError("Connection error. Please try again later.")
