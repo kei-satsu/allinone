@@ -282,26 +282,27 @@ export default function PickupsPage() {
   };
 
   const fetchRiders = async () => {
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    try {
+      const storedBranch =
+        typeof window !== "undefined" ? localStorage.getItem("user_branch") : null;
 
-    if (sessionError || !session) {
-      setRiders([]);
-      return;
+      let query = supabase.from("riders").select("*").order("name");
+
+      if (storedBranch) {
+        query = query.eq("branch", storedBranch);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error("Error fetching riders:", error.message);
+        return;
+      }
+
+      if (data) setRiders(data);
+    } catch (err) {
+      console.error("Unexpected error fetching riders:", err);
     }
-
-    const branch = session.user.user_metadata?.branch || "MDY";
-    const { data, error } = await supabase
-      .from("riders")
-      .select("*")
-      .eq("branch", branch)
-      .order("name");
-
-    if (error) {
-      setRiders([]);
-      return;
-    }
-
-    setRiders(data || []);
   };
 
   // Helper to ensure dummy manual sender ID exists in database
