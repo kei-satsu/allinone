@@ -713,6 +713,7 @@ export default function DailyReport() {
     .filter(
       (o) =>
         o.deliver_date === selectedDate &&
+        (o.status === "Delivered" || o.status === "Settled") &&
         (o.fee_type === "Cash" || o.fee_type === "Kpay") &&
         o.sender_loc === oppositeCity &&
         o.receiver_loc === userBranch,
