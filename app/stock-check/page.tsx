@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import BarcodeScannerModal from '@/components/BarcodeScannerModal'
+import EditOrderModal from '@/components/EditOrderModal'
 import OrderTable, { type ColumnDef } from '@/components/OrderTable'
 import { useOrderSelection } from '@/hooks/useOrderSelection'
 import { apiClient } from '@/lib/databaseApi'
@@ -32,6 +33,7 @@ type StockStatus = 'All' | 'At Office' | 'On Way' | 'Arrived' | 'Checked'
 type StockColumnFilters = Record<string, string | string[]>
 type QueryResult = { data: StockOrder[] | StockOrder | null; error: Error | null }
 type QueryFactory = (from: number, to: number) => PromiseLike<QueryResult>
+type OrderContextMenu = { x: number; y: number; order: StockOrder }
 
 const COLUMN_DEFS: ColumnDef[] = [
   { key: 'item_id', label: 'Item ID', defaultVisible: true },
@@ -149,6 +151,8 @@ export default function StockCheckPage() {
   const [previewImage, setPreviewImage] = useState<string | null>(null)
   const [isScannerOpen, setIsScannerOpen] = useState(false)
   const [scanMessage, setScanMessage] = useState('')
+  const [contextMenu, setContextMenu] = useState<OrderContextMenu | null>(null)
+  const [editingOrder, setEditingOrder] = useState<StockOrder | null>(null)
   const [checkingOrderIds, setCheckingOrderIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
@@ -272,6 +276,17 @@ export default function StockCheckPage() {
       : `${scannedCode} ကို ဒီ branch ရဲ့ Stock Check စာရင်းမှာ မတွေ့ပါ။`)
   }
 
+  const handleOrderContextMenu = (event: MouseEvent, order: StockOrder) => {
+    event.preventDefault()
+    const menuWidth = 176
+    const menuHeight = 56
+    setContextMenu({
+      x: Math.max(8, Math.min(event.clientX, window.innerWidth - menuWidth - 8)),
+      y: Math.max(8, Math.min(event.clientY, window.innerHeight - menuHeight - 8)),
+      order,
+    })
+  }
+
   const handleRefresh = () => {
     setLoading(true)
     setRefreshKey((current) => current + 1)
@@ -310,7 +325,8 @@ export default function StockCheckPage() {
             <label className="relative hidden min-w-0 flex-1 sm:block sm:w-72 sm:flex-none">
               <span className="sr-only">Search orders</span>
               <svg aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path strokeLinecap="round" d="m20 20-4-4" /></svg>
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ID, barcode..." className="h-10 w-full rounded-sm border border-slate-300 bg-white pl-9 pr-3 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100" />
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ID, barcode..." className="h-10 w-full rounded-sm border border-slate-300 bg-white pl-9 pr-9 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100" />
+              {search && <button type="button" onClick={() => { setSearch(''); setScanMessage('') }} aria-label="Clear search filter" title="Clear search filter" className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700"><svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" d="m6 6 12 12M18 6 6 18" /></svg></button>}
             </label>
             <button type="button" onClick={() => setIsScannerOpen(true)} aria-label="Scan barcode" title="Scan barcode" className="flex h-10 w-10 shrink-0 items-center justify-center gap-2 border border-orange-700 bg-orange-600 px-2 text-sm font-semibold text-white transition hover:bg-orange-700 sm:w-auto sm:px-3">
               <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" d="M4 7V5a1 1 0 011-1h2M17 4h2a1 1 0 011 1v2M20 17v2a1 1 0 01-1 1h-2M7 20H5a1 1 0 01-1-1v-2M7 9v6m3-6v6m3-6v6m3-6v6" /></svg>
@@ -347,9 +363,12 @@ export default function StockCheckPage() {
           </div>
         </details>
 
-        {scanMessage && <div aria-live="polite" className="mb-2 flex shrink-0 items-center justify-between gap-3 px-2 text-xs text-slate-600 sm:mb-3 sm:text-sm">
-          <span className="min-w-0 truncate">{scanMessage}</span>
-          <button type="button" onClick={() => setScanMessage('')} aria-label="Dismiss scan message" className="flex h-8 w-8 shrink-0 items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700"><svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" d="m6 6 12 12M18 6 6 18" /></svg></button>
+        {(scanMessage || search) && <div aria-live="polite" className="mb-2 flex shrink-0 items-center justify-between gap-3 px-2 text-xs text-slate-600 sm:mb-3 sm:text-sm">
+          <span className="min-w-0 truncate">{scanMessage || `Search filter: ${search}`}</span>
+          <div className="flex shrink-0 items-center gap-1">
+            {search && <button type="button" onClick={() => { setSearch(''); setScanMessage('') }} className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-orange-700 hover:bg-orange-50">Filter ဖြုတ်ရန်</button>}
+            <button type="button" onClick={() => setScanMessage('')} aria-label="Dismiss scan message" className="flex h-8 w-8 shrink-0 items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700"><svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" d="m6 6 12 12M18 6 6 18" /></svg></button>
+          </div>
         </div>}
 
         {errorMessage && (
@@ -380,7 +399,7 @@ export default function StockCheckPage() {
           onRowMouseEnter={selection.handleRowMouseEnter}
           onStopDragging={() => selection.setIsDraggingSelection(false)}
           onRowClick={() => {}}
-          onRowContextMenu={() => {}}
+          onRowContextMenu={handleOrderContextMenu}
           onPreviewImage={(url) => setPreviewImage(url)}
           onCheckOrder={handleCheckOrder}
           isOrderChecked={hasBeenCheckedToday}
@@ -400,6 +419,32 @@ export default function StockCheckPage() {
       )}
 
       <BarcodeScannerModal isOpen={isScannerOpen} onClose={() => setIsScannerOpen(false)} onScanSuccess={handleScan} />
+
+      {contextMenu && (
+        <>
+          <button type="button" aria-label="Close order actions" className="fixed inset-0 z-[90] cursor-default" onClick={() => setContextMenu(null)} />
+          <div className="fixed z-[91] min-w-44 border border-slate-200 bg-white py-1 shadow-xl" style={{ left: contextMenu.x, top: contextMenu.y }}>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingOrder(contextMenu.order)
+                setContextMenu(null)
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-orange-50 hover:text-orange-700"
+            >
+              <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 2.651 2.651M8 16l8.5-8.5a2.121 2.121 0 0 1 3 3L11 19l-4 1 1-4Z" /></svg>
+              Edit Order
+            </button>
+          </div>
+        </>
+      )}
+
+      <EditOrderModal
+        isOpen={editingOrder !== null}
+        onClose={() => setEditingOrder(null)}
+        orderData={editingOrder}
+        onSaveSuccess={handleRefresh}
+      />
     </div>
   )
 }
