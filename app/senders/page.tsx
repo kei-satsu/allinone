@@ -803,7 +803,7 @@ export default function SendersDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 p-3 sm:p-4 font-sans w-full">
+    <div className="min-h-screen bg-[#f3f3f3] p-3 sm:p-4 font-sans w-full">
       <div className="w-full max-w-[1800px] mx-auto space-y-3">
         {/* ─── COMPACT TOP BAR ─── */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-sm">

@@ -841,34 +841,41 @@ if (updatedPending.length > 0) {
   const labelStyle = "block text-gray-600 font-semibold mb-1 uppercase text-xs tracking-wide"
 
   return (
-    <div className="w-full min-h-screen bg-[#f3f3f3] text-sm text-gray-800 antialiased font-[system-ui,-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif] flex flex-col h-screen select-none">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#f3f3f3] text-sm text-gray-800 antialiased font-[system-ui,-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif] select-none">
       
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between flex-shrink-0 z-10">
+      <header className="relative z-10 flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 shadow-sm sm:px-5">
         <div className="flex items-center gap-4">
-          <h1 className="text-base font-semibold text-gray-900 uppercase tracking-wide">Pending Data Entry</h1>
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="hidden h-9 w-1 rounded-full bg-gradient-to-b from-orange-500 to-amber-400 sm:block" />
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-orange-600">Order Processing</p>
+              <h1 className="truncate text-sm font-bold uppercase tracking-wide text-slate-900 sm:text-base">Pending Data Entry</h1>
+            </div>
+          </div>
           <button
             onClick={handleUndo}
             disabled={processedStack.length === 0}
-            className="text-xs font-medium text-gray-500 hover:text-orange-600 disabled:opacity-30 disabled:cursor-not-allowed transition flex items-center gap-1"
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-500 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700 disabled:cursor-not-allowed disabled:opacity-30"
             title="Go back to last processed item"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 15l-3-3m0 0l3-3m-3 3h8M3 12a9 9 0 1118 0 9 9 0 01-18 0z" /></svg>
-            Undo
+            <span className="hidden sm:inline">Undo</span>
           </button>
         </div>
-        <div className="bg-orange-50 border border-orange-200 px-3 py-1 rounded-lg flex items-center gap-2">
-          <span className="text-xs font-bold text-orange-700 font-mono">{pendingItems.length} PENDING</span>
+        <div className="flex shrink-0 items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5">
+          <span className="h-2 w-2 rounded-full bg-orange-500" />
+          <span className="font-mono text-xs font-bold text-orange-800">{pendingItems.length} <span className="hidden sm:inline">PENDING</span></span>
         </div>
-      </div>
+      </header>
 
       {/* Main Split Layout */}
-      <div className="flex-1 overflow-hidden flex flex-col lg:flex-row relative">
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
         
         {/* Left panel: Image + thumbnail strip */}
         <div 
           style={{ width: isMobile ? '100%' : `${leftWidth}px` }}
-          className="w-full h-[45vh] lg:h-full lg:flex-shrink-0 border-b lg:border-b-0 lg:border-r border-gray-300 bg-gray-900 flex flex-col relative overflow-hidden"
+          className="relative flex h-[42vh] min-h-[240px] w-full shrink-0 flex-col overflow-hidden border-b border-slate-700 bg-slate-950 lg:h-full lg:min-h-0 lg:border-b-0 lg:border-r"
         >
           {selectedItem ? (
             <>
@@ -938,7 +945,7 @@ if (updatedPending.length > 0) {
               )}
 
               <div 
-                className="flex-1 flex items-center justify-center p-3 bg-black overflow-hidden relative group select-none"
+                className="relative flex min-h-0 flex-1 select-none items-center justify-center overflow-hidden bg-black p-3 group"
                 onWheel={handleWheel}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
@@ -1086,7 +1093,7 @@ if (updatedPending.length > 0) {
               {/* Bottom Strip Zone with Expand Grid Trigger */}
               <div 
   ref={thumbContainerRef}
-  className="h-20 bg-gray-950 border-t border-gray-800 p-1.5 flex gap-2 overflow-x-auto scrollbar-thin flex-shrink-0 items-center"
+  className="flex h-16 shrink-0 items-center gap-2 overflow-x-auto border-t border-gray-800 bg-gray-950 p-1.5 scrollbar-thin lg:h-20"
 >
                 
                 {/* ✨ Grid Trigger Icon Button */}
@@ -1156,8 +1163,8 @@ if (updatedPending.length > 0) {
         />
 
         {/* Right panel: Form */}
-<div className="flex-1 overflow-y-auto p-5 bg-gray-50/60 custom-scrollbar">
-  <form onSubmit={handleSubmit} className="w-full space-y-5">
+<div className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-slate-50/70 p-3 custom-scrollbar sm:p-5">
+  <form onSubmit={handleSubmit} className="mx-auto w-full max-w-[1600px] space-y-4 sm:space-y-5">
     
     {(selectedItem?.uploader_note || selectedBarcode) && (
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

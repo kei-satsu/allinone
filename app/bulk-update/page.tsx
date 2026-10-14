@@ -512,7 +512,7 @@ const resolveBulkStatus = (selectedStatus: string, selectedCityId: string) => {
               <button 
                 type="button"
                 onClick={() => setShowCamera(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium text-xs whitespace-nowrap transition-all shadow-md flex items-center gap-1.5"
+                className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md font-medium text-xs whitespace-nowrap transition-all shadow-md flex items-center gap-1.5"
               >
                 📷 Camera ဖြင့်ဖတ်မည်
               </button>
@@ -524,7 +524,7 @@ const resolveBulkStatus = (selectedStatus: string, selectedCityId: string) => {
             <button 
               type="button"
               onClick={() => setShowCamera(true)}
-              className="w-full py-4 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-all"
+              className="w-full py-4 bg-orange-600 hover:bg-orange-700 active:scale-[0.98] text-white rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-all"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />

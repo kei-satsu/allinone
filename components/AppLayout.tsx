@@ -164,6 +164,15 @@ const MENU_ITEMS: MenuItem[] = [
     ),
   },
   {
+    name: "Pickups",
+    path: "/pickups",
+    icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0-8 4m8-4v10l-8 4m0-10L4 7m8 10V11" />
+      </svg>
+    ),
+  },
+  {
     name: "Barcode Print",
     path: "/barcode-print",
     icon: (
@@ -350,12 +359,12 @@ function SidebarMenuItem({ item, isActive, collapsed, isMobile, onClick }: { ite
           }
         }}
         title={collapsed ? item.name : undefined}
-        className={`flex items-center rounded-3xl transition-all duration-200 group relative ${collapsed ? "justify-center p-3" : isMobile ? "px-4 py-3" : "px-3 py-2.5"} ${
-          isActive ? "bg-orange-50 text-orange-600 font-semibold shadow-[inset_0_0_0_1px_rgba(249,115,22,0.15)]" : "hover:bg-slate-100 text-slate-700 hover:text-slate-900"
+        className={`flex items-center rounded-xl transition-colors duration-200 group relative ${collapsed ? "justify-center p-2.5" : isMobile ? "px-4 py-2.5" : "px-3 py-2.5"} ${
+          isActive ? "bg-orange-50 text-orange-700 font-semibold" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
         }`}
       >
-        {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 bg-gradient-to-b from-orange-500 to-amber-500 rounded-r-full" />}
-        <span className={`flex-shrink-0 transition-colors ${isActive ? "text-orange-500" : "text-slate-500 group-hover:text-slate-700"}`}>{item.icon}</span>
+        {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-orange-500 rounded-r-full" />}
+        <span className={`flex-shrink-0 transition-colors ${isActive ? "text-orange-600" : "text-slate-400 group-hover:text-slate-700"}`}>{item.icon}</span>
         
         <span className={`ml-3 text-sm font-medium whitespace-nowrap transition-all duration-200 flex-1 flex items-center justify-between ${collapsed ? "w-0 opacity-0 overflow-hidden ml-0" : "w-auto opacity-100"}`}>
           <span>{item.name}</span>
@@ -368,7 +377,7 @@ function SidebarMenuItem({ item, isActive, collapsed, isMobile, onClick }: { ite
       </Link>
 
       {hasChildren && expanded && !collapsed && item.children && (
-        <div className={`flex flex-col gap-1 ${isMobile ? "pl-9 pr-2" : "pl-8 pr-1"} border-l border-slate-200 ml-5 mt-0.5 animate-in fade-in slide-in-from-top-1 duration-200`}>
+        <div className={`flex flex-col gap-1 ${isMobile ? "pl-9 pr-2" : "pl-8 pr-1"} border-l border-slate-200 ml-5 mt-1 animate-in fade-in slide-in-from-top-1 duration-200`}>
           {item.children.map((child) => {
             const isSubActive = pathname === child.path
             return (
@@ -378,8 +387,8 @@ function SidebarMenuItem({ item, isActive, collapsed, isMobile, onClick }: { ite
                 onClick={onClick}
                 className={`flex items-center gap-2.5 py-2 px-3 text-xs rounded-2xl transition-all ${
                   isSubActive 
-                    ? "text-orange-600 font-bold bg-orange-50/50 shadow-[inset_0_0_0_1px_rgba(249,115,22,0.08)]" 
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/60"
+                    ? "text-orange-700 font-semibold bg-orange-50"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                 }`}
               >
                 <span className="text-sm shrink-0">{child.icon}</span>
@@ -415,8 +424,7 @@ export function useMobileDockVisibility() {
 // Main Layout Component
 // ──────────────────────────────────────
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const [sidebarExpanded, setSidebarExpanded] = useState(false)
-  const [sidebarLocked, setSidebarLocked] = useState(false)
+  const [sidebarExpanded, setSidebarExpanded] = useState(true)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [hideMobileDock, setHideMobileDock] = useState(false)
   const pathname = usePathname()
@@ -453,13 +461,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("resize", check)
   }, [])
 
-  const handleMouseEnter = () => {
-    if (!isMobile && !sidebarLocked) setSidebarExpanded(true)
-  }
-  const handleMouseLeave = () => {
-    if (!isMobile && !sidebarLocked) setSidebarExpanded(false)
-  }
-
   useEffect(() => { setMobileSidebarOpen(false) }, [pathname])
 
   useEffect(() => {
@@ -489,21 +490,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         if (isMobile) {
           if (!isIntakePage) setMobileSidebarOpen(prev => !prev) 
         } else {
-          setSidebarLocked(prev => !prev)
-          if (!sidebarLocked) setSidebarExpanded(true)
+          setSidebarExpanded(prev => !prev)
         }
       }
       if (e.key === "Escape") {
         if (isMobile) setMobileSidebarOpen(false)
-        else {
-          setSidebarLocked(false)
-          setSidebarExpanded(false)
-        }
+        else setSidebarExpanded(false)
       }
     }
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [isMobile, sidebarLocked, isIntakePage])
+  }, [isMobile, isIntakePage])
 
   if (!mounted || !isReady) return <div className="w-full h-screen bg-[#f3f3f3]" />
   if (isPublicPage) return <div className="w-full min-h-screen">{children}</div>
@@ -514,7 +511,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return <div className="w-full h-screen bg-[#f3f3f3]" />
   }
 
-  const collapsed = !sidebarExpanded && !sidebarLocked
+  const collapsed = !sidebarExpanded
 
   return (
     <div className="w-full h-screen flex overflow-hidden bg-[#f3f3f3] font-sans antialiased">
@@ -533,30 +530,28 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {!isVocPage && (
         <aside
           ref={sidebarRef}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-          className={`flex flex-col bg-white/75 backdrop-blur-2xl border border-slate-200/40 shadow-[0_25px_50px_-12px_rgba(15,23,42,0.08)] z-50 transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] ${
+          className={`flex flex-col bg-white z-50 transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] ${
             isMobile
-              ? `fixed inset-x-0 bottom-0 ${mobileSidebarOpen ? "translate-y-0" : "translate-y-full"} w-full max-h-[82vh] rounded-t-[32px] border-t border-x border-slate-200/60 shadow-[0_-15px_40px_-15px_rgba(0,0,0,0.12)] overflow-hidden`
-              : `relative ${collapsed ? "w-[68px]" : "w-64"}`
+              ? `fixed inset-x-0 bottom-0 ${mobileSidebarOpen ? "translate-y-0" : "translate-y-full"} w-full max-h-[82vh] rounded-t-3xl border-t border-slate-200 shadow-[0_-12px_32px_-16px_rgba(15,23,42,0.2)] overflow-hidden`
+              : `relative my-3 ml-3 h-[calc(100%-1.5rem)] shrink-0 overflow-hidden rounded-2xl border border-slate-200 shadow-[0_8px_24px_-16px_rgba(15,23,42,0.18)] ${collapsed ? "w-[68px]" : "w-64"}`
           }`}
         >
           {isMobile && (
             <div className="flex justify-center pt-3 pb-1 shrink-0">
-              <div className="h-1.2 w-12 rounded-full bg-slate-300/60" />
+              <div className="h-1.5 w-12 rounded-full bg-slate-300" />
             </div>
           )}
 
           {/* Header */}
-          <div className={`flex flex-col border-b border-slate-100/70 flex-shrink-0 transition-all duration-300 ${
+          <div className={`flex flex-col border-b border-slate-100 flex-shrink-0 transition-all duration-300 ${
             collapsed && !isMobile ? "h-16 justify-center items-center px-2" : "min-h-[84px] justify-center px-5 py-4"
           }`}>
             <div className="flex items-center w-full justify-between">
               <div className="flex items-center gap-2.5">
                 <img
-                  src="/logo.png" 
+                  src="/logo.png"
                   alt="All In One Logo"
-                  className="w-7.5 h-7.5 object-contain rounded-xl shadow-sm"
+                  className="h-9 w-9 object-contain"
                 />
                 <div className={`flex flex-col transition-all duration-200 ${
                   collapsed && !isMobile ? "w-0 opacity-0 overflow-hidden" : "w-auto opacity-100"
@@ -578,19 +573,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      setSidebarLocked(!sidebarLocked)
-                      if (!sidebarLocked) setSidebarExpanded(true)
-                      else setSidebarExpanded(false)
+                      setSidebarExpanded(prev => !prev)
                     }}
-                    title={sidebarLocked ? "Unpin sidebar" : "Pin sidebar"}
-                    className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition-all ${
-                      sidebarLocked 
-                        ? "bg-orange-500 text-white shadow-sm shadow-orange-500/20" 
-                        : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-                    } ${collapsed ? "hidden" : ""}`}
+                    title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                    aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                    className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-slate-400 transition-all hover:bg-orange-100 hover:text-orange-700"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                      {collapsed
+                        ? <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        : <path strokeLinecap="round" strokeLinejoin="round" d="M15 5l-7 7 7 7" />}
                     </svg>
                   </button>
                 )}
@@ -609,38 +601,54 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* ⚙️ ADMIN BRANCH SWITCHER */}
-          {isAdmin && (!collapsed || isMobile) && (
-            <div className="px-4 pt-3 pb-2 border-b border-slate-100/50 flex flex-col gap-1.5 animate-in fade-in duration-200">
-              <span className="text-[10px] text-slate-400 font-bold tracking-wider uppercase px-1 flex items-center gap-1">
-                ⚙️ Admin View Node
-              </span>
-              <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100/80 rounded-2xl border border-slate-200/30 shadow-inner">
-                <button
-                  onClick={() => changeBranch("MDY")}
-                  className={`py-1.5 text-xs font-black rounded-xl transition-all duration-200 ${
-                    userBranch === "MDY"
-                      ? "bg-white text-orange-600 shadow-sm scale-[1.02]"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
+          {isAdmin && (
+            <div className={`border-b border-slate-100/50 animate-in fade-in duration-200 ${
+              collapsed && !isMobile
+                ? "flex justify-center px-2 py-3"
+                : "flex flex-col gap-1.5 px-4 pt-3 pb-2"
+            }`}>
+              {collapsed && !isMobile ? (
+                <span
+                  title={`Admin View Node: ${userBranch}`}
+                  aria-label={`Admin View Node: ${userBranch}`}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-orange-200 bg-orange-50 text-[10px] font-black text-orange-700"
                 >
-                  MDY
-                </button>
-                <button
-                  onClick={() => changeBranch("YGN")}
-                  className={`py-1.5 text-xs font-black rounded-xl transition-all duration-200 ${
-                    userBranch === "YGN"
-                      ? "bg-white text-blue-600 shadow-sm scale-[1.02]"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  YGN
-                </button>
-              </div>
+                  {userBranch}
+                </span>
+              ) : (
+                <>
+                  <span className="text-[10px] text-slate-400 font-bold tracking-wider uppercase px-1 flex items-center gap-1">
+                    ⚙️ Admin View Node
+                  </span>
+                  <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl">
+                    <button
+                      onClick={() => changeBranch("MDY")}
+                      className={`py-1.5 text-xs font-black rounded-xl transition-all duration-200 ${
+                        userBranch === "MDY"
+                          ? "bg-white text-orange-600 shadow-sm scale-[1.02]"
+                          : "text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      MDY
+                    </button>
+                    <button
+                      onClick={() => changeBranch("YGN")}
+                      className={`py-1.5 text-xs font-black rounded-xl transition-all duration-200 ${
+                        userBranch === "YGN"
+                          ? "bg-white text-orange-600 shadow-sm"
+                          : "text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      YGN
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
           {/* Navigation List */}
-          <nav className={`flex-1 mt-3 overflow-y-auto custom-scrollbar ${
+          <nav className={`flex-1 mt-3 overflow-y-auto custom-scrollbar [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
             isMobile 
               ? "space-y-1.5 px-4 pb-6" 
               : collapsed 
@@ -668,11 +676,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </nav>
 
           {/* Footer User Info */}
-          <div className={`border-t border-slate-100 flex-shrink-0 bg-slate-50/50 ${
+          <div className={`border-t border-slate-100 flex-shrink-0 bg-white ${
             collapsed && !isMobile ? "p-2" : "px-4 py-3.5"
           }`}>
-            <div className={`flex items-center bg-white/60 border border-slate-100 p-2 rounded-2xl shadow-sm ${
-              collapsed && !isMobile ? "justify-center border-none bg-transparent shadow-none p-0" : "gap-3"
+            <div className={`flex items-center ${
+              collapsed && !isMobile ? "justify-center" : "gap-3"
             }`}>
               <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${branchInfo.color} flex items-center justify-center text-white font-extrabold text-xs shadow-sm flex-shrink-0`}>
                 {branchInfo.code.substring(0, 2)}
@@ -717,7 +725,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         <MobileDockContext.Provider value={{ hideMobileDock, setHideMobileDock }}>
-          <main className="flex-1 overflow-y-auto bg-[#f3f3f3] pb-0 md:pb-0">
+          <main className={`min-h-0 flex-1 overflow-y-auto bg-[#f3f3f3] pb-0 md:pb-0 ${
+            isMobile ? "" : "my-3 ml-3 mr-3 rounded-2xl border border-slate-200 shadow-[0_8px_24px_-16px_rgba(15,23,42,0.18)]"
+          }`}>
             {children}
           </main>
 
@@ -790,19 +800,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           )}
         </MobileDockContext.Provider>
 
-        {/* Floating Action Button (Desktop Only) */}
-        {!isIntakePage && !isVocPage && (
-          <Link
-            href="/intake"
-            className="hidden md:flex fixed bottom-6 right-6 z-50 items-center justify-center gap-2 bg-gradient-to-br from-orange-500 to-amber-500 text-white w-12 h-12 md:w-auto md:h-12 md:px-5 rounded-full shadow-lg hover:shadow-orange-500/30 active:scale-95 transition-all duration-200 group font-semibold tracking-wide"
-            title="Go to Parcel Intake"
-          >
-            <svg className="w-5 h-5 transition-transform group-hover:rotate-90 duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-            <span className="hidden md:inline text-sm">Intake</span>
-          </Link>
-        )}
       </div>
     </div>
   )

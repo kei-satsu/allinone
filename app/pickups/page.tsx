@@ -19,6 +19,8 @@ type Rider = {
   phone?: string;
 };
 
+type PickupStatus = "Pending" | "Assigned" | "Picked Up" | "Completed";
+
 type ManualSenderData = {
   isManual: boolean;
   name: string;
@@ -31,7 +33,7 @@ type Pickup = {
   id: number;
   sender_id: number;
   rider_id: string | number | null;
-  status: "Pending" | "Assigned" | "Completed";
+  status: PickupStatus;
   quantity: number;
   note: string | null;
   created_at: string;
@@ -39,6 +41,23 @@ type Pickup = {
   riders?: Rider | null;
   manualSender?: ManualSenderData | null;
 };
+
+function getPickupDateKey(createdAt: string): string {
+  const date = new Date(createdAt);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatPickupDate(dateKey: string): string {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
 
 // ----------------- MANUAL SENDER NOTE HELPERS -----------------
 const MANUAL_TAG = "[MANUAL_SENDER]";
@@ -181,7 +200,7 @@ export default function PickupsPage() {
   const [senders, setSenders] = useState<Sender[]>([]);
   const [riders, setRiders] = useState<Rider[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<string>("Pending");
+  const [activeTab, setActiveTab] = useState<PickupStatus | "All">("Pending");
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -202,12 +221,14 @@ export default function PickupsPage() {
     rider_id: "",
     quantity: 1,
     note: "",
-    status: "Pending" as "Pending" | "Assigned" | "Completed",
+    status: "Pending" as PickupStatus,
   });
 
   const [assignRiderId, setAssignRiderId] = useState<string>("");
   const [completeQty, setCompleteQty] = useState<number>(1);
   const [searchQuery, setSearchQuery] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   useEffect(() => {
     fetchInitialData();
@@ -476,6 +497,8 @@ export default function PickupsPage() {
 
   const filteredPickups = pickups.filter((item) => {
     const matchesTab = activeTab === "All" || item.status === activeTab;
+    const pickupDate = getPickupDateKey(item.created_at);
+    const matchesDate = (!dateFrom || pickupDate >= dateFrom) && (!dateTo || pickupDate <= dateTo);
     const senderAddress = item.senders?.Address || item.senders?.address || "";
     const senderPhone = item.senders?.phone || "";
     const cleanNoteText = parseManualSender(item.note).cleanNote;
@@ -488,17 +511,27 @@ export default function PickupsPage() {
       item.riders?.name?.toLowerCase().includes(query) ||
       cleanNoteText.toLowerCase().includes(query);
 
-    return matchesTab && matchesSearch;
+    return matchesTab && matchesDate && matchesSearch;
   });
 
+  const groupedPickups = Array.from(
+    filteredPickups.reduce((groups, item) => {
+      const date = getPickupDateKey(item.created_at);
+      const datePickups = groups.get(date) || [];
+      datePickups.push(item);
+      groups.set(date, datePickups);
+      return groups;
+    }, new Map<string, Pickup[]>())
+  );
+
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-6 text-slate-800">
+    <div className="min-h-screen bg-[#f3f3f3] p-4 md:p-6 text-slate-800">
       <div className="max-w-7xl mx-auto space-y-6">
 
         {/* Top Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-blue-50 rounded-xl text-blue-600">
+            <div className="p-2.5 bg-gradient-to-br from-orange-500 to-amber-500 rounded-xl text-white shadow-md shadow-orange-500/20">
               <IconPackage className="w-6 h-6" />
             </div>
             <div>
@@ -510,7 +543,7 @@ export default function PickupsPage() {
           </div>
           <button
             onClick={() => { resetForm(); setIsAddModalOpen(true); }}
-            className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 active:scale-95 transition text-white px-5 py-2.5 rounded-xl font-medium shadow-md shadow-blue-500/20"
+            className="flex items-center justify-center gap-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 active:scale-95 transition text-white px-5 py-2.5 rounded-xl font-semibold shadow-md shadow-orange-500/25"
           >
             <IconPlus className="w-4 h-4" />
             <span>Pickup အသစ်ထည့်မည်</span>
@@ -519,19 +552,19 @@ export default function PickupsPage() {
 
         {/* Filter Tabs & Search */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex bg-slate-200/80 p-1 rounded-xl w-full md:w-auto overflow-x-auto">
-            {["All", "Pending", "Assigned", "Completed"].map((tab) => {
+          <div className="flex bg-white p-1 rounded-xl w-full md:w-auto overflow-x-auto border border-slate-200">
+            {(["All", "Pending", "Assigned", "Picked Up", "Completed"] as const).map((tab) => {
               const count = tab === "All" ? pickups.length : pickups.filter((p) => p.status === tab).length;
               return (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition whitespace-nowrap flex-1 md:flex-initial justify-center ${
-                    activeTab === tab ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
+                    activeTab === tab ? "bg-orange-50 text-orange-700 shadow-sm" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                   }`}
                 >
                   <span>{tab}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${activeTab === tab ? "bg-slate-100 text-slate-800" : "bg-slate-300 text-slate-700"}`}>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${activeTab === tab ? "bg-orange-100 text-orange-800" : "bg-slate-100 text-slate-600"}`}>
                     {count}
                   </span>
                 </button>
@@ -539,17 +572,50 @@ export default function PickupsPage() {
             })}
           </div>
 
-          <div className="relative w-full md:w-72">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-              <IconSearch className="w-4 h-4" />
-            </span>
-            <input
-              type="text"
-              placeholder="Sender, Rider သို့မဟုတ် လိပ်စာ..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
-            />
+          <div className="flex flex-col sm:flex-row sm:items-end gap-3 w-full md:w-auto">
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block text-xs font-medium text-slate-600">
+                စတင်ရက်
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="mt-1 block w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                />
+              </label>
+              <label className="block text-xs font-medium text-slate-600">
+                နောက်ဆုံးရက်
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="mt-1 block w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                />
+              </label>
+            </div>
+
+            <div className="relative w-full md:w-72">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                <IconSearch className="w-4 h-4" />
+              </span>
+              <input
+                type="text"
+                placeholder="Sender, Rider သို့မဟုတ် လိပ်စာ..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition"
+              />
+            </div>
+
+            {(dateFrom || dateTo) && (
+              <button
+                type="button"
+                onClick={() => { setDateFrom(""); setDateTo(""); }}
+                className="py-2 px-3 text-sm text-orange-700 hover:text-orange-800 border border-orange-200 rounded-xl bg-white whitespace-nowrap"
+              >
+                ရက်စွဲရှင်းမည်
+              </button>
+            )}
           </div>
         </div>
 
@@ -557,19 +623,29 @@ export default function PickupsPage() {
         {loading ? (
           <div className="text-center py-12 text-slate-400">Loading pickups...</div>
         ) : filteredPickups.length === 0 ? (
-          <div className="bg-white rounded-2xl p-12 text-center border border-slate-100 text-slate-500">
+          <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 text-slate-500">
             စာရင်း မရှိသေးပါ။
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredPickups.map((item) => {
+          <div className="space-y-6">
+            {groupedPickups.map(([date, datePickups]) => (
+              <section key={date} className="space-y-3">
+                <div className="flex items-center gap-3 border-b border-slate-200 pb-2">
+                  <span className="w-2 h-2 rounded-full bg-orange-500" />
+                  <h2 className="font-semibold text-slate-800">{formatPickupDate(date)}</h2>
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+                    {datePickups.length}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {datePickups.map((item) => {
               const { cleanNote } = parseManualSender(item.note);
               const isManual = Boolean(item.manualSender);
 
               return (
                 <div
                   key={item.id}
-                  className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between space-y-4"
+                  className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-orange-200 transition flex flex-col justify-between space-y-4"
                 >
                   <div>
                     {/* Card Header */}
@@ -646,7 +722,7 @@ export default function PickupsPage() {
                         <h3 className="font-bold text-slate-900 text-lg leading-tight">
                           {item.senders?.name || "Unassigned Sender"}
                         </h3>
-                        <span className="bg-blue-50 text-blue-700 text-xs font-semibold px-2.5 py-1 rounded-lg flex items-center gap-1 shrink-0">
+                        <span className="bg-orange-50 text-orange-700 border border-orange-100 text-xs font-semibold px-2.5 py-1 rounded-lg flex items-center gap-1 shrink-0">
                           <IconPackage className="w-3.5 h-3.5" />
                           {item.quantity} ခု
                         </span>
@@ -694,7 +770,7 @@ export default function PickupsPage() {
                     {item.status === "Pending" ? (
                       <button
                         onClick={() => { setSelectedPickup(item); setAssignRiderId(""); setIsAssignModalOpen(true); }}
-                        className="w-full bg-blue-50 text-blue-700 hover:bg-blue-100 py-2.5 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-1.5 active:scale-95 transition"
+                        className="w-full bg-orange-50 text-orange-700 hover:bg-orange-100 py-2.5 px-3 rounded-xl font-medium text-xs flex items-center justify-center gap-1.5 active:scale-95 transition"
                       >
                         <IconArrowRight className="w-3.5 h-3.5" />
                         <span>Assign Rider</span>
@@ -732,6 +808,9 @@ export default function PickupsPage() {
                 </div>
               );
             })}
+                </div>
+              </section>
+            ))}
           </div>
         )}
       </div>
@@ -750,7 +829,7 @@ export default function PickupsPage() {
                 onClick={() => setSenderMode("select")}
                 className={`flex-1 py-2 text-xs font-semibold rounded-lg transition ${
                   senderMode === "select"
-                    ? "bg-white text-blue-600 shadow-sm"
+                  ? "bg-white text-orange-700 shadow-sm"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
@@ -761,7 +840,7 @@ export default function PickupsPage() {
                 onClick={() => setSenderMode("manual")}
                 className={`flex-1 py-2 text-xs font-semibold rounded-lg transition ${
                   senderMode === "manual"
-                    ? "bg-white text-blue-600 shadow-sm"
+                  ? "bg-white text-orange-700 shadow-sm"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
@@ -777,7 +856,7 @@ export default function PickupsPage() {
                   required
                   value={formData.sender_id}
                   onChange={(e) => setFormData({ ...formData, sender_id: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
                   <option value="">-- Sender ရွေးပါ --</option>
                   {senders
@@ -791,7 +870,7 @@ export default function PickupsPage() {
               </div>
             ) : (
               /* Manual Input Mode */
-              <div className="space-y-3 bg-blue-50/50 p-3.5 rounded-xl border border-blue-100">
+              <div className="space-y-3 bg-orange-50/70 p-3.5 rounded-xl border border-orange-100">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Sender အမည် * <span className="text-slate-400 font-normal">(Senders list ထဲ မထည့်ပါ)</span>
@@ -802,7 +881,7 @@ export default function PickupsPage() {
                     value={formData.manual_name}
                     onChange={(e) => setFormData({ ...formData, manual_name: e.target.value })}
                     placeholder="ဥပမာ - မမြမြ၊ ဆိုင်အမည် စသည်..."
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                   />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -813,7 +892,7 @@ export default function PickupsPage() {
                       value={formData.manual_phone}
                       onChange={(e) => setFormData({ ...formData, manual_phone: e.target.value })}
                       placeholder="09..."
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                     />
                   </div>
                   <div>
@@ -823,7 +902,7 @@ export default function PickupsPage() {
                       value={formData.manual_address}
                       onChange={(e) => setFormData({ ...formData, manual_address: e.target.value })}
                       placeholder="ရပ်ကွက် / လမ်း / အိမ်အမှတ်..."
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                     />
                   </div>
                 </div>
@@ -835,7 +914,7 @@ export default function PickupsPage() {
               <select
                 value={formData.rider_id}
                 onChange={(e) => setFormData({ ...formData, rider_id: e.target.value })}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
               >
                 <option value="">-- တန်းမသတ်မှတ်သေးပါ (Pending) --</option>
                 {riders.map((r) => (
@@ -851,7 +930,7 @@ export default function PickupsPage() {
                 min="1"
                 value={formData.quantity}
                 onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
               />
             </div>
 
@@ -865,7 +944,7 @@ export default function PickupsPage() {
                 value={formData.note}
                 onChange={(e) => setFormData({ ...formData, note: e.target.value })}
                 placeholder="မှတ်ချက်တစ်ခုခု ထည့်မည်ဆိုရင် ဒီမှာ ရေးပါ..."
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
               />
             </div>
 
@@ -873,7 +952,7 @@ export default function PickupsPage() {
               <button type="button" onClick={() => setIsAddModalOpen(false)} className="flex-1 py-2.5 border border-slate-200 text-slate-600 rounded-xl font-medium text-sm hover:bg-slate-50">
                 မလုပ်တော့ပါ
               </button>
-              <button type="submit" className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl font-medium text-sm hover:bg-blue-700">
+              <button type="submit" className="flex-1 py-2.5 bg-orange-600 text-white rounded-xl font-medium text-sm hover:bg-orange-700">
                 သိမ်းဆည်းမည်
               </button>
             </div>
@@ -893,7 +972,7 @@ export default function PickupsPage() {
               <select
                 value={assignRiderId}
                 onChange={(e) => setAssignRiderId(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
               >
                 <option value="">-- Rider ရွေးချယ်ပါ --</option>
                 {riders.map((r) => (
@@ -905,7 +984,7 @@ export default function PickupsPage() {
               <button type="button" onClick={() => setIsAssignModalOpen(false)} className="flex-1 py-2.5 border border-slate-200 text-slate-600 rounded-xl font-medium text-sm hover:bg-slate-50">
                 မလုပ်တော့ပါ
               </button>
-              <button type="button" onClick={handleAssignRider} className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl font-medium text-sm hover:bg-blue-700">
+              <button type="button" onClick={handleAssignRider} className="flex-1 py-2.5 bg-orange-600 text-white rounded-xl font-medium text-sm hover:bg-orange-700">
                 အတည်ပြုမည်
               </button>
             </div>
@@ -954,7 +1033,7 @@ export default function PickupsPage() {
                 onClick={() => setSenderMode("select")}
                 className={`flex-1 py-2 text-xs font-semibold rounded-lg transition ${
                   senderMode === "select"
-                    ? "bg-white text-blue-600 shadow-sm"
+                  ? "bg-white text-orange-700 shadow-sm"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
@@ -965,7 +1044,7 @@ export default function PickupsPage() {
                 onClick={() => setSenderMode("manual")}
                 className={`flex-1 py-2 text-xs font-semibold rounded-lg transition ${
                   senderMode === "manual"
-                    ? "bg-white text-blue-600 shadow-sm"
+                  ? "bg-white text-orange-700 shadow-sm"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
@@ -980,7 +1059,7 @@ export default function PickupsPage() {
                   required
                   value={formData.sender_id}
                   onChange={(e) => setFormData({ ...formData, sender_id: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
                   <option value="">-- Sender ရွေးပါ --</option>
                   {senders
@@ -993,7 +1072,7 @@ export default function PickupsPage() {
                 </select>
               </div>
             ) : (
-              <div className="space-y-3 bg-blue-50/50 p-3.5 rounded-xl border border-blue-100">
+              <div className="space-y-3 bg-orange-50/70 p-3.5 rounded-xl border border-orange-100">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Sender အမည် *</label>
                   <input
@@ -1001,7 +1080,7 @@ export default function PickupsPage() {
                     required
                     value={formData.manual_name}
                     onChange={(e) => setFormData({ ...formData, manual_name: e.target.value })}
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                   />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1011,7 +1090,7 @@ export default function PickupsPage() {
                       type="text"
                       value={formData.manual_phone}
                       onChange={(e) => setFormData({ ...formData, manual_phone: e.target.value })}
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                     />
                   </div>
                   <div>
@@ -1020,7 +1099,7 @@ export default function PickupsPage() {
                       type="text"
                       value={formData.manual_address}
                       onChange={(e) => setFormData({ ...formData, manual_address: e.target.value })}
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                     />
                   </div>
                 </div>
@@ -1032,7 +1111,7 @@ export default function PickupsPage() {
               <select
                 value={formData.rider_id}
                 onChange={(e) => setFormData({ ...formData, rider_id: e.target.value })}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
               >
                 <option value="">-- တာဝန်မပေးသေးပါ --</option>
                 {riders.map((r) => (
@@ -1045,11 +1124,12 @@ export default function PickupsPage() {
               <label className="block text-sm font-medium text-slate-700 mb-1">Status ပြင်ရန်</label>
               <select
                 value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value as "Pending" | "Assigned" | "Completed" })}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={(e) => setFormData({ ...formData, status: e.target.value as PickupStatus })}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
               >
                 <option value="Pending">Pending</option>
                 <option value="Assigned">Assigned</option>
+                <option value="Picked Up">Picked Up</option>
                 <option value="Completed">Completed</option>
               </select>
             </div>
@@ -1061,7 +1141,7 @@ export default function PickupsPage() {
                 min="1"
                 value={formData.quantity}
                 onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
               />
             </div>
 
@@ -1075,7 +1155,7 @@ export default function PickupsPage() {
                 value={formData.note}
                 onChange={(e) => setFormData({ ...formData, note: e.target.value })}
                 placeholder="မှတ်ချက်တစ်ခုခု ထည့်မည်ဆိုရင် ဒီမှာ ရေးပါ..."
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
               />
             </div>
 
@@ -1083,7 +1163,7 @@ export default function PickupsPage() {
               <button type="button" onClick={() => setIsEditModalOpen(false)} className="flex-1 py-2.5 border border-slate-200 text-slate-600 rounded-xl font-medium text-sm hover:bg-slate-50">
                 မလုပ်တော့ပါ
               </button>
-              <button type="submit" className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl font-medium text-sm hover:bg-blue-700">
+              <button type="submit" className="flex-1 py-2.5 bg-orange-600 text-white rounded-xl font-medium text-sm hover:bg-orange-700">
                 ပြင်ဆင်မှု သိမ်းမည်
               </button>
             </div>
@@ -1226,12 +1306,14 @@ function NoteModal({
 
 // ----------------- SUB-COMPONENTS -----------------
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status }: { status: PickupStatus }) {
   switch (status) {
     case "Pending":
       return <span className="bg-amber-50 text-amber-700 border border-amber-200/60 text-xs font-semibold px-2.5 py-1 rounded-lg">Pending</span>;
     case "Assigned":
       return <span className="bg-blue-50 text-blue-700 border border-blue-200/60 text-xs font-semibold px-2.5 py-1 rounded-lg">Assigned</span>;
+    case "Picked Up":
+      return <span className="bg-violet-50 text-violet-700 border border-violet-200/60 text-xs font-semibold px-2.5 py-1 rounded-lg">Picked Up</span>;
     case "Completed":
       return <span className="bg-emerald-50 text-emerald-700 border border-emerald-200/60 text-xs font-semibold px-2.5 py-1 rounded-lg">Completed</span>;
     default:

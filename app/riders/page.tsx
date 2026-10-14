@@ -186,7 +186,7 @@ export default function RidersManagement() {
                         {rider.created_at ? new Date(rider.created_at).toLocaleDateString() : '—'}
                       </td>
                       <td className="py-2.5 px-3 text-right space-x-3">
-                        <button onClick={() => openEditModal(rider)} className="text-blue-600 hover:text-blue-800 font-medium text-xs uppercase tracking-wider transition">Edit</button>
+                        <button onClick={() => openEditModal(rider)} className="text-orange-600 hover:text-orange-800 font-medium text-xs uppercase tracking-wider transition">Edit</button>
                         <button onClick={() => handleDelete(rider)} className="text-red-500 hover:text-red-700 font-medium text-xs uppercase tracking-wider transition">Delete</button>
                       </td>
                     </tr>

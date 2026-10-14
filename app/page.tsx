@@ -308,14 +308,14 @@ const handleExportExcel = async () => {
   // 🎨 PREMIUM REDESIGNED UI — "Luxe Sapphire"
   // ──────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 text-slate-800 antialiased font-sans select-none pb-24 md:pb-8">
+    <div className="min-h-screen bg-[#f3f3f3] text-slate-800 antialiased font-sans select-none pb-24 md:pb-8">
       
       {/* ── 🧭 Ultra-Premium Header with Glassmorphism ── */}
-      <header className="sticky top-0 z-50 backdrop-blur-2xl bg-white/60 border-b border-slate-200/40 shadow-[0_1px_0_rgba(0,0,0,0.02),0_4px_24px_rgba(0,0,0,0.03)]">
+      <header className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between">
           <div className="flex items-center gap-3.5">
             <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl blur-md opacity-40" />
+              <div className="absolute inset-0 bg-gradient-to-br from-orange-500 to-amber-500 rounded-2xl blur-md opacity-30" />
               <img
                 src="/logo.png" 
                 alt="All In One Express Logo"
@@ -371,24 +371,24 @@ const handleExportExcel = async () => {
               {/* Scan & Print */}
               <button
                 onClick={() => setIsScannerOpen(true)}
-                className="group relative bg-white border border-slate-200/40 rounded-[28px] p-5 hover:border-emerald-300/60 hover:shadow-[0_16px_40px_rgba(16,185,129,0.1)] transition-all duration-500 flex flex-col items-center text-center gap-3 active:scale-[0.97] overflow-hidden"
+                className="group relative bg-white border border-slate-200 rounded-2xl p-5 hover:border-orange-300 hover:shadow-md transition-all duration-300 flex flex-col items-center text-center gap-3 active:scale-[0.97] overflow-hidden"
               >
-                <div className="absolute inset-0 bg-gradient-to-b from-emerald-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[28px]" />
-                <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center shadow-lg shadow-emerald-500/25 group-hover:shadow-emerald-500/40 group-hover:scale-105 transition-all duration-300">
+                <div className="absolute inset-0 bg-gradient-to-b from-orange-50/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" />
+                <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-md shadow-orange-500/20 group-hover:shadow-orange-500/30 group-hover:scale-105 transition-all duration-300">
                   <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM14.625 3.75c-.621 0-1.125.504-1.125 1.125v4.5c0 .621.504 1.125 1.125 1.125h4.5c.621 0 1.125-.504 1.125-1.125v-4.5c0-.621-.504-1.125-1.125-1.125h-4.5zM14.625 14.625c-.621 0-1.125.504-1.125 1.125v4.5c0 .621.504 1.125 1.125 1.125h4.5c.621 0 1.125-.504 1.125-1.125v-4.5c0-.621-.504-1.125-1.125-1.125h-4.5z" />
                   </svg>
                 </div>
                 <div className="relative">
-                  <h3 className="text-sm font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">Scan to Search</h3>
+                  <h3 className="text-sm font-bold text-slate-800 group-hover:text-orange-700 transition-colors">Scan to Search</h3>
                   <p className="text-[11px] text-slate-400 font-medium mt-0.5">အချက်အလက်ရှာဖွေရန်</p>
                 </div>
               </button>
 
               {/* New Voucher */}
-              <Link href="/voc/form" className="group relative bg-white border border-slate-200/40 rounded-[28px] p-5 hover:border-orange-300/60 hover:shadow-[0_16px_40px_rgba(249,115,22,0.1)] transition-all duration-500 flex flex-col items-center text-center gap-3 active:scale-[0.97] overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-b from-orange-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[28px]" />
-                <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 text-white flex items-center justify-center shadow-lg shadow-orange-500/25 group-hover:shadow-orange-500/40 group-hover:scale-105 transition-all duration-300">
+              <Link href="/voc/form" className="group relative bg-white border border-slate-200 rounded-2xl p-5 hover:border-orange-300 hover:shadow-md transition-all duration-300 flex flex-col items-center text-center gap-3 active:scale-[0.97] overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-b from-orange-50/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" />
+                <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-md shadow-orange-500/20 group-hover:shadow-orange-500/30 group-hover:scale-105 transition-all duration-300">
                   <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                   </svg>
@@ -400,15 +400,15 @@ const handleExportExcel = async () => {
               </Link>
 
               {/* Order List */}
-              <Link href="/list" className="group relative bg-white border border-slate-200/40 rounded-[28px] p-5 hover:border-blue-300/60 hover:shadow-[0_16px_40px_rgba(59,130,246,0.1)] transition-all duration-500 flex flex-col items-center text-center gap-3 active:scale-[0.97] overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-b from-blue-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[28px]" />
-                <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-400 to-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/25 group-hover:shadow-blue-500/40 group-hover:scale-105 transition-all duration-300">
+              <Link href="/list" className="group relative bg-white border border-slate-200 rounded-2xl p-5 hover:border-orange-300 hover:shadow-md transition-all duration-300 flex flex-col items-center text-center gap-3 active:scale-[0.97] overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-b from-orange-50/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" />
+                <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-md shadow-orange-500/20 group-hover:shadow-orange-500/30 group-hover:scale-105 transition-all duration-300">
                   <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                   </svg>
                 </div>
                 <div className="relative">
-                  <h3 className="text-sm font-bold text-slate-800 group-hover:text-blue-700 transition-colors">Order List</h3>
+                  <h3 className="text-sm font-bold text-slate-800 group-hover:text-orange-700 transition-colors">Order List</h3>
                   <p className="text-[11px] text-slate-400 font-medium mt-0.5">စာရင်းများစစ်ဆေးရန်</p>
                 </div>
               </Link>
@@ -416,17 +416,17 @@ const handleExportExcel = async () => {
               {/* ကြိုရှင်းစရင်း */}
              <Link 
   href="/senders/prepaid" 
-  className="group relative bg-white border border-slate-200/40 rounded-[28px] p-5 hover:border-purple-300/60 hover:shadow-[0_16px_40px_rgba(147,51,234,0.1)] transition-all duration-500 flex flex-col items-center text-center gap-3 active:scale-[0.97] overflow-hidden"
+  className="group relative bg-white border border-slate-200 rounded-2xl p-5 hover:border-orange-300 hover:shadow-md transition-all duration-300 flex flex-col items-center text-center gap-3 active:scale-[0.97] overflow-hidden"
 >
-  <div className="absolute inset-0 bg-gradient-to-b from-purple-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[28px]" />
-  <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-400 to-purple-600 text-white flex items-center justify-center shadow-lg shadow-purple-500/25 group-hover:shadow-purple-500/40 group-hover:scale-105 transition-all duration-300">
+  <div className="absolute inset-0 bg-gradient-to-b from-orange-50/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" />
+  <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-md shadow-orange-500/20 group-hover:shadow-orange-500/30 group-hover:scale-105 transition-all duration-300">
     {/* Banknotes / Money Icon */}
     <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
     </svg>
   </div>
   <div className="relative">
-    <h3 className="text-sm font-bold text-slate-800 group-hover:text-purple-700 transition-colors">ကြိုရှင်းစာရင်း</h3>
+    <h3 className="text-sm font-bold text-slate-800 group-hover:text-orange-700 transition-colors">ကြိုရှင်းစာရင်း</h3>
     <p className="text-[11px] text-slate-400 font-medium mt-0.5">ငွေကြိုရှင်းပေးထားသော စာရင်းများကြည့်ရန်</p>
   </div>
 </Link>
@@ -661,7 +661,7 @@ const handleExportExcel = async () => {
                   className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-bold text-xs text-white transition-all shadow-sm flex items-center justify-center gap-2 ${
                     isExporting 
                       ? 'bg-slate-400 cursor-not-allowed' 
-                      : 'bg-gradient-to-r from-emerald-500 to-emerald-700 hover:from-emerald-600 hover:to-emerald-800 active:scale-[0.98] shadow-emerald-500/25'
+                      : 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 active:scale-[0.98] shadow-orange-500/25'
                   }`}
                 >
                   {isExporting ? (

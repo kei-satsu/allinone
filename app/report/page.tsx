@@ -600,7 +600,7 @@ export default function DailyReport() {
                 e.stopPropagation();
                 setPreviewImage(o.image_url);
               }}
-              className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+              className="p-1 text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded-lg transition-colors"
               title="ပုံကြည့်ရန် နှိပ်ပါ"
             >
               <svg
@@ -2228,7 +2228,7 @@ export default function DailyReport() {
                       }
                     }}
                     disabled={settling}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm disabled:opacity-50"
+                    className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-md text-xs font-semibold shadow-sm disabled:opacity-50"
                   >
                     {settling ? "Settling..." : "Mark Settled"}
                   </button>
@@ -2521,7 +2521,7 @@ export default function DailyReport() {
                     }
                   }}
                   disabled={settling}
-                  className="min-h-10 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white shadow-sm active:bg-blue-700 disabled:opacity-50"
+                  className="min-h-10 rounded-lg bg-orange-600 px-3 text-xs font-bold text-white shadow-sm active:bg-orange-700 disabled:opacity-50"
                 >
                   {settling ? "Settling..." : "Mark Settled"}
                 </button>

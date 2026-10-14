@@ -287,7 +287,7 @@ export default function StockCheckPage() {
   const renderStatusTabs = () => (
     <nav aria-label="Stock status" className="flex items-center gap-1">
       {statusOptions.map((status) => (
-        <button key={status} type="button" onClick={() => setStatusFilter(status)} aria-pressed={statusFilter === status} className={`flex min-h-8 shrink-0 items-center gap-1.5 border px-2.5 text-[11px] font-semibold transition ${statusFilter === status ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-900'}`}>
+        <button key={status} type="button" onClick={() => setStatusFilter(status)} aria-pressed={statusFilter === status} className={`flex min-h-8 shrink-0 items-center gap-1.5 border px-2.5 text-[11px] font-semibold transition ${statusFilter === status ? 'border-orange-600 bg-orange-600 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-orange-300 hover:text-orange-700'}`}>
           {status}<span className={`tabular-nums ${statusFilter === status ? 'text-white/70' : 'text-slate-400'}`}>{statusCounts[status]}</span>
         </button>
       ))}
@@ -295,7 +295,7 @@ export default function StockCheckPage() {
   )
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#f3f4f1] text-slate-900">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#f3f3f3] text-slate-900">
       <header className="z-30 shrink-0 border-b border-slate-200 bg-white px-3 py-2 sm:px-4 sm:py-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
@@ -310,9 +310,9 @@ export default function StockCheckPage() {
             <label className="relative hidden min-w-0 flex-1 sm:block sm:w-72 sm:flex-none">
               <span className="sr-only">Search orders</span>
               <svg aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path strokeLinecap="round" d="m20 20-4-4" /></svg>
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ID, barcode..." className="h-10 w-full rounded-sm border border-slate-300 bg-white pl-9 pr-3 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ID, barcode..." className="h-10 w-full rounded-sm border border-slate-300 bg-white pl-9 pr-3 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100" />
             </label>
-            <button type="button" onClick={() => setIsScannerOpen(true)} aria-label="Scan barcode" title="Scan barcode" className="flex h-10 w-10 shrink-0 items-center justify-center gap-2 border border-emerald-700 bg-emerald-800 px-2 text-sm font-semibold text-white transition hover:bg-emerald-700 sm:w-auto sm:px-3">
+            <button type="button" onClick={() => setIsScannerOpen(true)} aria-label="Scan barcode" title="Scan barcode" className="flex h-10 w-10 shrink-0 items-center justify-center gap-2 border border-orange-700 bg-orange-600 px-2 text-sm font-semibold text-white transition hover:bg-orange-700 sm:w-auto sm:px-3">
               <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" d="M4 7V5a1 1 0 011-1h2M17 4h2a1 1 0 011 1v2M20 17v2a1 1 0 01-1 1h-2M7 20H5a1 1 0 01-1-1v-2M7 9v6m3-6v6m3-6v6m3-6v6" /></svg>
               <span className="hidden sm:inline">Scan</span>
             </button>
@@ -333,7 +333,7 @@ export default function StockCheckPage() {
           <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3 text-xs font-semibold text-slate-700">
             <span>Filter columns{activeColumnFilterCount ? ` (${activeColumnFilterCount})` : ''}</span>
             <span className="flex items-center gap-2 text-slate-400">
-              {activeColumnFilterCount > 0 && <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setColumnFilters({}) }} className="text-[11px] font-semibold text-emerald-700">Clear</button>}
+              {activeColumnFilterCount > 0 && <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setColumnFilters({}) }} className="text-[11px] font-semibold text-orange-700">Clear</button>}
               <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" /></svg>
             </span>
           </summary>
@@ -341,7 +341,7 @@ export default function StockCheckPage() {
             {COLUMN_DEFS.filter((column) => visibleCols[column.key]).map((column) => (
               <label key={column.key} className="min-w-0 text-[10px] font-semibold text-slate-500">
                 <span className="mb-1 block truncate">{column.label}</span>
-                <input value={typeof columnFilters[column.key] === 'string' ? columnFilters[column.key] as string : ''} onChange={(event) => handleColumnFilterChange(column.key, event.target.value)} placeholder={`Filter ${column.label}`} className="h-9 w-full border border-slate-300 px-2 text-xs font-normal text-slate-800 outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-100" />
+                <input value={typeof columnFilters[column.key] === 'string' ? columnFilters[column.key] as string : ''} onChange={(event) => handleColumnFilterChange(column.key, event.target.value)} placeholder={`Filter ${column.label}`} className="h-9 w-full border border-slate-300 px-2 text-xs font-normal text-slate-800 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-100" />
               </label>
             ))}
           </div>
