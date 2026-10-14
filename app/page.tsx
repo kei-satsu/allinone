@@ -7,6 +7,7 @@ import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import BarcodeScannerModal from '@/components/BarcodeScannerModal' 
 import { ParcelDetailModal, ParcelOrder } from '@/components/ParcelDetailModal'
+import EditOrderModal from '@/components/EditOrderModal'
 
 type DashboardStats = {
   total: number
@@ -37,6 +38,7 @@ export default function Dashboard() {
 
   const [isScannerOpen, setIsScannerOpen] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<ParcelOrder | null>(null)
+  const [editingOrder, setEditingOrder] = useState<ParcelOrder | null>(null)
 
   // 🟢 Barcode Scan ဖတ်ပြီးပါက Voucher ရှာ၍ Print ထုတ်ပေးမည့် Function
   const handleScanCode = async (scannedCode: string) => {
@@ -698,6 +700,14 @@ const handleExportExcel = async () => {
         <ParcelDetailModal
           order={selectedOrder}
           onClose={() => setSelectedOrder(null)}
+          onEdit={(order) => setEditingOrder(order)}
+        />
+
+        <EditOrderModal
+          isOpen={editingOrder !== null}
+          onClose={() => setEditingOrder(null)}
+          orderData={editingOrder}
+          onSaveSuccess={() => setEditingOrder(null)}
         />
 
         {/* ── Footer ── */}

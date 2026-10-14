@@ -279,14 +279,15 @@ export const ParcelDetailModal: React.FC<ParcelDetailModalProps> = ({
     Print Voucher
   </button>
 
-  {/* ✏️ Edit Order Button 
+  {/* ✏️ Edit Order Button */}
+  {onEdit && (
     <button 
       onClick={handleEdit}
       className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2.5 rounded-xl text-center shadow-md transition-colors text-sm"
     >
       Edit Order
     </button>
- */}
+  )}
 
   <button 
     onClick={onClose}
@@ -300,4 +301,3 @@ export const ParcelDetailModal: React.FC<ParcelDetailModalProps> = ({
     </div>
   );
 };
-
