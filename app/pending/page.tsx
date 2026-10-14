@@ -836,9 +836,9 @@ if (updatedPending.length > 0) {
   }
   const handleMouseUpOrLeave = () => setIsDragging(false)
 
-  const winInput = "w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all shadow-sm"
-  const winSelect = "w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-800 text-sm focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all appearance-none bg-no-repeat bg-[length:0.75rem_auto] bg-[right_1rem_center] cursor-pointer shadow-sm"
-  const labelStyle = "block text-gray-600 font-semibold mb-1 uppercase text-xs tracking-wide"
+  const winInput = "w-full px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all shadow-sm"
+  const winSelect = "w-full px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-gray-800 text-sm focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all appearance-none bg-no-repeat bg-[length:0.75rem_auto] bg-[right_1rem_center] cursor-pointer shadow-sm"
+  const labelStyle = "block text-gray-600 font-semibold mb-0.5 uppercase text-[11px] tracking-wide"
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#f3f3f3] text-sm text-gray-800 antialiased font-[system-ui,-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif] select-none">
@@ -1163,12 +1163,12 @@ if (updatedPending.length > 0) {
         />
 
         {/* Right panel: Form */}
-<div className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-slate-50/70 p-3 custom-scrollbar sm:p-5">
-  <form onSubmit={handleSubmit} className="mx-auto w-full max-w-[1600px] space-y-4 sm:space-y-5">
+<div className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-slate-50/70 p-2 custom-scrollbar sm:p-3">
+  <form onSubmit={handleSubmit} className="mx-auto w-full max-w-[1600px] space-y-3">
     
     {(selectedItem?.uploader_note || selectedBarcode) && (
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {selectedItem?.uploader_note && <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-xl shadow-sm transition-all animate-fadeIn">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {selectedItem?.uploader_note && <div className="bg-amber-50 border-l-4 border-amber-500 p-3 rounded-r-xl shadow-sm transition-all animate-fadeIn">
         <span className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5 mb-1">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" /></svg>
           Note for this Parcel
@@ -1176,7 +1176,7 @@ if (updatedPending.length > 0) {
         <p className="text-gray-950 font-medium text-sm leading-relaxed">{selectedItem.uploader_note}</p>
       </div>}
         {selectedBarcode && (
-          <div className="bg-white border border-gray-200 border-l-4 border-l-blue-500 p-4 rounded-r-xl shadow-sm flex flex-col justify-center">
+          <div className="bg-white border border-gray-200 border-l-4 border-l-blue-500 p-3 rounded-r-xl shadow-sm flex flex-col justify-center">
             <span className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-1">Barcode Number</span>
             <span className="font-mono font-bold text-gray-900 tracking-widest select-all break-all">{selectedBarcode}</span>
           </div>
@@ -1185,10 +1185,10 @@ if (updatedPending.length > 0) {
     )}
 
     {/* Section 1: Core Logistics Info */}
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-3 rounded-xl border border-gray-200/80 shadow-sm">
       <div>
         <label className={labelStyle}>Item ID</label>
-        <input type="text" readOnly value={selectedItem?.item_id || selectedItem?.id || '[ Select Item ]'} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 text-gray-500 font-mono font-bold rounded-lg text-sm cursor-not-allowed select-all" />
+        <input type="text" readOnly value={selectedItem?.item_id || selectedItem?.id || '[ Select Item ]'} className="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 text-gray-500 font-mono font-bold rounded-lg text-sm cursor-not-allowed select-all" />
       </div>
       <div>
         <label className={labelStyle}>Arrival Date</label>
@@ -1210,16 +1210,16 @@ if (updatedPending.length > 0) {
     </div>
 
     {/* Section 2: Sender & Receiver Cards */}
-    <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
       {/* Sender Block */}
-      <div className="bg-white border border-gray-200/80 p-5 rounded-xl shadow-sm hover:shadow-md transition-shadow">
-        <div className="flex items-center gap-2 mb-4 border-b border-gray-100 pb-2.5">
+      <div className="bg-white border border-gray-200/80 p-3 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+        <div className="flex items-center gap-2 mb-2 border-b border-gray-100 pb-2">
           <span className="text-blue-600 bg-blue-50 p-1.5 rounded-lg ring-4 ring-blue-500/5">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
           </span>
           <h3 className="font-bold text-gray-900 uppercase tracking-wider text-xs">Sender Information</h3>
         </div>
-        <div className="space-y-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2">
           <div>
             <label className={labelStyle}>Name <span className="text-red-500">*</span></label>
             <div className="relative">
@@ -1330,14 +1330,14 @@ if (updatedPending.length > 0) {
       </div>
 
       {/* Receiver Block */}
-      <div className="bg-white border border-gray-200/80 p-5 rounded-xl shadow-sm hover:shadow-md transition-shadow">
-        <div className="flex items-center gap-2 mb-4 border-b border-gray-100 pb-2.5">
+      <div className="bg-white border border-gray-200/80 p-3 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+        <div className="flex items-center gap-2 mb-2 border-b border-gray-100 pb-2">
           <span className="text-emerald-600 bg-emerald-50 p-1.5 rounded-lg ring-4 ring-emerald-500/5">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
           </span>
           <h3 className="font-bold text-gray-900 uppercase tracking-wider text-xs">Receiver Information</h3>
         </div>
-        <div className="space-y-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2">
           <div>
             <label className={labelStyle}>Name <span className="text-red-500">*</span></label>
             <input ref={receiverNameRef} type="text" value={formData.receiver_name} onChange={e => setFormData({...formData, receiver_name: e.target.value})} className={winInput} required disabled={!selectedItem} />
@@ -1346,11 +1346,11 @@ if (updatedPending.length > 0) {
             <label className={labelStyle}>Phone <span className="text-red-500">*</span></label>
             <input type="text" value={formData.receiver_phone} onChange={handlePhoneChange} className={`${winInput} font-mono`} required disabled={!selectedItem} />
           </div>
-          <div>
+          <div className="sm:col-span-2">
   <label className={labelStyle}>Address</label>
   <input type="text" value={formData.receiver_address} onChange={e => setFormData({...formData, receiver_address: e.target.value})} className={winInput} disabled={!selectedItem} placeholder="လမ်း၊ အိမ်နံပါတ်၊ ရပ်ကွက် ဖြည့်သွင်းရန်" />
 </div>
-<div>
+<div className="sm:col-span-2">
   <div className="flex justify-between items-center mb-1.5">
     <label className="block text-gray-600 font-semibold uppercase text-xs tracking-wide">City</label>
     <button
@@ -1381,17 +1381,17 @@ if (updatedPending.length > 0) {
     </div>
 
     {/* Section 3: Financials & Status / Remarks */}
-    <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
       {/* Financials Block */}
-      <div className="bg-white border border-gray-200/80 p-5 rounded-xl shadow-sm flex flex-col justify-between">
+      <div className="bg-white border border-gray-200/80 p-3 rounded-xl shadow-sm flex flex-col justify-between">
         <div>
-          <div className="flex items-center gap-2 mb-4 border-b border-gray-100 pb-2.5">
+          <div className="flex items-center gap-2 mb-2 border-b border-gray-100 pb-2">
             <span className="text-orange-600 bg-orange-50 p-1.5 rounded-lg ring-4 ring-orange-500/5">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.3} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </span>
             <h3 className="font-bold text-gray-900 uppercase tracking-wider text-xs">Financial Pricing</h3>
           </div>
-          <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
               <label className={labelStyle}>COD Amount</label>
               <input type="number" value={formData.cod_amount || ''} onChange={e => {
@@ -1405,7 +1405,7 @@ if (updatedPending.length > 0) {
               <input type="number" value={formData.deli_fee || ''} onChange={e => setFormData({...formData, deli_fee: Number(e.target.value)})} className={`${winInput} font-mono font-bold text-orange-600`} disabled={!selectedItem} placeholder="0" />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelStyle}>Fee Type</label>
               <select value={formData.fee_type} onChange={e => setFormData({...formData, fee_type: e.target.value})} className={winSelect} disabled={!selectedItem} onFocus={handleSelectFocus}>
@@ -1430,15 +1430,15 @@ if (updatedPending.length > 0) {
       </div>
 
       {/* Status & Assignment Block */}
-      <div className="bg-white border border-gray-200/80 p-5 rounded-xl shadow-sm space-y-4">
-        <div className="flex items-center gap-2 mb-1 border-b border-gray-100 pb-2.5">
+      <div className="bg-white border border-gray-200/80 p-3 rounded-xl shadow-sm space-y-2.5">
+        <div className="flex items-center gap-2 mb-0.5 border-b border-gray-100 pb-2">
           <span className="text-purple-600 bg-purple-50 p-1.5 rounded-lg ring-4 ring-purple-500/5">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.3} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
           </span>
           <h3 className="font-bold text-gray-900 uppercase tracking-wider text-xs">Status & Execution</h3>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelStyle}>Current Status</label>
             <select value={formData.status} onChange={e => handleStatusChange(e.target.value)} className={winSelect} disabled={!selectedItem} onFocus={handleSelectFocus}>
@@ -1471,7 +1471,7 @@ if (updatedPending.length > 0) {
           </select>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelStyle}>Return Utility</label>
             <select value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} className={winSelect} disabled={!selectedItem} onFocus={handleSelectFocus}>
@@ -1489,7 +1489,7 @@ if (updatedPending.length > 0) {
         </div>
 
         {formData.cleared_date && (
-          <div className="bg-emerald-50/60 border border-emerald-200 p-3.5 rounded-xl transition-all animate-fadeIn">
+          <div className="bg-emerald-50/60 border border-emerald-200 p-2.5 rounded-xl transition-all animate-fadeIn">
             <label className="block text-emerald-800 font-bold mb-1 uppercase text-xs tracking-wide">Cleared Date</label>
             <input
               type="date"
@@ -1508,7 +1508,7 @@ if (updatedPending.length > 0) {
           <textarea
             value={formData.remark || ''}
             onChange={e => setFormData({...formData, remark: e.target.value})}
-            className={`${winInput} h-[76px] resize-none transition-all leading-relaxed placeholder-gray-400`}
+            className={`${winInput} h-[56px] resize-none transition-all leading-relaxed placeholder-gray-400`}
             placeholder="ရုံးတွင်းမှတ်သားရန် အချက်အလက်များ သို့မဟုတ် မှတ်ချက်များရေးရန်..."
             disabled={!selectedItem}
           />
@@ -1518,7 +1518,7 @@ if (updatedPending.length > 0) {
           <button 
             type="submit" 
             disabled={!selectedItem || loading}
-            className={`w-full py-3 text-sm font-bold rounded-xl uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2 ${
+            className={`w-full py-2.5 text-sm font-bold rounded-xl uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2 ${
               !selectedItem || loading 
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none' 
                 : 'bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white active:scale-[0.995] hover:shadow-orange-500/10'
