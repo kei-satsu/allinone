@@ -24,6 +24,7 @@ interface OrderTableProps {
   loadingMore: boolean;
   hasMore: boolean;
   onLoadMore: () => void;
+  onTableScroll?: (scrollTop: number) => void;
   
   // Selection Props
   selectedOrders: Set<string>;
@@ -43,6 +44,7 @@ interface OrderTableProps {
   checkingOrderIds?: Set<string>;
   mobileCompact?: boolean;
   fullBleed?: boolean;
+  hideScrollbars?: boolean;
 }
 
 // forwardRef ဖြင့် Component ကို ပတ်ပေးပါ
@@ -59,6 +61,7 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
   loadingMore,
   hasMore,
   onLoadMore,
+  onTableScroll,
   selectedOrders,
   isAllSelected,
   onToggleSelectAll,
@@ -74,6 +77,7 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
   checkingOrderIds,
   mobileCompact = false,
   fullBleed = false,
+  hideScrollbars = false,
 }, ref) => {
 
   const horizontalScrollRef = useRef<HTMLDivElement>(null);
@@ -230,8 +234,15 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
       {/* 💻 Desktop Table View */}
       <div
         ref={tableScrollRef}
-        onScroll={(e) => syncTableScroll(e.currentTarget.scrollLeft)}
-        className="hidden min-h-0 min-w-[800px] flex-1 overflow-x-auto overflow-y-auto sm:block lg:min-w-0 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-slate-300 [scrollbar-color:transparent_transparent] hover:[scrollbar-color:#cbd5e1_transparent]"
+        onScroll={(e) => {
+          syncTableScroll(e.currentTarget.scrollLeft)
+          onTableScroll?.(e.currentTarget.scrollTop)
+        }}
+        className={`hidden min-h-0 min-w-[800px] flex-1 overflow-x-auto overflow-y-auto sm:block lg:min-w-0 ${
+          hideScrollbars
+            ? '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+            : '[&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-slate-300 [scrollbar-color:transparent_transparent] hover:[scrollbar-color:#cbd5e1_transparent]'
+        }`}
       >
         <table className="w-full border-collapse text-left whitespace-nowrap text-[13px] text-gray-800">
           <thead className="sticky top-0 z-20 bg-white shadow-[0_2px_0_0_rgba(203,213,225,1)]">
@@ -368,7 +379,12 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
 
 
       {/* 📱 Mobile Optimized Card List */}
-      <div className="sm:hidden min-h-0 flex flex-1 flex-col divide-y divide-gray-100 overflow-y-auto bg-gray-50 pb-20">
+      <div
+        onScroll={(e) => onTableScroll?.(e.currentTarget.scrollTop)}
+        className={`sm:hidden min-h-0 flex flex-1 flex-col divide-y divide-gray-100 overflow-y-auto bg-gray-50 pb-20 ${
+          hideScrollbars ? '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden' : ''
+        }`}
+      >
         {loading ? (
           <div className="p-12 text-center text-gray-400 text-xs flex flex-col items-center gap-2 justify-center">
             <span className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />

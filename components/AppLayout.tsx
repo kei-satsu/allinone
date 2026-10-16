@@ -723,9 +723,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className={`flex-1 flex flex-col min-w-0 ${pathname === "/order-status" ? "min-h-0" : ""}`}>
         <MobileDockContext.Provider value={{ hideMobileDock, setHideMobileDock }}>
-          <main className={`min-h-0 flex-1 overflow-y-auto bg-[#f3f3f3] pb-0 md:pb-0 ${
+          <main className={`min-h-0 flex-1 ${pathname === "/order-status" ? "overflow-hidden" : "overflow-y-auto"} bg-[#f3f3f3] pb-0 md:pb-0 ${
             isMobile ? "" : "my-3 ml-3 mr-3 rounded-2xl border border-slate-200 shadow-[0_8px_24px_-16px_rgba(15,23,42,0.18)]"
           }`}>
             {children}

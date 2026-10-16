@@ -9,6 +9,16 @@ import BarcodeScannerModal from '@/components/BarcodeScannerModal'
 import { ParcelDetailModal, ParcelOrder } from '@/components/ParcelDetailModal'
 import EditOrderModal from '@/components/EditOrderModal'
 
+type OrderStatus =
+  | 'Handover'
+  | 'On Way'
+  | 'Delivered'
+  | 'At Office'
+  | 'Arrived'
+  | 'On Hold'
+  | 'Settled'
+type DashboardCounts = Record<OrderStatus, number>
+
 type DashboardStats = {
   total: number
   atOffice: number
@@ -17,6 +27,16 @@ type DashboardStats = {
   deliveryRate: number
   totalCod: number
   unpaidCod: number
+}
+
+const emptyCounts: DashboardCounts = {
+  Handover: 0,
+  'On Way': 0,
+  Delivered: 0,
+  'At Office': 0,
+  Arrived: 0,
+  'On Hold': 0,
+  Settled: 0,
 }
 
 const emptyStats: DashboardStats = {
@@ -34,7 +54,10 @@ const showDashboardSummary = false
 export default function Dashboard() {
   const [userBranch, setUserBranch] = useState('')
   const loading = false
-  const [stats, setStats] = useState<DashboardStats>(emptyStats)
+  const [counts, setCounts] = useState<DashboardCounts>(emptyCounts)
+  const [countsLoading, setCountsLoading] = useState(true)
+  const [countsError, setCountsError] = useState('')
+  const stats = emptyStats
 
   const [isScannerOpen, setIsScannerOpen] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<ParcelOrder | null>(null)
@@ -81,6 +104,38 @@ export default function Dashboard() {
       setUserBranch('ALL')
     }
   }, [])
+
+  useEffect(() => {
+    if (!userBranch) return
+
+    const controller = new AbortController()
+    const loadCounts = async () => {
+      setCountsLoading(true)
+      setCountsError('')
+
+      try {
+        const params = new URLSearchParams({ branch: userBranch })
+        const response = await fetch(`/api/dashboard-status-counts?${params}`, {
+          signal: controller.signal,
+        })
+        const payload = await response.json()
+        if (!response.ok) {
+          throw new Error(payload.error || 'Dashboard counts request failed')
+        }
+
+        setCounts({ ...emptyCounts, ...payload.data })
+      } catch (error) {
+        if (controller.signal.aborted) return
+        console.error('Dashboard counts error:', error)
+        setCountsError(error instanceof Error ? error.message : 'Dashboard counts request failed')
+      } finally {
+        if (!controller.signal.aborted) setCountsLoading(false)
+      }
+    }
+
+    void loadCounts()
+    return () => controller.abort()
+  }, [userBranch])
 
 const handleExportExcel = async () => {
   setIsExporting(true);
@@ -549,6 +604,74 @@ const handleExportExcel = async () => {
               </div>
             </div>
             </>}
+
+            <section aria-labelledby="order-status-heading" className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-1.5 bg-gradient-to-b from-blue-500 to-indigo-600 rounded-full" />
+                <h2 id="order-status-heading" className="text-sm font-extrabold text-slate-700 uppercase tracking-[0.2em]">
+                  Order Status • {userBranch === 'ALL' ? 'All Branches' : userBranch}
+                </h2>
+                <div className="flex-1 border-t border-slate-200/60" />
+              </div>
+
+              {countsError && (
+                <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+                  အရေအတွက်များ ရယူ၍မရပါ။ Supabase SQL Editor မှာ <code>database/dashboard-status-counts.sql</code> ကို run ပေးပါ။ {countsError}
+                </p>
+              )}
+
+              <div aria-live="polite" className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {(['Handover', 'On Way', 'Delivered'] as const).map((status) => (
+                  <Link
+                    key={status}
+                    href={`/order-status?status=${encodeURIComponent(status)}`}
+                    aria-label={`View ${status} orders`}
+                    className={`block rounded-[24px] border p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+                      status === 'Handover'
+                        ? 'border-sky-200 bg-sky-50/70'
+                        : status === 'On Way'
+                          ? 'border-indigo-200 bg-indigo-50/70'
+                          : 'border-emerald-200 bg-emerald-50/70'
+                    }`}
+                  >
+                    <p className={`text-sm font-extrabold uppercase tracking-wider ${
+                      status === 'Handover'
+                        ? 'text-sky-700'
+                        : status === 'On Way'
+                          ? 'text-indigo-700'
+                          : 'text-emerald-700'
+                    }`}>
+                      {status}
+                    </p>
+                    <p className={`mt-2 text-4xl font-black tracking-tight ${
+                      status === 'Handover'
+                        ? 'text-sky-900'
+                        : status === 'On Way'
+                          ? 'text-indigo-900'
+                          : 'text-emerald-900'
+                    }`}>
+                      {countsError ? '—' : countsLoading ? '…' : counts[status].toLocaleString()}
+                    </p>
+                  </Link>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {(['At Office', 'Arrived', 'On Hold', 'Settled'] as const).map((status) => (
+                  <Link
+                    key={status}
+                    href={`/order-status?status=${encodeURIComponent(status)}`}
+                    aria-label={`View ${status} orders`}
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                  >
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{status}</p>
+                    <p className="mt-1 text-2xl font-black tracking-tight text-slate-800">
+                      {countsError ? '—' : countsLoading ? '…' : counts[status].toLocaleString()}
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            </section>
 
             {/* ── 📥 Excel Export Card ── */}
             <div className="bg-white border border-slate-200/40 rounded-[28px] p-6 shadow-[0_4px_24px_rgba(15,23,42,0.02)] space-y-5">
