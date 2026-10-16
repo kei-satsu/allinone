@@ -82,17 +82,23 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
 
   const horizontalScrollRef = useRef<HTMLDivElement>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
+  const tableContentRef = useRef<HTMLTableElement>(null);
   const [tableWidth, setTableWidth] = useState(0);
 
   useEffect(() => {
     const scrollElement = tableScrollRef.current;
-    if (!scrollElement) return;
+    const tableElement = tableContentRef.current;
+    if (!scrollElement || !tableElement) return;
 
-    const updateTableWidth = () => setTableWidth(scrollElement.scrollWidth);
+    const updateTableWidth = () => setTableWidth(Math.max(
+      scrollElement.scrollWidth,
+      tableElement.scrollWidth,
+    ));
     updateTableWidth();
 
     const resizeObserver = new ResizeObserver(updateTableWidth);
     resizeObserver.observe(scrollElement);
+    resizeObserver.observe(tableElement);
     return () => resizeObserver.disconnect();
   }, [columnDefs, visibleCols, orders.length]);
 
@@ -175,7 +181,7 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
     )}
   </div>
 );
-    if (['cod_amount', 'deli_fee', 'total_amount'].includes(key)) return (
+    if (['cod_amount', 'deli_fee', 'total_amount', 'agent_fee'].includes(key)) return (
       <span className={key === 'total_amount' ? 'font-bold text-gray-900' : ''}>
         {o[key]?.toLocaleString() || '-'}
       </span>
@@ -184,6 +190,7 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
     if (key === 'pickup_rider') return <span className="text-gray-600">{o.pickup_rider?.name || '-'}</span>;
     if (key === 'deliver_rider') return <span className="text-gray-600">{o.deliver_rider?.name || '-'}</span>;
     if (key === 'created_at') return <span className="text-gray-500">{new Date(o.created_at).toLocaleDateString()}</span>;
+    if (key === 'last_check') return <span className="text-gray-500">{o.last_check ? new Date(o.last_check).toLocaleDateString() : '-'}</span>;
     return o[key] || '-';
   };
 
@@ -244,7 +251,7 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
             : '[&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-slate-300 [scrollbar-color:transparent_transparent] hover:[scrollbar-color:#cbd5e1_transparent]'
         }`}
       >
-        <table className="w-full border-collapse text-left whitespace-nowrap text-[13px] text-gray-800">
+        <table ref={tableContentRef} className="w-full border-collapse text-left whitespace-nowrap text-[13px] text-gray-800">
           <thead className="sticky top-0 z-20 bg-white shadow-[0_2px_0_0_rgba(203,213,225,1)]">
             <tr className="border-b-2 border-orange-300 bg-orange-100 text-[12px] font-extrabold uppercase tracking-wider text-orange-900">
               <th className="w-10 border-r border-orange-300 px-1.5 py-2 text-center align-middle">
@@ -292,7 +299,7 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
                         selectedValues={Array.isArray(colFilters[col.key]) ? colFilters[col.key] : []}
                         onChange={(values) => onFilterChange(col.key, values)}
                       />
-                    ) : ['received_date', 'deliver_date', 'cleared_date', 'created_at', 'transit_date','arrival_date'].includes(col.key) ? (
+                    ) : ['received_date', 'deliver_date', 'cleared_date', 'refund_date', 'created_at', 'transit_date', 'last_check', 'arrival_date'].includes(col.key) ? (
                       <input
                         type="date"
                         className={filterInputCls}
@@ -377,6 +384,16 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
         </table>
       </div>
 
+      <div
+        ref={horizontalScrollRef}
+        aria-label="Scroll order table horizontally"
+        role="region"
+        tabIndex={0}
+        onScroll={(e) => syncTableScroll(e.currentTarget.scrollLeft)}
+        className="hidden h-3 shrink-0 overflow-x-auto overflow-y-hidden border-t border-slate-200 bg-slate-50 sm:block [scrollbar-color:#94a3b8_#f1f5f9] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-400 [&::-webkit-scrollbar-track]:bg-slate-100"
+      >
+        <div style={{ width: tableWidth, height: 1 }} />
+      </div>
 
       {/* 📱 Mobile Optimized Card List */}
       <div

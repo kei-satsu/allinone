@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import OrderTable, { type ColumnDef } from '@/components/OrderTable'
 import { useOrderSelection } from '@/hooks/useOrderSelection'
@@ -31,7 +31,12 @@ type StatusCountsResponse = {
 
 const PAGE_SIZE = 50
 
-const COLUMN_DEFS = [
+function getRelationName(value: unknown) {
+  if (typeof value !== 'object' || value === null || !('name' in value)) return ''
+  return String(value.name ?? '')
+}
+
+const COLUMN_DEFS: ColumnDef[] = [
   { key: 'image_url', label: 'Photo', defaultVisible: true }, 
   { key: 'item_id', label: 'Item ID', defaultVisible: true },
   { key: 'received_date', label: 'Received Date', defaultVisible: true },
@@ -59,7 +64,7 @@ const COLUMN_DEFS = [
   { key: 'agent_fee', label: 'Agent Fee', defaultVisible: false },
   { key: 'remark', label: 'Remark', defaultVisible: false },
   { key: 'barcode', label: 'Barcode', defaultVisible: false },
- { key: 'last_check', label: 'Last Check', defaultVisible: false },
+  { key: 'last_check', label: 'Last Check', defaultVisible: false },
 ]
 
 const DEFAULT_VISIBLE_COLS: Record<string, boolean> = Object.fromEntries(
@@ -160,6 +165,8 @@ export default function OrderStatusPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(false)
   const [page, setPage] = useState(1)
+  const [totalOrders, setTotalOrders] = useState(0)
+  const requestVersionRef = useRef(0)
   const [errorMessage, setErrorMessage] = useState('')
   const [statusCounts, setStatusCounts] = useState<StatusCounts | null>(null)
   const [countsError, setCountsError] = useState('')
@@ -175,25 +182,18 @@ export default function OrderStatusPage() {
   const [colFilters, setColFilters] = useState<Record<string, FilterValue>>({})
   const selection = useOrderSelection(orders)
 
-  const filteredOrders = useMemo(() => orders.filter((order) => (
-    Object.entries(colFilters).every(([key, value]) => {
-      if (Array.isArray(value)) {
-        return value.length === 0 || value.includes(String(order[key] ?? ''))
-      }
-
-      const filter = value.trim().toLocaleLowerCase()
-      if (!filter) return true
-
-      const cellValue = String(order[key] ?? '').toLocaleLowerCase()
-      return ['received_date', 'transit_date'].includes(key)
-        ? cellValue.slice(0, 10) === filter
-        : cellValue.includes(filter)
-    })
-  )), [colFilters, orders])
+  const filteredOrders = orders
 
   const locationOptions = useMemo(() => Array.from(new Set(
-    orders.map((order) => order.receiver_loc).filter(Boolean).map(String),
+    orders.flatMap((order) => [order.sender_loc, order.receiver_loc]).filter(Boolean).map(String),
   )).sort(), [orders])
+
+  const riders = useMemo(() => Array.from(new Set(
+    orders.flatMap((order) => [
+      getRelationName(order.pickup_rider),
+      getRelationName(order.deliver_rider),
+    ]).filter(Boolean),
+  )).sort().map((name) => ({ name })), [orders])
 
   const handleFilterChange = (column: string, value: string | string[]) => {
     setColFilters((current) => ({ ...current, [column]: value }))
@@ -245,12 +245,16 @@ export default function OrderStatusPage() {
   useEffect(() => {
     if (!branch) return
 
+    requestVersionRef.current += 1
     const controller = new AbortController()
     const loadFirstPage = async () => {
       setLoading(true)
+      setLoadingMore(false)
       setErrorMessage('')
       setOrders([])
       setPage(1)
+      setTotalOrders(0)
+      setHasMore(false)
 
       try {
         const params = new URLSearchParams({
@@ -258,6 +262,7 @@ export default function OrderStatusPage() {
           status,
           page: '1',
           limit: String(PAGE_SIZE),
+          filters: JSON.stringify(colFilters),
         })
         const response = await fetch(`/api/dashboard-status-orders?${params}`, {
           signal: controller.signal,
@@ -267,7 +272,9 @@ export default function OrderStatusPage() {
 
         const rows = payload.data || []
         setOrders(rows)
-        setHasMore(rows.length < (payload.total || 0))
+        const total = payload.total || 0
+        setTotalOrders(total)
+        setHasMore(rows.length < total)
       } catch (error) {
         if (controller.signal.aborted) return
         console.error('Dashboard status orders error:', error)
@@ -279,11 +286,12 @@ export default function OrderStatusPage() {
 
     void loadFirstPage()
     return () => controller.abort()
-  }, [branch, status, refreshKey])
+  }, [branch, colFilters, refreshKey, status])
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return
 
+    const requestVersion = requestVersionRef.current
     setLoadingMore(true)
     setErrorMessage('')
     try {
@@ -293,22 +301,25 @@ export default function OrderStatusPage() {
         status,
         page: String(nextPage),
         limit: String(PAGE_SIZE),
+        filters: JSON.stringify(colFilters),
       })
       const response = await fetch(`/api/dashboard-status-orders?${params}`)
       const payload = await response.json() as StatusOrdersResponse
       if (!response.ok) throw new Error(payload.error || 'Unable to load more orders')
+      if (requestVersionRef.current !== requestVersion) return
 
       const rows = payload.data || []
       setOrders((current) => [...current, ...rows])
       setPage(nextPage)
-      setHasMore(nextPage * PAGE_SIZE < (payload.total || 0))
+      setHasMore(nextPage * PAGE_SIZE < totalOrders)
     } catch (error) {
+      if (requestVersionRef.current !== requestVersion) return
       console.error('Dashboard status orders pagination error:', error)
       setErrorMessage(error instanceof Error ? error.message : 'Unable to load more orders')
     } finally {
-      setLoadingMore(false)
+      if (requestVersionRef.current === requestVersion) setLoadingMore(false)
     }
-  }, [branch, hasMore, loadingMore, page, status])
+  }, [branch, colFilters, hasMore, loadingMore, page, status, totalOrders])
 
   const selectStatus = (nextStatus: OrderStatus) => {
     selection.clearSelection()
@@ -392,7 +403,11 @@ export default function OrderStatusPage() {
             <h2 className="font-bold text-slate-800">{status} Orders</h2>
             <div className="flex flex-wrap items-center justify-end gap-2">
               <span className="text-sm font-semibold text-slate-500">
-                {loading ? 'Loading…' : `${filteredOrders.length.toLocaleString()} of ${orders.length.toLocaleString()} loaded`}
+                {loading
+                  ? 'Loading…'
+                  : activeFilterCount > 0
+                    ? `${filteredOrders.length.toLocaleString()} of ${totalOrders.toLocaleString()} matching`
+                    : `${orders.length.toLocaleString()} of ${totalOrders.toLocaleString()} loaded`}
               </span>
               <button
                 type="button"
@@ -470,7 +485,7 @@ export default function OrderStatusPage() {
             showFilterBar={showFilterBar}
             colFilters={colFilters}
             onFilterChange={handleFilterChange}
-            riders={[]}
+            riders={riders}
             locationOptions={locationOptions}
             loading={loading}
             loadingMore={loadingMore}
