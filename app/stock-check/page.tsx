@@ -36,6 +36,7 @@ type QueryFactory = (from: number, to: number) => PromiseLike<QueryResult>
 type OrderContextMenu = { x: number; y: number; order: StockOrder }
 
 const COLUMN_DEFS: ColumnDef[] = [
+  { key: 'row_number', label: 'No.', defaultVisible: true },
   { key: 'item_id', label: 'Item ID', defaultVisible: true },
   { key: 'status', label: 'Status', defaultVisible: true },
   { key: 'last_check', label: 'Last Check', defaultVisible: true },
@@ -151,6 +152,7 @@ export default function StockCheckPage() {
   const [previewImage, setPreviewImage] = useState<string | null>(null)
   const [isScannerOpen, setIsScannerOpen] = useState(false)
   const [scanMessage, setScanMessage] = useState('')
+  const [showRowNumber, setShowRowNumber] = useState(true)
   const [contextMenu, setContextMenu] = useState<OrderContextMenu | null>(null)
   const [editingOrder, setEditingOrder] = useState<StockOrder | null>(null)
   const [checkingOrderIds, setCheckingOrderIds] = useState<Set<string>>(new Set())
@@ -214,7 +216,12 @@ export default function StockCheckPage() {
     return () => { isCurrent = false }
   }, [refreshKey, router, userBranch])
 
-  const visibleCols = useMemo(() => Object.fromEntries(COLUMN_DEFS.map((column) => [column.key, column.defaultVisible])), [])
+  const visibleCols = useMemo(() => Object.fromEntries(
+    COLUMN_DEFS.map((column) => [
+      column.key,
+      column.key === 'row_number' ? showRowNumber : column.defaultVisible,
+    ]),
+  ), [showRowNumber])
   const visibleOrders = useMemo(() => {
     const query = search.trim().toLocaleLowerCase()
     return orders.filter((order) => {
@@ -223,7 +230,7 @@ export default function StockCheckPage() {
         || (statusFilter === 'Checked' ? checkedToday : !checkedToday && order.status === statusFilter)
       const searchableValues = [order.item_id, order.barcode, order.sender_name, order.receiver_name, order.receiver_phone]
       const matchesSearch = !query || searchableValues.some((value) => String(value || '').toLocaleLowerCase().includes(query))
-      const matchesColumns = COLUMN_DEFS.filter((column) => visibleCols[column.key]).every((column) => {
+      const matchesColumns = COLUMN_DEFS.filter((column) => column.key !== 'row_number' && visibleCols[column.key]).every((column) => {
         const filterValue = columnFilters[column.key]
         const cellValue = String(order[column.key] ?? '').toLocaleLowerCase()
         if (Array.isArray(filterValue)) return filterValue.length === 0 || filterValue.some((value) => cellValue === value.toLocaleLowerCase())
@@ -322,6 +329,10 @@ export default function StockCheckPage() {
           </div>
           <div className="hidden lg:block">{renderStatusTabs()}</div>
           <div className="ml-auto flex w-auto min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
+            <label className="flex h-10 shrink-0 cursor-pointer items-center gap-1.5 border border-slate-300 bg-white px-2 text-xs font-medium text-slate-700">
+              <input type="checkbox" checked={showRowNumber} onChange={(event) => setShowRowNumber(event.target.checked)} className="h-3.5 w-3.5 accent-orange-600" />
+              No.
+            </label>
             <label className="relative hidden min-w-0 flex-1 sm:block sm:w-72 sm:flex-none">
               <span className="sr-only">Search orders</span>
               <svg aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path strokeLinecap="round" d="m20 20-4-4" /></svg>
@@ -354,7 +365,7 @@ export default function StockCheckPage() {
             </span>
           </summary>
           <div className="grid grid-cols-2 gap-2 border-t border-slate-200 p-3">
-            {COLUMN_DEFS.filter((column) => visibleCols[column.key]).map((column) => (
+            {COLUMN_DEFS.filter((column) => column.key !== 'row_number' && visibleCols[column.key]).map((column) => (
               <label key={column.key} className="min-w-0 text-[10px] font-semibold text-slate-500">
                 <span className="mb-1 block truncate">{column.label}</span>
                 <input value={typeof columnFilters[column.key] === 'string' ? columnFilters[column.key] as string : ''} onChange={(event) => handleColumnFilterChange(column.key, event.target.value)} placeholder={`Filter ${column.label}`} className="h-9 w-full border border-slate-300 px-2 text-xs font-normal text-slate-800 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-100" />

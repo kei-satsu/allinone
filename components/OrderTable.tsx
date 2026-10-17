@@ -118,6 +118,9 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
     value: String(status),
   }));
 
+  const isColumnVisible = (column: ColumnDef) =>
+    visibleCols[column.key] ?? column.defaultVisible;
+
   const filterInputCls = "w-full bg-transparent border-b border-gray-300 focus:border-orange-500 focus:outline-none py-1 text-[11px] text-gray-700 placeholder:text-gray-400 font-medium transition-colors";
 
   const getStatusClasses = (status: string) => {
@@ -262,8 +265,8 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
                   onChange={onToggleSelectAll}
                 />
               </th>
-              {columnDefs.map(col => visibleCols[col.key] && (
-                <th key={col.key} className={`border-l border-orange-200 px-2 py-2 align-middle ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right' : ''} ${col.key === 'image_url' ? 'text-center' : ''}`}>
+              {columnDefs.map(col => isColumnVisible(col) && (
+                <th key={col.key} className={`border-l border-orange-200 px-2 py-2 align-middle ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right' : ''} ${['image_url', 'row_number'].includes(col.key) ? 'text-center' : ''} ${col.key === 'row_number' ? 'w-12' : ''}`}>
                   {col.label}
                 </th>
               ))}
@@ -273,9 +276,9 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
             {showFilterBar && (
               <tr className="border-b border-orange-200 bg-orange-50/60">
                 <th className="w-10 border-r border-orange-200 px-1.5 py-1.5" />
-                {columnDefs.map(col => visibleCols[col.key] && (
+                {columnDefs.map(col => isColumnVisible(col) && (
                   <th key={`filter-${col.key}`} className="border-l border-orange-200 px-1.5 py-1.5 font-normal">
-                    {col.key === 'image_url' ? (
+                    {col.key === 'row_number' || col.key === 'image_url' ? (
                       <div className="h-5" />
                     ) : ['branch', 'status', 'fee_type', 'pickup_rider', 'deliver_rider', 'sender_loc', 'receiver_loc'].includes(col.key) ? (
                       <MultiSelectFilter
@@ -323,7 +326,7 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
           <tbody className="divide-y divide-slate-300">
             {loading ? (
               <tr>
-                <td colSpan={columnDefs.filter(col => visibleCols[col.key]).length + 1 + Number(Boolean(onCheckOrder))} className="p-20 text-center">
+                <td colSpan={columnDefs.filter(isColumnVisible).length + 1 + Number(Boolean(onCheckOrder))} className="p-20 text-center">
                   <div className="inline-flex items-center gap-3 text-gray-400 font-medium text-sm">
                     <span className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
                     Loading Records...
@@ -332,7 +335,7 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
               </tr>
             ) : (
               <>
-                {orders.map((o) => (
+                {orders.map((o, rowIndex) => (
                   <tr 
                     key={o.id} 
                     onDoubleClick={() => onRowClick(o)}
@@ -353,9 +356,9 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
                         onChange={() => onToggleOrderSelection(o.id)}
                       />
                     </td>
-                    {columnDefs.map(col => visibleCols[col.key] && (
-                      <td key={`${o.id}-${col.key}`} className={`border-l border-slate-300 px-2 py-2 align-middle text-[13px] font-semibold text-slate-700 ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right tabular-nums' : ''} ${col.key === 'receiver_address' ? 'w-64 max-w-64 whitespace-normal break-words' : ''}`}>
-                        {renderCell(o, col.key)}
+                    {columnDefs.map(col => isColumnVisible(col) && (
+                      <td key={`${o.id}-${col.key}`} className={`border-l border-slate-300 px-2 py-2 align-middle text-[13px] font-semibold text-slate-700 ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right tabular-nums' : ''} ${col.key === 'row_number' ? 'w-12 text-center tabular-nums' : ''} ${col.key === 'receiver_address' ? 'w-64 max-w-64 whitespace-normal break-words' : ''}`}>
+                        {col.key === 'row_number' ? rowIndex + 1 : renderCell(o, col.key)}
                       </td>
                     ))}
                     {onCheckOrder && <td className="border-l border-slate-300 px-2 py-2 text-center align-middle">
@@ -413,7 +416,7 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
           </div>
         ) : (
           <>
-            {orders.map((o) => (
+            {orders.map((o, rowIndex) => (
               <div 
                 key={o.id} 
                 onClick={() => onRowClick(o)}
@@ -421,6 +424,9 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
+                    {columnDefs.some(col => col.key === 'row_number' && isColumnVisible(col)) && (
+                      <span className="min-w-5 text-center text-xs font-bold tabular-nums text-slate-500">{rowIndex + 1}</span>
+                    )}
                     <input
                       type="checkbox"
                       className="w-5 h-5 text-orange-500 rounded border-gray-300 accent-orange-500 cursor-pointer"

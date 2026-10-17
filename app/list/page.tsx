@@ -13,6 +13,7 @@ import DailyOSreport from "@/components/DailyOSreport";
 import { softDeleteOrder } from '@/lib/softDeleteOrder'
 
 const COLUMN_DEFS = [
+  { key: 'row_number', label: 'No.', defaultVisible: true },
   { key: 'image_url', label: 'Photo', defaultVisible: true }, 
   { key: 'item_id', label: 'Item ID', defaultVisible: true },
   { key: 'received_date', label: 'Received Date', defaultVisible: true },
@@ -385,13 +386,15 @@ useEffect(() => {
   }
 
   // ရွေးချယ်ထားတဲ့ Column Header တွေအတိုင်း Data ပုံစံပြောင်းလဲခြင်း
-  const excelRows = dataToExport.map(order => {
+  const excelRows = dataToExport.map((order, rowIndex) => {
     const rowData: Record<string, any> = {};
     
     COLUMN_DEFS.forEach(col => {
       if (excelCols[col.key]) {
         // သတ်မှတ်ထားတဲ့ column သာ ယူမယ် (အထူးသဖြင့် Object data တွေကို စာသားပြောင်းပေးမယ်)
-        if (col.key === 'pickup_rider') {
+        if (col.key === 'row_number') {
+          rowData[col.label] = rowIndex + 1;
+        } else if (col.key === 'pickup_rider') {
           rowData[col.label] = order.pickup_rider?.name || '-';
         } else if (col.key === 'deliver_rider') {
           rowData[col.label] = order.deliver_rider?.name || '-';
@@ -440,7 +443,8 @@ useEffect(() => {
 
   const toggleColumn = (colKey: string) => {
   setVisibleCols(prev => {
-    const updated = { ...prev, [colKey]: !prev[colKey] };
+    const defaultVisible = COLUMN_DEFS.find(col => col.key === colKey)?.defaultVisible ?? false;
+    const updated = { ...prev, [colKey]: !(prev[colKey] ?? defaultVisible) };
     localStorage.setItem('all_in_one_visible_cols', JSON.stringify(updated)); // localStorage ထဲ သိမ်းလိုက်ခြင်း
     return updated;
   });
@@ -642,7 +646,7 @@ useEffect(() => {
                           <input 
                             type="checkbox" 
                             className="mr-2.5 w-4 h-4 sm:w-3.5 sm:h-3.5 text-orange-500 rounded border-gray-300 accent-orange-500"
-                            checked={visibleCols[col.key] || false }  
+                            checked={visibleCols[col.key] ?? col.defaultVisible}
                             onChange={() => toggleColumn(col.key)}
                             disabled={col.key === 'item_id'} 
                           />
@@ -660,7 +664,7 @@ useEffect(() => {
   onClick={() => {
     // Modal ဖွင့်ခါနီး လက်ရှိ screen ရဲ့ visible ဖြစ်နေတဲ့ columns တွေအတိုင်း update ဖြစ်အောင်လုပ်ပေးခြင်း
     const currentVisible: Record<string, boolean> = {};
-    COLUMN_DEFS.forEach(col => { currentVisible[col.key] = visibleCols[col.key]; });
+    COLUMN_DEFS.forEach(col => { currentVisible[col.key] = visibleCols[col.key] ?? col.defaultVisible; });
     setExcelCols(currentVisible);
     setShowExcelModal(true);
   }} 

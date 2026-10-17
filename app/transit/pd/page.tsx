@@ -11,6 +11,7 @@ import SelectionSummaryBar from '@/components/SelectionSummaryBar'
 import OrderTable from '@/components/OrderTable'
 
 const COLUMN_DEFS = [
+  { key: 'row_number', label: 'No.', defaultVisible: true },
   { key: 'image_url', label: 'Photo', defaultVisible: false }, 
   { key: 'item_id', label: 'Item ID', defaultVisible: true },
   { key: 'received_date', label: 'Received Date', defaultVisible: true },
@@ -280,7 +281,8 @@ useEffect(() => {
 
   const toggleColumn = (colKey: string) => {
   setVisibleCols(prev => {
-    const updated = { ...prev, [colKey]: !prev[colKey] };
+    const defaultVisible = COLUMN_DEFS.find(col => col.key === colKey)?.defaultVisible ?? false;
+    const updated = { ...prev, [colKey]: !(prev[colKey] ?? defaultVisible) };
     localStorage.setItem('all_in_one_visible_cols', JSON.stringify(updated)); // localStorage ထဲ သိမ်းလိုက်ခြင်း
     return updated;
   });
@@ -474,7 +476,7 @@ async function handleQuickAtOffice(order: any) {
                         <input 
                           type="checkbox" 
                           className="mr-2.5 w-4 h-4 sm:w-3.5 sm:h-3.5 text-orange-500 rounded border-gray-300 accent-orange-500"
-                          checked={visibleCols[col.key] || false }  
+                          checked={visibleCols[col.key] ?? col.defaultVisible}
                           onChange={() => toggleColumn(col.key)}
                           disabled={col.key === 'item_id'} 
                         />

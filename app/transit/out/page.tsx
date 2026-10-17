@@ -31,6 +31,7 @@ const MANUAL_CITIES = [
 ]
 
 const COLUMN_DEFS = [
+  { key: 'row_number', label: 'No.', defaultVisible: true },
   { key: 'image_url', label: 'Photo', defaultVisible: false }, 
   { key: 'item_id', label: 'Item ID', defaultVisible: true },
   { key: 'received_date', label: 'Received Date', defaultVisible: true },
@@ -314,13 +315,15 @@ const start = append ? ordersRef.current.length : 0;
       return
     }
 
-    const excelRows = dataToExport.map(order => {
+    const excelRows = dataToExport.map((order, rowIndex) => {
       const rowData: Record<string, unknown> = {}
 
       COLUMN_DEFS.forEach(col => {
         if (!excelCols[col.key]) return
 
-        if (col.key === 'pickup_rider' || col.key === 'deliver_rider') {
+        if (col.key === 'row_number') {
+          rowData[col.label] = rowIndex + 1
+        } else if (col.key === 'pickup_rider' || col.key === 'deliver_rider') {
           rowData[col.label] = order[col.key]?.name || '-'
         } else if (col.key === 'image_url') {
           rowData[col.label] = order.image_url ? 'Has Photo' : '-'
@@ -388,7 +391,8 @@ const start = append ? ordersRef.current.length : 0;
 
   const toggleColumn = (colKey: string) => {
   setVisibleCols(prev => {
-    const updated = { ...prev, [colKey]: !prev[colKey] };
+    const defaultVisible = COLUMN_DEFS.find(col => col.key === colKey)?.defaultVisible ?? false;
+    const updated = { ...prev, [colKey]: !(prev[colKey] ?? defaultVisible) };
     localStorage.setItem('all_in_one_visible_cols', JSON.stringify(updated)); // localStorage ထဲ သိမ်းလိုက်ခြင်း
     return updated;
   });
@@ -579,7 +583,7 @@ const start = append ? ordersRef.current.length : 0;
                         <input 
                           type="checkbox" 
                           className="mr-2.5 w-4 h-4 sm:w-3.5 sm:h-3.5 text-orange-500 rounded border-gray-300 accent-orange-500"
-                          checked={visibleCols[col.key] || false }  
+                          checked={visibleCols[col.key] ?? col.defaultVisible}
                           onChange={() => toggleColumn(col.key)}
                           disabled={col.key === 'item_id'} 
                         />
@@ -600,7 +604,7 @@ const start = append ? ordersRef.current.length : 0;
           <button
             onClick={() => {
               const currentVisible: Record<string, boolean> = {}
-              COLUMN_DEFS.forEach(col => { currentVisible[col.key] = visibleCols[col.key] })
+              COLUMN_DEFS.forEach(col => { currentVisible[col.key] = visibleCols[col.key] ?? col.defaultVisible })
               setExcelCols({ ...currentVisible, item_id: true })
               setShowExcelModal(true)
             }}

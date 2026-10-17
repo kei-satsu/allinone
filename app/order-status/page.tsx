@@ -37,6 +37,7 @@ function getRelationName(value: unknown) {
 }
 
 const COLUMN_DEFS: ColumnDef[] = [
+  { key: 'row_number', label: 'No.', defaultVisible: true },
   { key: 'image_url', label: 'Photo', defaultVisible: true }, 
   { key: 'item_id', label: 'Item ID', defaultVisible: true },
   { key: 'received_date', label: 'Received Date', defaultVisible: true },
@@ -208,7 +209,8 @@ export default function OrderStatusPage() {
   const toggleColumn = (columnKey: string) => {
     if (columnKey === 'item_id') return
 
-    const updated = { ...visibleCols, [columnKey]: !visibleCols[columnKey] }
+    const defaultVisible = COLUMN_DEFS.find((column) => column.key === columnKey)?.defaultVisible ?? false
+    const updated = { ...visibleCols, [columnKey]: !(visibleCols[columnKey] ?? defaultVisible) }
     localStorage.setItem(COLUMN_PREFERENCES_KEY, JSON.stringify(updated))
     window.dispatchEvent(new Event('order-status-columns-changed'))
   }
@@ -458,7 +460,7 @@ export default function OrderStatusPage() {
                           <input
                             type="checkbox"
                             className="mr-2.5 h-3.5 w-3.5 rounded border-gray-300 accent-orange-500"
-                            checked={visibleCols[column.key] ?? false}
+                            checked={visibleCols[column.key] ?? column.defaultVisible}
                             onChange={() => toggleColumn(column.key)}
                             disabled={column.key === 'item_id'}
                           />
