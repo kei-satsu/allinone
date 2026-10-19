@@ -36,6 +36,7 @@ export default function PendingEntry() {
   const [isOnline, setIsOnline] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showSubmitConfirmation, setShowSubmitConfirmation] = useState(false)
 
   // ── Persisted fields across items ──
   const [persistSenderName, setPersistSenderName] = useState('')
@@ -395,6 +396,8 @@ const loadCities = async (targetBranch?: string) => {
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Enter') {
+        if (showSubmitConfirmation) return
+
         // အကယ်၍ Textarea ထဲမှာ စာရိုက်နေလို့ Line Break ဆင်းချင်တာမျိုးဆိုရင်တော့ Enter ကို ခွင့်ပြုမယ်
         if ((e.target as HTMLElement).tagName === 'TEXTAREA') return;
 
@@ -410,7 +413,7 @@ const loadCities = async (targetBranch?: string) => {
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [selectedItem, loading]); // Item ပြောင်းလဲမှုနဲ့ Loading စတိတ်တွေကို စောင့်ကြည့်ဖို့ Dependency ထည့်ထားပါတယ်
+  }, [selectedItem, loading, showSubmitConfirmation]); // Item ပြောင်းလဲမှုနဲ့ Loading စတိတ်တွေကို စောင့်ကြည့်ဖို့ Dependency ထည့်ထားပါတယ်
 
   const filteredSenders = (() => {
     const q = (searchQuery || '').trim().toLowerCase()
@@ -640,12 +643,21 @@ setOcrWords([]);
   
   
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedItem) return alert("စာရင်းသွင်းရန် Item ရွေးချယ်ပါ။")
     if (!formData.sender_name || !formData.receiver_name || !formData.receiver_phone) {
       return alert("လိုအပ်သောအချက်အလက်များ ပြည့်စုံစွာဖြည့်ပါ!")
     }
+    setShowSubmitConfirmation(true)
+  }
+
+  const handleConfirmSubmit = async () => {
+    if (!selectedItem) {
+      setShowSubmitConfirmation(false)
+      return alert("စာရင်းသွင်းရန် Item ရွေးချယ်ပါ။")
+    }
+    setShowSubmitConfirmation(false)
     setLoading(true)
 
     
@@ -1542,6 +1554,61 @@ if (updatedPending.length > 0) {
       onClose={() => setIsModalOpen(false)} 
       onCityAdded={loadCities} 
     />     
+
+{showSubmitConfirmation && (
+  <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="submit-confirmation-title"
+      className="w-full max-w-md overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl"
+    >
+      <div className="bg-gray-900 px-5 py-4 text-white">
+        <h2 id="submit-confirmation-title" className="text-base font-bold">အချက်အလက်များ ပြန်စစ်ပါ</h2>
+        <p className="mt-1 text-xs text-gray-300">သိမ်းဆည်းမည့် အချက်အလက်များ မှန်ကန်ကြောင်း အတည်ပြုပါ။</p>
+      </div>
+      <div className="space-y-3 p-5">
+        <div className="flex items-center justify-between gap-4 border-b border-gray-100 pb-2">
+          <span className="text-xs font-semibold uppercase text-gray-500">Sender Name</span>
+          <span className="break-all text-right font-semibold text-gray-900">{formData.sender_name || '—'}</span>
+        </div>
+        <div className="flex items-center justify-between gap-4 border-b border-gray-100 pb-2">
+          <span className="text-xs font-semibold uppercase text-gray-500">Receiver Name</span>
+          <span className="break-all text-right font-semibold text-gray-900">{formData.receiver_name || '—'}</span>
+        </div>
+        <div className="flex items-center justify-between gap-4 border-b border-gray-100 pb-2">
+          <span className="text-xs font-semibold uppercase text-gray-500">COD Amount</span>
+          <span className="font-mono font-bold text-gray-900">{Number(formData.cod_amount || 0).toLocaleString()} Ks</span>
+        </div>
+        <div className="flex items-center justify-between gap-4 border-b border-gray-100 pb-2">
+          <span className="text-xs font-semibold uppercase text-gray-500">Deli Fee</span>
+          <span className="font-mono font-bold text-orange-600">{Number(formData.deli_fee || 0).toLocaleString()} Ks</span>
+        </div>
+        <div className="flex items-center justify-between gap-4 rounded-lg bg-gray-900 px-3 py-2.5">
+          <span className="text-xs font-bold uppercase text-gray-300">Total</span>
+          <span className="font-mono text-lg font-black text-orange-400">{Number(formData.total_amount || 0).toLocaleString()} Ks</span>
+        </div>
+      </div>
+      <div className="flex justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-3">
+        <button
+          type="button"
+          onClick={() => setShowSubmitConfirmation(false)}
+          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100"
+        >
+          ပြန်ပြင်မည်
+        </button>
+        <button
+          type="button"
+          onClick={handleConfirmSubmit}
+          disabled={loading}
+          className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          အတည်ပြုပြီး သိမ်းမည်
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
 {/* OCR Text Result Popup Modal */}
 {showOcrModal && (
