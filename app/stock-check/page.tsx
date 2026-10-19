@@ -38,6 +38,7 @@ type OrderContextMenu = { x: number; y: number; order: StockOrder }
 const COLUMN_DEFS: ColumnDef[] = [
   { key: 'row_number', label: 'No.', defaultVisible: true },
   { key: 'item_id', label: 'Item ID', defaultVisible: true },
+  { key: 'received_date', label: 'Received Date', defaultVisible: true },
   { key: 'status', label: 'Status', defaultVisible: true },
   { key: 'last_check', label: 'Last Check', defaultVisible: true },
   { key: 'sender_name', label: 'Sender', defaultVisible: true },
