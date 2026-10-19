@@ -18,6 +18,7 @@ export default function PendingEntry() {
   const senderInputRef = useRef<HTMLInputElement>(null)
   const receiverNameRef = useRef<HTMLInputElement>(null)
   const submitConfirmationButtonRef = useRef<HTMLButtonElement>(null)
+  const cancelSubmitConfirmationButtonRef = useRef<HTMLButtonElement>(null)
 
   const thumbContainerRef = useRef<HTMLDivElement>(null)
   
@@ -397,6 +398,11 @@ const loadCities = async (targetBranch?: string) => {
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (showSubmitConfirmation) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          cancelSubmitConfirmationButtonRef.current?.click()
+          return
+        }
         if (e.key === 'Enter') {
           e.preventDefault()
           if (!e.repeat && !loading) submitConfirmationButtonRef.current?.click()
@@ -1572,49 +1578,52 @@ if (updatedPending.length > 0) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="submit-confirmation-title"
-      className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-2xl"
+      className="max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-2xl"
     >
       <div className="bg-gray-900 px-5 py-4 text-white">
         <h2 id="submit-confirmation-title" className="text-base font-bold">အချက်အလက်များ ပြန်စစ်ပါ</h2>
         <p className="mt-1 text-xs text-gray-300">သိမ်းဆည်းမည့် အချက်အလက်များ မှန်ကန်ကြောင်း အတည်ပြုပါ။</p>
       </div>
-      <div className="space-y-3 p-5">
+      <div className="grid gap-5 p-5 md:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.9fr)]">
         {selectedItem?.image_url ? (
-          <div className="flex max-h-[42vh] items-center justify-center overflow-hidden rounded-xl bg-gray-950 p-2">
+          <div className="flex min-h-64 max-h-[68vh] items-center justify-center overflow-hidden rounded-xl bg-gray-950 p-3">
             <img
               src={getCloudinaryUrl(selectedItem.image_url, CLOUDINARY_TRANSFORMS.main)}
               alt="Voucher preview"
-              className="max-h-[40vh] max-w-full object-contain"
+              className="max-h-[66vh] max-w-full object-contain"
             />
           </div>
         ) : (
-          <div className="flex h-32 items-center justify-center rounded-xl bg-gray-100 text-sm text-gray-500">
+          <div className="flex min-h-64 items-center justify-center rounded-xl bg-gray-100 text-sm text-gray-500">
             ပုံ မရှိပါ
           </div>
         )}
-        <div className="flex items-center justify-between gap-4 border-b border-gray-100 pb-2">
-          <span className="text-xs font-semibold uppercase text-gray-500">Sender Name</span>
-          <span className="break-all text-right font-semibold text-gray-900">{formData.sender_name || '—'}</span>
-        </div>
-        <div className="flex items-center justify-between gap-4 border-b border-gray-100 pb-2">
-          <span className="text-xs font-semibold uppercase text-gray-500">Receiver Name</span>
-          <span className="break-all text-right font-semibold text-gray-900">{formData.receiver_name || '—'}</span>
-        </div>
-        <div className="flex items-center justify-between gap-4 border-b border-gray-100 pb-2">
-          <span className="text-xs font-semibold uppercase text-gray-500">COD Amount</span>
-          <span className="font-mono font-bold text-gray-900">{Number(formData.cod_amount || 0).toLocaleString()} Ks</span>
-        </div>
-        <div className="flex items-center justify-between gap-4 border-b border-gray-100 pb-2">
-          <span className="text-xs font-semibold uppercase text-gray-500">Deli Fee</span>
-          <span className="font-mono font-bold text-orange-600">{Number(formData.deli_fee || 0).toLocaleString()} Ks</span>
-        </div>
-        <div className="flex items-center justify-between gap-4 rounded-lg bg-gray-900 px-3 py-2.5">
-          <span className="text-xs font-bold uppercase text-gray-300">Total</span>
-          <span className="font-mono text-lg font-black text-orange-400">{Number(formData.total_amount || 0).toLocaleString()} Ks</span>
+        <div className="flex flex-col justify-center gap-4">
+          <div className="flex items-center justify-between gap-4 border-b border-gray-100 pb-3">
+            <span className="text-xs font-semibold uppercase text-gray-500">Sender Name</span>
+            <span className="break-all text-right font-semibold text-gray-900">{formData.sender_name || '—'}</span>
+          </div>
+          <div className="flex items-center justify-between gap-4 border-b border-gray-100 pb-3">
+            <span className="text-xs font-semibold uppercase text-gray-500">Receiver Name</span>
+            <span className="break-all text-right font-semibold text-gray-900">{formData.receiver_name || '—'}</span>
+          </div>
+          <div className="flex items-center justify-between gap-4 border-b border-gray-100 pb-3">
+            <span className="text-xs font-semibold uppercase text-gray-500">COD Amount</span>
+            <span className="font-mono font-bold text-gray-900">{Number(formData.cod_amount || 0).toLocaleString()} Ks</span>
+          </div>
+          <div className="flex items-center justify-between gap-4 border-b border-gray-100 pb-3">
+            <span className="text-xs font-semibold uppercase text-gray-500">Deli Fee</span>
+            <span className="font-mono font-bold text-orange-600">{Number(formData.deli_fee || 0).toLocaleString()} Ks</span>
+          </div>
+          <div className="flex items-center justify-between gap-4 rounded-lg bg-gray-900 px-3 py-3">
+            <span className="text-xs font-bold uppercase text-gray-300">Total</span>
+            <span className="font-mono text-lg font-black text-orange-400">{Number(formData.total_amount || 0).toLocaleString()} Ks</span>
+          </div>
         </div>
       </div>
       <div className="flex justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-3">
         <button
+          ref={cancelSubmitConfirmationButtonRef}
           type="button"
           onClick={() => setShowSubmitConfirmation(false)}
           className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100"
