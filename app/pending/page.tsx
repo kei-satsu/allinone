@@ -17,6 +17,7 @@ export default function PendingEntry() {
   const router = useRouter()
   const senderInputRef = useRef<HTMLInputElement>(null)
   const receiverNameRef = useRef<HTMLInputElement>(null)
+  const submitConfirmationButtonRef = useRef<HTMLButtonElement>(null)
 
   const thumbContainerRef = useRef<HTMLDivElement>(null)
   
@@ -395,9 +396,15 @@ const loadCities = async (targetBranch?: string) => {
   // 🌟 ဘယ်နေရာမှာပဲဖြစ်ဖြစ် Enter နှိပ်လိုက်ရင် Update & Next ကို တန်းနှိပ်ပေးမယ့် စနစ်
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        if (showSubmitConfirmation) return
+      if (showSubmitConfirmation) {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          if (!e.repeat && !loading) submitConfirmationButtonRef.current?.click()
+        }
+        return
+      }
 
+      if (e.key === 'Enter') {
         // အကယ်၍ Textarea ထဲမှာ စာရိုက်နေလို့ Line Break ဆင်းချင်တာမျိုးဆိုရင်တော့ Enter ကို ခွင့်ပြုမယ်
         if ((e.target as HTMLElement).tagName === 'TEXTAREA') return;
 
@@ -414,6 +421,10 @@ const loadCities = async (targetBranch?: string) => {
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [selectedItem, loading, showSubmitConfirmation]); // Item ပြောင်းလဲမှုနဲ့ Loading စတိတ်တွေကို စောင့်ကြည့်ဖို့ Dependency ထည့်ထားပါတယ်
+
+  useEffect(() => {
+    if (showSubmitConfirmation) submitConfirmationButtonRef.current?.focus()
+  }, [showSubmitConfirmation])
 
   const filteredSenders = (() => {
     const q = (searchQuery || '').trim().toLowerCase()
@@ -1561,13 +1572,26 @@ if (updatedPending.length > 0) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="submit-confirmation-title"
-      className="w-full max-w-md overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl"
+      className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-2xl"
     >
       <div className="bg-gray-900 px-5 py-4 text-white">
         <h2 id="submit-confirmation-title" className="text-base font-bold">အချက်အလက်များ ပြန်စစ်ပါ</h2>
         <p className="mt-1 text-xs text-gray-300">သိမ်းဆည်းမည့် အချက်အလက်များ မှန်ကန်ကြောင်း အတည်ပြုပါ။</p>
       </div>
       <div className="space-y-3 p-5">
+        {selectedItem?.image_url ? (
+          <div className="flex max-h-[42vh] items-center justify-center overflow-hidden rounded-xl bg-gray-950 p-2">
+            <img
+              src={getCloudinaryUrl(selectedItem.image_url, CLOUDINARY_TRANSFORMS.main)}
+              alt="Voucher preview"
+              className="max-h-[40vh] max-w-full object-contain"
+            />
+          </div>
+        ) : (
+          <div className="flex h-32 items-center justify-center rounded-xl bg-gray-100 text-sm text-gray-500">
+            ပုံ မရှိပါ
+          </div>
+        )}
         <div className="flex items-center justify-between gap-4 border-b border-gray-100 pb-2">
           <span className="text-xs font-semibold uppercase text-gray-500">Sender Name</span>
           <span className="break-all text-right font-semibold text-gray-900">{formData.sender_name || '—'}</span>
@@ -1598,6 +1622,7 @@ if (updatedPending.length > 0) {
           ပြန်ပြင်မည်
         </button>
         <button
+          ref={submitConfirmationButtonRef}
           type="button"
           onClick={handleConfirmSubmit}
           disabled={loading}
