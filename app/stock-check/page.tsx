@@ -29,7 +29,7 @@ type StockOrder = {
   [key: string]: unknown
 }
 
-type StockStatus = 'All' | 'At Office' | 'On Way' | 'Arrived' | 'Checked'
+type StockStatus = 'All' | 'At Office' | 'On Hold' | 'Arrived' | 'Checked'
 type StockColumnFilters = Record<string, string | string[]>
 type QueryResult = { data: StockOrder[] | StockOrder | null; error: Error | null }
 type QueryFactory = (from: number, to: number) => PromiseLike<QueryResult>
@@ -53,7 +53,7 @@ const COLUMN_DEFS: ColumnDef[] = [
   { key: 'branch', label: 'Origin', defaultVisible: false },
 ]
 
-const STOCK_STATUSES = ['At Office', 'On Way', 'Arrived']
+const STOCK_STATUSES = ['At Office', 'On Hold', 'Arrived']
 const PAGE_SIZE = 500
 
 function subscribeToBranch(onStoreChange: () => void) {
@@ -101,13 +101,12 @@ function belongsInStockCheck(order: StockOrder, branch: string) {
   const origin = String(order.branch || '').trim().toUpperCase()
   const currentBranch = branch.trim().toUpperCase()
   const status = String(order.status || '').trim()
-  const transitLegs = getTransitLegs(order.transit)
 
   if (origin === currentBranch && status === 'At Office') return true
-  if (origin === currentBranch && status === 'On Way' && transitLegs.length === 0) return true
+  if (origin === currentBranch && status === 'On Hold') return true
 
   const lastDestination = String(getLastTransitLeg(order)?.transit_to || '').trim().toUpperCase()
-  return lastDestination === currentBranch && (status === 'On Way' || status === 'Arrived')
+  return lastDestination === currentBranch && (status === 'On Hold' || status === 'Arrived')
 }
 
 async function fetchAllPages(createQuery: QueryFactory) {
@@ -182,7 +181,7 @@ export default function StockCheckPage() {
           .from<StockOrder>('orders')
           .select('*')
           .eq('is_deleted', false)
-          .in('status', ['Arrived', 'On Way'])
+          .in('status', ['Arrived', 'On Hold'])
           .filter('transit', 'cs', JSON.stringify([{ transit_to: branch }]))
           .order('created_at', { ascending: false })
           .range(from, to))
@@ -244,9 +243,9 @@ export default function StockCheckPage() {
   const selection = useOrderSelection(orders)
   const statusCounts = useMemo(() => orders.reduce<Record<StockStatus, number>>((counts, order) => {
     if (hasBeenCheckedToday(order)) counts.Checked += 1
-    else if (order.status === 'At Office' || order.status === 'On Way' || order.status === 'Arrived') counts[order.status] += 1
+    else if (order.status === 'At Office' || order.status === 'On Hold' || order.status === 'Arrived') counts[order.status] += 1
     return counts
-  }, { All: orders.length, 'At Office': 0, 'On Way': 0, Arrived: 0, Checked: 0 }), [orders])
+  }, { All: orders.length, 'At Office': 0, 'On Hold': 0, Arrived: 0, Checked: 0 }), [orders])
 
   const handleCheckOrder = async (order: StockOrder) => {
     if (checkingOrderIds.has(order.id)) return
@@ -306,7 +305,7 @@ export default function StockCheckPage() {
 
   const activeColumnFilterCount = Object.values(columnFilters).filter((value) => Array.isArray(value) ? value.length > 0 : Boolean(value.trim())).length
 
-  const statusOptions: StockStatus[] = ['All', 'At Office', 'On Way', 'Arrived', 'Checked']
+  const statusOptions: StockStatus[] = ['All', 'At Office', 'On Hold', 'Arrived', 'Checked']
   const renderStatusTabs = () => (
     <nav aria-label="Stock status" className="flex items-center gap-1">
       {statusOptions.map((status) => (
