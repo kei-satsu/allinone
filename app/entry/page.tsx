@@ -229,15 +229,6 @@ useEffect(() => {
     setFormData(prev => ({ ...prev, receiver_phone: formatted }))
   }
 
-  const handleStatusChange = (status: string) => {
-    const isDateRelevant = ['On Way', 'On Hold', 'Delivered', 'Handover', 'Returned'].includes(status)
-    const nextDeliverDate = isDateRelevant
-      ? formData.deliver_date || today
-      : ''
-
-    setFormData(prev => ({ ...prev, status, deliver_date: nextDeliverDate }))
-  }
-
   const handleSenderPhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let s = e.target.value.replace(/-/g, '').replace(/\D/g, '')
     let formatted = s;
@@ -712,7 +703,7 @@ useEffect(() => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className={labelStyle}>Dispatch Status</label>
-                  <select value={formData.status} onChange={e => handleStatusChange(e.target.value)} className={winSelect}>
+                  <select value={formData.status} className={`${winSelect} bg-gray-100 cursor-not-allowed`} disabled>
                      <option value="At Office">📦 At Office</option>
                       <option value="On Way">🚵 On Way</option>
                      <option value="On Hold">⏸️ On Hold</option>
@@ -728,15 +719,14 @@ useEffect(() => {
                   <input
                     type="date"
                     value={formData.deliver_date}
-                    onChange={e => setFormData({...formData, deliver_date: e.target.value})}
-                    className={`${winInput} font-mono ${!['On Way', 'On Hold', 'Delivered', 'Handover', 'Returned'].includes(formData.status) ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                    disabled={!['On Way', 'On Hold', 'Delivered', 'Handover', 'Returned'].includes(formData.status)}
+                    className={`${winInput} font-mono bg-gray-100 cursor-not-allowed`}
+                    disabled
                   />
                 </div>
               </div>
               <div>
                 <label className={labelStyle}>Delivery Rider</label>
-                <select value={formData.deliver_rider_id} onChange={e => setFormData({...formData, deliver_rider_id: e.target.value})} className={winSelect}>
+                <select value={formData.deliver_rider_id} className={`${winSelect} bg-gray-100 cursor-not-allowed`} disabled>
                   <option value="">Select delivery rider...</option>
                   {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                 </select>
