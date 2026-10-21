@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { apiClient } from "@/lib/databaseApi";
 import { useRouter } from "next/navigation";
 import EditOrderModal from "@/components/EditOrderModal";
@@ -31,6 +31,8 @@ const COLUMN_DEFS = [
 ];
 
 const REPORT_VISIBLE_COLUMNS_KEY = "report_visible_columns_v2";
+const SUMMARY_PANEL_MIN_HEIGHT = 220;
+const SUMMARY_PANEL_MAX_HEIGHT = 650;
 
 export default function DailyReport() {
   const router = useRouter();
@@ -50,6 +52,12 @@ export default function DailyReport() {
   const [mobilePage, setMobilePage] = useState<"workspace" | "summary">(
     "workspace",
   );
+  const [summaryPanelHeight, setSummaryPanelHeight] = useState(390);
+  const summaryResizeRef = useRef<{
+    pointerId: number;
+    startY: number;
+    startHeight: number;
+  } | null>(null);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [expandedMobileCards, setExpandedMobileCards] = useState<
     Record<string, boolean>
@@ -350,6 +358,14 @@ export default function DailyReport() {
       return cellValue.toLowerCase().includes(filterValue);
     });
   });
+
+  const statusOptions = Array.from(
+    new Set(
+      reportData
+        .map((order) => String(order.status ?? "").trim())
+        .filter(Boolean),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
 
   // 💡 (ကုဒ်သစ်) ရွေးချယ်ထားသော ပါဆယ် ID များကို ထိန်းချုပ်ရန် State
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -1282,12 +1298,11 @@ export default function DailyReport() {
                 }
               >
                 <option value="">All Status</option>
-                <option value="At Office">At Office</option>
-                <option value="On Way">On Way</option>
-                <option value="On Hold">On Hold</option>
-                <option value="Delivered">Delivered</option>
-                <option value="In-Transit">In-Transit</option>
-                <option value="Settled">Settled</option>
+                {statusOptions.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
@@ -1325,12 +1340,17 @@ export default function DailyReport() {
       </div>
       {/* ── Cards Layout Wrapper (Responsive managed with state) ── */}
       <div
-        className={`${mobilePage === "summary" ? "grid max-h-[calc(100dvh-9rem)] overflow-y-auto overscroll-contain pb-[calc(env(safe-area-inset-bottom)+4rem)]" : "hidden sm:grid"} sm:max-h-none sm:overflow-visible sm:pb-0 mx-3 sm:mx-4 mt-3 grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 shrink-0 transition-all`}
+        style={
+          {
+            "--report-summary-height": `${summaryPanelHeight}px`,
+          } as CSSProperties
+        }
+        className={`${mobilePage === "summary" ? "grid max-h-[calc(100dvh-9rem)] overflow-y-auto overscroll-contain pb-[calc(env(safe-area-inset-bottom)+4rem)]" : "hidden sm:grid"} sm:max-h-none sm:overflow-visible sm:pb-0 mx-3 sm:mx-4 mt-3 grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 shrink-0 transition-all lg:h-[var(--report-summary-height)] lg:min-h-0 lg:overflow-hidden`}
       >
         {/* ========================================================= */}
         {/* ဘယ်ဘက် Column: ကတ် (၁) - Rider Ngwe ရှင်းမှုမှတ်တမ်း Card */}
         {/* ========================================================= */}
-        <div className="flex flex-col gap-3 h-full">
+        <div className="flex flex-col gap-3 h-full lg:min-h-0">
           {/* ထိပ်ဆုံးက Metric Cards ၄ ခု */}
 
           <div
@@ -1371,12 +1391,12 @@ export default function DailyReport() {
           </div>
 
           {/* 🔴 🟣 🔵 အသစ်ပြင်ဆင်ထားသော Layout (Image ထဲကအတိုင်း ဘယ်ညာကပ်လျက်) */}
-          <div className="flex flex-col sm:flex-row bg-white rounded-lg border border-gray-200 shadow-sm h-auto sm:h-[320px] overflow-hidden mt-1">
+          <div className="flex flex-col sm:flex-row bg-white rounded-lg border border-gray-200 shadow-sm h-auto sm:h-[320px] lg:h-auto lg:flex-1 lg:min-h-0 overflow-hidden mt-1">
             {/* ---------------------------------------------------- */}
-            {/* ဘယ်ဘက်ခြမ်း (Purple & Red Areas) - Width 30% */}
+            {/* ဘယ်ဘက်ခြမ်း (Purple & Red Areas) - Width 24% */}
             {/* ---------------------------------------------------- */}
             <div
-              className={`${mobilePage === "summary" ? "grid" : "hidden"} sm:flex w-full sm:w-[30%] grid-cols-2 sm:flex-col border-b sm:border-b-0 sm:border-r border-gray-200 shrink-0 bg-gray-50/30`}
+              className={`${mobilePage === "summary" ? "grid" : "hidden"} sm:flex w-full sm:w-[24%] grid-cols-2 sm:flex-col border-b sm:border-b-0 sm:border-r border-gray-200 shrink-0 bg-gray-50/30`}
             >
               {/* 🟣 ၁။ Opposite Paid Card */}
               <div className="flex-1 p-3 sm:p-4 border-b border-r sm:border-r-0 border-gray-200 flex flex-col items-center justify-center bg-white hover:bg-purple-50/20 transition-colors">
@@ -1420,10 +1440,10 @@ export default function DailyReport() {
             </div>
 
             {/* ---------------------------------------------------- */}
-            {/* ညာဘက်ခြမ်း (Blue Area - Table & Buttons) - Width 70% */}
+            {/* ညာဘက်ခြမ်း (Blue Area - Table & Buttons) - Width 76% */}
             {/* ---------------------------------------------------- */}
             <div
-              className={`${mobilePage === "summary" ? "flex" : "hidden"} sm:flex w-full sm:w-[70%] p-2 relative bg-blue-50/20 flex-col h-auto sm:h-full`}
+              className={`${mobilePage === "summary" ? "flex" : "hidden"} sm:flex w-full sm:w-[76%] p-2 relative bg-blue-50/20 flex-col h-auto sm:h-full`}
             >
               {/* Header & Buttons (Blue Box အတွင်း) */}
               <div className="flex flex-col min-[440px]:flex-row justify-between items-stretch min-[440px]:items-center gap-2 pb-2 z-10 px-2 pt-1 relative shrink-0">
@@ -1458,8 +1478,11 @@ export default function DailyReport() {
                 let grandTotalOop = 0;
                 let grandTotalGap = 0;
 
-                let grandTotalDelivered = 0;
+                let grandTotalHandover = 0;
                 let grandTotalOnWay = 0;
+                let grandTotalOnHold = 0;
+                let grandTotalDelivered = 0;
+                let grandTotalSettled = 0;
                 let grandTotalWays = 0;
 
                 // 1. Rider တစ်ယောက်ချင်းစီရဲ့ Data တွက်ချက်ခြင်းအပိုင်း
@@ -1471,11 +1494,20 @@ export default function DailyReport() {
                         o.deliver_date === selectedDate,
                     );
 
-                    const deliveredCount = riderOrders.filter(
-                      (o) => o.status === "Delivered" || o.status === "Settled",
+                    const handoverCount = riderOrders.filter(
+                      (o) => o.status === "Handover",
                     ).length;
                     const onWayCount = riderOrders.filter(
                       (o) => o.status === "On Way",
+                    ).length;
+                    const onHoldCount = riderOrders.filter(
+                      (o) => o.status === "On Hold",
+                    ).length;
+                    const deliveredCount = riderOrders.filter(
+                      (o) => o.status === "Delivered",
+                    ).length;
+                    const settledCount = riderOrders.filter(
+                      (o) => o.status === "Settled",
                     ).length;
                     const totalWayCount = riderOrders.length;
 
@@ -1510,8 +1542,11 @@ export default function DailyReport() {
                     grandTotalOop += oop;
                     grandTotalGap += gap;
 
-                    grandTotalDelivered += deliveredCount;
+                    grandTotalHandover += handoverCount;
                     grandTotalOnWay += onWayCount;
+                    grandTotalOnHold += onHoldCount;
+                    grandTotalDelivered += deliveredCount;
+                    grandTotalSettled += settledCount;
                     grandTotalWays += totalWayCount;
 
                     let gapColor = "text-green-600";
@@ -1533,16 +1568,34 @@ export default function DailyReport() {
                         <td className="px-2 py-1.5 sm:px-1 sm:py-0.5 text-center">
                           <div className="flex items-center justify-center gap-1 font-mono text-[10px]">
                             <span
-                              className="bg-green-50 text-green-700 px-1 rounded border border-green-200"
-                              title="Delivered"
+                              className="bg-amber-50 text-amber-700 px-1 rounded border border-amber-200"
+                              title="Handover"
                             >
-                              D:{deliveredCount}
+                              H:{handoverCount}
                             </span>
                             <span
                               className="bg-blue-50 text-blue-700 px-1 rounded border border-blue-200"
                               title="On Way"
                             >
                               O:{onWayCount}
+                            </span>
+                            <span
+                              className="bg-red-50 text-red-700 px-1 rounded border border-red-200"
+                              title="On Hold"
+                            >
+                              OH:{onHoldCount}
+                            </span>
+                            <span
+                              className="bg-green-50 text-green-700 px-1 rounded border border-green-200"
+                              title="Delivered"
+                            >
+                              D:{deliveredCount}
+                            </span>
+                            <span
+                              className="bg-purple-50 text-purple-700 px-1 rounded border border-purple-200"
+                              title="Settled"
+                            >
+                              S:{settledCount}
                             </span>
                             <span
                               className="bg-gray-100 text-gray-700 px-1 rounded border border-gray-200 font-bold"
@@ -1585,11 +1638,20 @@ export default function DailyReport() {
                         o.deliver_rider_id === rider.id &&
                         o.deliver_date === selectedDate,
                     );
-                    const deliveredCount = riderOrders.filter(
-                      (o) => o.status === "Delivered" || o.status === "Settled",
+                    const handoverCount = riderOrders.filter(
+                      (o) => o.status === "Handover",
                     ).length;
                     const onWayCount = riderOrders.filter(
                       (o) => o.status === "On Way",
+                    ).length;
+                    const onHoldCount = riderOrders.filter(
+                      (o) => o.status === "On Hold",
+                    ).length;
+                    const deliveredCount = riderOrders.filter(
+                      (o) => o.status === "Delivered",
+                    ).length;
+                    const settledCount = riderOrders.filter(
+                      (o) => o.status === "Settled",
                     ).length;
                     const totalWayCount = riderOrders.length;
                     const totalToPay = riderOrders
@@ -1634,11 +1696,20 @@ export default function DailyReport() {
                             {rider.name}
                           </span>
                           <div className="shrink-0 flex items-center gap-1 font-mono text-[10px]">
-                            <span className="rounded border border-green-200 bg-green-50 px-1.5 py-0.5 text-green-700">
-                              D:{deliveredCount}
+                            <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-amber-700">
+                              H:{handoverCount}
                             </span>
                             <span className="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-blue-700">
                               O:{onWayCount}
+                            </span>
+                            <span className="rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-red-700">
+                              OH:{onHoldCount}
+                            </span>
+                            <span className="rounded border border-green-200 bg-green-50 px-1.5 py-0.5 text-green-700">
+                              D:{deliveredCount}
+                            </span>
+                            <span className="rounded border border-purple-200 bg-purple-50 px-1.5 py-0.5 text-purple-700">
+                              S:{settledCount}
                             </span>
                             <span className="rounded border border-gray-200 bg-gray-100 px-1.5 py-0.5 font-bold text-gray-700">
                               T:{totalWayCount}
@@ -1694,19 +1765,19 @@ export default function DailyReport() {
                               <th className="px-2 py-2 sm:px-1 sm:py-0.5 w-[22%]">
                                 Rider Name
                               </th>
-                              <th className="px-2 py-2 sm:px-1 sm:py-0.5 text-center w-[18%]">
-                                Way (D/O/T)
+                              <th className="px-2 py-2 sm:px-1 sm:py-0.5 text-center w-[30%]">
+                                Way (H/O/OH/D/S/T)
                               </th>
-                              <th className="px-2 py-2 sm:px-1 sm:py-0.5 text-right w-[15%]">
+                              <th className="px-2 py-2 sm:px-1 sm:py-0.5 text-right w-[12%]">
                                 Total
                               </th>
-                              <th className="px-2 py-2 sm:px-1 sm:py-0.5 text-right w-[15%]">
+                              <th className="px-2 py-2 sm:px-1 sm:py-0.5 text-right w-[12%]">
                                 အပ်ငွေ
                               </th>
-                              <th className="px-2 py-2 sm:px-1 sm:py-0.5 text-right w-[15%]">
+                              <th className="px-2 py-2 sm:px-1 sm:py-0.5 text-right w-[12%]">
                                 စိုက်ငွေ
                               </th>
-                              <th className="px-2 py-2 sm:px-1 sm:py-0.5 text-right w-[15%]">
+                              <th className="px-2 py-2 sm:px-1 sm:py-0.5 text-right w-[12%]">
                                 ကွာဟချက်
                               </th>
                             </tr>
@@ -1737,13 +1808,22 @@ export default function DailyReport() {
                                 Total
                               </td>
 
-                              <td className="px-2 py-2 sm:px-1 sm:py-1 text-center w-[18%]">
+                              <td className="px-2 py-2 sm:px-1 sm:py-1 text-center w-[30%]">
                                 <div className="flex items-center justify-center gap-1 font-mono text-[10px]">
-                                  <span className="bg-green-100 text-green-800 px-1 rounded border border-green-300">
-                                    D:{grandTotalDelivered}
+                                  <span className="bg-amber-100 text-amber-800 px-1 rounded border border-amber-300">
+                                    H:{grandTotalHandover}
                                   </span>
                                   <span className="bg-blue-100 text-blue-800 px-1 rounded border border-blue-300">
                                     O:{grandTotalOnWay}
+                                  </span>
+                                  <span className="bg-red-100 text-red-800 px-1 rounded border border-red-300">
+                                    OH:{grandTotalOnHold}
+                                  </span>
+                                  <span className="bg-green-100 text-green-800 px-1 rounded border border-green-300">
+                                    D:{grandTotalDelivered}
+                                  </span>
+                                  <span className="bg-purple-100 text-purple-800 px-1 rounded border border-purple-300">
+                                    S:{grandTotalSettled}
                                   </span>
                                   <span className="bg-gray-200 text-gray-800 px-1 rounded border border-gray-200 font-bold">
                                     T:{grandTotalWays}
@@ -1751,17 +1831,17 @@ export default function DailyReport() {
                                 </div>
                               </td>
 
-                              <td className="px-2 py-2 sm:px-1 sm:py-1 text-right font-mono text-blue-900 w-[15%]">
+                              <td className="px-2 py-2 sm:px-1 sm:py-1 text-right font-mono text-blue-900 w-[12%]">
                                 {grandTotalToPay.toLocaleString()}
                               </td>
-                              <td className="px-2 py-2 sm:px-1 sm:py-1 text-right font-mono text-blue-700 w-[15%]">
+                              <td className="px-2 py-2 sm:px-1 sm:py-1 text-right font-mono text-blue-700 w-[12%]">
                                 {grandTotalCashIn.toLocaleString()}
                               </td>
-                              <td className="px-2 py-2 sm:px-1 sm:py-1 text-right font-mono text-purple-700 w-[15%]">
+                              <td className="px-2 py-2 sm:px-1 sm:py-1 text-right font-mono text-purple-700 w-[12%]">
                                 {grandTotalOop.toLocaleString()}
                               </td>
                               <td
-                                className={`px-2 py-2 sm:px-1 sm:py-1 text-right font-mono w-[15%] ${totalGapColor}`}
+                                className={`px-2 py-2 sm:px-1 sm:py-1 text-right font-mono w-[12%] ${totalGapColor}`}
                               >
                                 {grandTotalGap > 0
                                   ? `+${grandTotalGap.toLocaleString()}`
@@ -1787,8 +1867,10 @@ export default function DailyReport() {
                       <div className="col-span-2 flex items-center justify-between border-b border-blue-200 pb-1.5 text-blue-900">
                         <span>Total</span>
                         <span className="font-mono">
-                          D:{grandTotalDelivered} · O:{grandTotalOnWay} · T:
-                          {grandTotalWays}
+                          H:{grandTotalHandover} · O:{grandTotalOnWay} ·
+                          OH:{grandTotalOnHold} ·
+                          D:{grandTotalDelivered} · S:{grandTotalSettled} ·
+                          T:{grandTotalWays}
                         </span>
                       </div>
                       <div>
@@ -1833,7 +1915,7 @@ export default function DailyReport() {
 
         {/* ကတ် (၂) - Sender အလိုက် ပြန်ပေးရမယ့် COD စာရင်း Card */}
         <div
-          className={`${mobilePage === "summary" ? "flex" : "hidden"} sm:flex p-3 sm:p-4 bg-white rounded-lg border border-gray-200 shadow-sm flex-col gap-3 h-auto`}
+          className={`${mobilePage === "summary" ? "flex" : "hidden"} sm:flex p-3 sm:p-4 bg-white rounded-lg border border-gray-200 shadow-sm flex-col gap-3 h-auto lg:min-h-0`}
         >
           <div className="border-b border-gray-100 pb-2 shrink-0">
             <h2 className="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
@@ -1918,6 +2000,65 @@ export default function DailyReport() {
         </div>
       </div>{" "}
       {/* 👈 အပြင်ဘက်ဆုံး Layout အတွက် မူလအတိုင်း ပိတ်ပေးထားသည့် ဒုတိယမြောက် Div */}
+      <div
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize summary and order panels"
+        aria-valuemin={SUMMARY_PANEL_MIN_HEIGHT}
+        aria-valuemax={SUMMARY_PANEL_MAX_HEIGHT}
+        aria-valuenow={summaryPanelHeight}
+        tabIndex={0}
+        title="Drag to resize panels; use arrow keys for fine adjustment"
+        onPointerDown={(event) => {
+          event.preventDefault();
+          summaryResizeRef.current = {
+            pointerId: event.pointerId,
+            startY: event.clientY,
+            startHeight: summaryPanelHeight,
+          };
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onPointerMove={(event) => {
+          const drag = summaryResizeRef.current;
+          if (!drag || drag.pointerId !== event.pointerId) return;
+          setSummaryPanelHeight(
+            Math.max(
+              SUMMARY_PANEL_MIN_HEIGHT,
+              Math.min(
+                SUMMARY_PANEL_MAX_HEIGHT,
+                drag.startHeight + event.clientY - drag.startY,
+              ),
+            ),
+          );
+        }}
+        onPointerUp={() => {
+          summaryResizeRef.current = null;
+        }}
+        onPointerCancel={() => {
+          summaryResizeRef.current = null;
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+            event.preventDefault();
+            const delta = event.key === "ArrowUp" ? -20 : 20;
+            setSummaryPanelHeight((height) =>
+              Math.max(
+                SUMMARY_PANEL_MIN_HEIGHT,
+                Math.min(SUMMARY_PANEL_MAX_HEIGHT, height + delta),
+              ),
+            );
+          } else if (event.key === "Home") {
+            event.preventDefault();
+            setSummaryPanelHeight(SUMMARY_PANEL_MIN_HEIGHT);
+          } else if (event.key === "End") {
+            event.preventDefault();
+            setSummaryPanelHeight(SUMMARY_PANEL_MAX_HEIGHT);
+          }
+        }}
+        className="group hidden h-2 shrink-0 cursor-row-resize touch-none items-center justify-center outline-none lg:flex"
+      >
+        <span className="h-1 w-12 rounded-full bg-gray-300 transition-colors group-hover:bg-blue-500 group-focus-visible:bg-blue-500" />
+      </div>
       {/* ── Workspace Table / List Area (Flex item optimized) ── */}
       <div
         ref={tableRef}
@@ -2037,12 +2178,11 @@ export default function DailyReport() {
                           }
                         >
                           <option value="">All Status</option>
-                          <option value="At Office">At Office</option>
-                          <option value="On Way">On Way</option>
-                          <option value="On Hold">On Hold</option>
-                          <option value="Delivered">Delivered</option>
-                          <option value="In-Transit">In-Transit</option>
-                          <option value="Settled">Settled</option>
+                          {statusOptions.map((status) => (
+                            <option key={status} value={status}>
+                              {status}
+                            </option>
+                          ))}
                         </select>
                       ) : col.key === "pickup_rider" ||
                         col.key === "deliver_rider" ? (
