@@ -1345,7 +1345,7 @@ export default function DailyReport() {
             "--report-summary-height": `${summaryPanelHeight}px`,
           } as CSSProperties
         }
-        className={`${mobilePage === "summary" ? "grid max-h-[calc(100dvh-9rem)] overflow-y-auto overscroll-contain pb-[calc(env(safe-area-inset-bottom)+4rem)]" : "hidden sm:grid"} sm:max-h-none sm:overflow-visible sm:pb-0 mx-3 sm:mx-4 mt-3 grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 shrink-0 transition-all lg:h-[var(--report-summary-height)] lg:min-h-0 lg:overflow-hidden`}
+        className={`${mobilePage === "summary" ? "grid max-h-[calc(100dvh-9rem)] overflow-y-auto overscroll-contain pb-[calc(env(safe-area-inset-bottom)+4rem)]" : "hidden sm:grid"} sm:max-h-none sm:overflow-visible sm:pb-0 mx-3 sm:mx-4 mt-3 grid-cols-1 lg:grid-cols-2 gap-[6px] shrink-0 transition-all lg:h-[var(--report-summary-height)] lg:min-h-0 lg:overflow-hidden`}
       >
         {/* ========================================================= */}
         {/* ဘယ်ဘက် Column: ကတ် (၁) - Rider Ngwe ရှင်းမှုမှတ်တမ်း Card */}
@@ -1391,15 +1391,15 @@ export default function DailyReport() {
           </div>
 
           {/* 🔴 🟣 🔵 အသစ်ပြင်ဆင်ထားသော Layout (Image ထဲကအတိုင်း ဘယ်ညာကပ်လျက်) */}
-          <div className="flex flex-col sm:flex-row bg-white rounded-lg border border-gray-200 shadow-sm h-auto sm:h-[320px] lg:h-auto lg:flex-1 lg:min-h-0 overflow-hidden mt-1">
+          <div className="flex flex-col sm:flex-row bg-white rounded-lg border border-gray-200 shadow-sm h-auto sm:h-[320px] lg:h-auto lg:flex-1 lg:min-h-0 overflow-hidden lg:overflow-visible mt-1">
             {/* ---------------------------------------------------- */}
             {/* ဘယ်ဘက်ခြမ်း (Purple & Red Areas) - Width 24% */}
             {/* ---------------------------------------------------- */}
             <div
-              className={`${mobilePage === "summary" ? "grid" : "hidden"} sm:flex w-full sm:w-[24%] grid-cols-2 sm:flex-col border-b sm:border-b-0 sm:border-r border-gray-200 shrink-0 bg-gray-50/30`}
+              className={`${mobilePage === "summary" ? "grid" : "hidden"} sm:flex w-full sm:w-[24%] grid-cols-2 sm:flex-col border-b sm:border-b-0 sm:border-r border-gray-200 shrink-0 bg-gray-50/30 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain`}
             >
               {/* 🟣 ၁။ Opposite Paid Card */}
-              <div className="flex-1 p-3 sm:p-4 border-b border-r sm:border-r-0 border-gray-200 flex flex-col items-center justify-center bg-white hover:bg-purple-50/20 transition-colors">
+              <div className="flex-1 p-3 sm:p-4 border-b border-r sm:border-r-0 border-gray-200 flex flex-col items-center justify-center bg-white hover:bg-purple-50/20 transition-colors lg:min-h-[76px]">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">
                   {userBranch === "MDY" ? "Yangon" : "Mandalay"} Paid
                 </span>
@@ -1409,7 +1409,7 @@ export default function DailyReport() {
               </div>
 
               {/* 🟣 ၂။ Opposite Bill Card (မှနှုတ်ရန်) */}
-              <div className="flex-1 p-3 sm:p-4 border-b border-r sm:border-r-0 border-gray-200 flex flex-col items-center justify-center bg-white hover:bg-purple-50/20 transition-colors">
+              <div className="flex-1 p-3 sm:p-4 border-b border-r sm:border-r-0 border-gray-200 flex flex-col items-center justify-center bg-white hover:bg-purple-50/20 transition-colors lg:min-h-[76px]">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-orange-600 mb-1">
                   {userBranch === "MDY" ? "ရန်ကုန်" : "မန္တလေး"} မှနှုတ်ရန်
                 </span>
@@ -1419,7 +1419,7 @@ export default function DailyReport() {
               </div>
 
               {/* 🟣 ၃။ Office Paid Card */}
-              <div className="flex-1 p-3 sm:p-4 border-b border-r sm:border-r-0 border-gray-200 flex flex-col items-center justify-center bg-white hover:bg-purple-50/20 transition-colors">
+              <div className="flex-1 p-3 sm:p-4 border-b border-r sm:border-r-0 border-gray-200 flex flex-col items-center justify-center bg-white hover:bg-purple-50/20 transition-colors lg:min-h-[76px]">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">
                   Office Paid
                 </span>
@@ -1429,7 +1429,7 @@ export default function DailyReport() {
               </div>
 
               {/* 🔴 ၄။ Others Paid Card */}
-              <div className="flex-1 p-3 sm:p-4 flex flex-col items-center justify-center bg-white hover:bg-red-50/20 transition-colors">
+              <div className="flex-1 p-3 sm:p-4 flex flex-col items-center justify-center bg-white hover:bg-red-50/20 transition-colors lg:min-h-[76px]">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">
                   Others Paid
                 </span>
@@ -2055,9 +2055,9 @@ export default function DailyReport() {
             setSummaryPanelHeight(SUMMARY_PANEL_MAX_HEIGHT);
           }
         }}
-        className="group hidden h-2 shrink-0 cursor-row-resize touch-none items-center justify-center outline-none lg:flex"
+        className="group relative hidden h-1 shrink-0 cursor-row-resize touch-none items-center justify-center outline-none lg:flex"
       >
-        <span className="h-1 w-12 rounded-full bg-gray-300 transition-colors group-hover:bg-blue-500 group-focus-visible:bg-blue-500" />
+        <span className="h-px w-12 rounded-full bg-gray-300 transition-colors group-hover:bg-blue-500 group-focus-visible:bg-blue-500" />
       </div>
       {/* ── Workspace Table / List Area (Flex item optimized) ── */}
       <div
@@ -2075,7 +2075,7 @@ export default function DailyReport() {
           startDragSelection((e as any).clientX, (e as any).clientY, initialId);
           e.preventDefault();
         }}
-        className={`${mobilePage === "workspace" ? "flex" : "hidden"} sm:block flex-1 min-h-0 flex-col overflow-hidden bg-white sm:overflow-auto sm:mx-4 sm:my-3 sm:rounded-lg sm:border sm:border-gray-200 sm:shadow-sm`}
+        className={`${mobilePage === "workspace" ? "flex" : "hidden"} sm:block flex-1 min-h-0 flex-col overflow-hidden bg-white sm:overflow-auto sm:mx-4 sm:mt-0 sm:mb-3 sm:rounded-lg sm:border sm:border-gray-200 sm:shadow-sm`}
       >
         {selectionBox && (
           <div
