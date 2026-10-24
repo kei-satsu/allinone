@@ -39,6 +39,7 @@ export default function PendingEntry() {
   const [syncing, setSyncing] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showSubmitConfirmation, setShowSubmitConfirmation] = useState(false)
+  const [canConfirmSubmit, setCanConfirmSubmit] = useState(false)
 
   // ── Persisted fields across items ──
   const [persistSenderName, setPersistSenderName] = useState('')
@@ -429,7 +430,12 @@ const loadCities = async (targetBranch?: string) => {
   }, [selectedItem, loading, showSubmitConfirmation]); // Item ပြောင်းလဲမှုနဲ့ Loading စတိတ်တွေကို စောင့်ကြည့်ဖို့ Dependency ထည့်ထားပါတယ်
 
   useEffect(() => {
-    if (showSubmitConfirmation) submitConfirmationButtonRef.current?.focus()
+    if (!showSubmitConfirmation) return
+
+    const timer = window.setTimeout(() => setCanConfirmSubmit(true), 1500)
+    submitConfirmationButtonRef.current?.focus()
+
+    return () => window.clearTimeout(timer)
   }, [showSubmitConfirmation])
 
   const filteredSenders = (() => {
@@ -666,6 +672,7 @@ setOcrWords([]);
     if (!formData.sender_name || !formData.receiver_name || !formData.receiver_phone) {
       return alert("လိုအပ်သောအချက်အလက်များ ပြည့်စုံစွာဖြည့်ပါ!")
     }
+    setCanConfirmSubmit(false)
     setShowSubmitConfirmation(true)
   }
 
@@ -1630,7 +1637,10 @@ if (updatedPending.length > 0) {
         <button
           ref={cancelSubmitConfirmationButtonRef}
           type="button"
-          onClick={() => setShowSubmitConfirmation(false)}
+          onClick={() => {
+            setCanConfirmSubmit(false)
+            setShowSubmitConfirmation(false)
+          }}
           className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100"
         >
           ပြန်ပြင်မည်
@@ -1639,10 +1649,10 @@ if (updatedPending.length > 0) {
           ref={submitConfirmationButtonRef}
           type="button"
           onClick={handleConfirmSubmit}
-          disabled={loading}
+          disabled={loading || !canConfirmSubmit}
           className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          အတည်ပြုပြီး သိမ်းမည်
+          {canConfirmSubmit ? 'အတည်ပြုပြီး သိမ်းမည်' : '၁.၅ စက္ကန့် စောင့်ပါ'}
         </button>
       </div>
     </div>
