@@ -1584,9 +1584,9 @@ if (updatedPending.length > 0) {
         <h2 id="submit-confirmation-title" className="text-base font-bold">အချက်အလက်များ ပြန်စစ်ပါ</h2>
         <p className="mt-1 text-xs text-gray-300">သိမ်းဆည်းမည့် အချက်အလက်များ မှန်ကန်ကြောင်း အတည်ပြုပါ။</p>
       </div>
-      <div className="grid gap-5 p-5 md:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.9fr)]">
+      <div className="grid gap-3 p-4 md:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.9fr)]">
         {selectedItem?.image_url ? (
-          <div className="flex min-h-64 max-h-[68vh] items-center justify-center overflow-hidden rounded-xl bg-gray-950 p-3">
+          <div className="flex min-h-48 max-h-[68vh] items-center justify-center overflow-hidden rounded-xl bg-gray-950 p-3">
             <img
               src={getCloudinaryUrl(selectedItem.image_url, CLOUDINARY_TRANSFORMS.main)}
               alt="Voucher preview"
@@ -1594,11 +1594,11 @@ if (updatedPending.length > 0) {
             />
           </div>
         ) : (
-          <div className="flex min-h-64 items-center justify-center rounded-xl bg-gray-100 text-sm text-gray-500">
+          <div className="flex min-h-48 max-h-[68vh] items-center justify-center rounded-xl bg-gray-100 text-sm text-gray-500">
             ပုံ မရှိပါ
           </div>
         )}
-        <div className="flex flex-col justify-center gap-4">
+        <div aria-label="အတည်ပြုစစ်ဆေးရန် အချက်အလက်များ" className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-4 border-b border-gray-100 pb-3">
             <span className="text-xs font-semibold uppercase text-gray-500">Sender Name</span>
             <span className="break-all text-right font-semibold text-gray-900">{formData.sender_name || '—'}</span>
@@ -1608,16 +1608,21 @@ if (updatedPending.length > 0) {
             <span className="break-all text-right font-semibold text-gray-900">{formData.receiver_name || '—'}</span>
           </div>
           <div className="flex items-center justify-between gap-4 border-b border-gray-100 pb-3">
-            <span className="text-xs font-semibold uppercase text-gray-500">COD Amount</span>
-            <span className="font-mono font-bold text-gray-900">{Number(formData.cod_amount || 0).toLocaleString()} Ks</span>
-          </div>
-          <div className="flex items-center justify-between gap-4 border-b border-gray-100 pb-3">
             <span className="text-xs font-semibold uppercase text-gray-500">Deli Fee</span>
             <span className="font-mono font-bold text-orange-600">{Number(formData.deli_fee || 0).toLocaleString()} Ks</span>
           </div>
           <div className="flex items-center justify-between gap-4 rounded-lg bg-gray-900 px-3 py-3">
             <span className="text-xs font-bold uppercase text-gray-300">Total</span>
             <span className="font-mono text-lg font-black text-orange-400">{Number(formData.total_amount || 0).toLocaleString()} Ks</span>
+          </div>
+          <div className="rounded-xl border-2 border-amber-400 bg-amber-50 px-4 py-3 shadow-sm ring-2 ring-amber-100">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-sm font-black uppercase tracking-wider text-amber-900">COD Amount</span>
+              <span className="rounded-full bg-amber-400 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-amber-950">သေချာစစ်ပါ</span>
+            </div>
+            <p className="mt-2 font-mono text-3xl font-black leading-none text-amber-950">
+              {Number(formData.cod_amount || 0).toLocaleString()} <span className="text-base">Ks</span>
+            </p>
           </div>
         </div>
       </div>
