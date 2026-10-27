@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useEffect, useState, useCallback, useMemo, useRef, useContext, type Dispatch, type SetStateAction } from "react"
+import { createPortal } from "react-dom"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
@@ -84,7 +85,10 @@ const MENU_ITEMS: MenuItem[] = [
     path: "/riders",
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        <circle cx="6" cy="17" r="3" />
+        <circle cx="18" cy="17" r="3" />
+        <circle cx="14" cy="4.5" r="2" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="m12.5 7-2 4 3.5 2 2-3m-5.5 1L7.5 11m6.5 2 2.5 4M6 17h4l3-6h3l2 6" />
       </svg>
     ),
   },
@@ -112,7 +116,7 @@ const MENU_ITEMS: MenuItem[] = [
     path: "/transit",
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5h11.25a2.25 2.25 0 012.25 2.25v4.5a2.25 2.25 0 01-2.25 2.25H3V7.5Zm13.5 3h2.25l2.25 2.25v3.75H16.5v-6ZM7.5 19.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm10.5 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
       </svg>
     ),
     children: [
@@ -341,32 +345,81 @@ function SidebarMenuItem({ item, isActive, collapsed, isMobile, onClick }: { ite
   const hasChildren = !!item.children && item.children.length > 0
   const isChildActive = item.children?.some(child => pathname === child.path) ?? false
   const [expanded, setExpanded] = useState(isChildActive)
+  const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null)
+  const [submenuPosition, setSubmenuPosition] = useState<{ top: number; left: number } | null>(null)
+  const triggerRef = useRef<HTMLAnchorElement>(null)
+  const submenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (isChildActive) setExpanded(true)
   }, [isChildActive])
 
+  useEffect(() => {
+    if (!collapsed || !hasChildren || !expanded || !submenuPosition) return
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target
+      if (
+        target instanceof Node &&
+        !triggerRef.current?.contains(target) &&
+        !submenuRef.current?.contains(target)
+      ) {
+        setExpanded(false)
+        setSubmenuPosition(null)
+      }
+    }
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer)
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer)
+  }, [collapsed, expanded, hasChildren, submenuPosition])
+
+  const showTooltip = (element: HTMLAnchorElement) => {
+    if (!collapsed) return
+    const bounds = element.getBoundingClientRect()
+    setTooltipPosition({ top: bounds.top + bounds.height / 2, left: bounds.right + 10 })
+  }
+
   return (
+    <>
     <div className="w-full flex flex-col gap-1">
       <Link
+        ref={triggerRef}
         href={item.path}
+        aria-label={collapsed ? item.name : undefined}
+        onMouseEnter={(event) => showTooltip(event.currentTarget)}
+        onMouseLeave={() => setTooltipPosition(null)}
+        onFocus={(event) => showTooltip(event.currentTarget)}
+        onBlur={() => setTooltipPosition(null)}
         onClick={(e) => {
-          if (hasChildren && !collapsed) {
+          if (hasChildren && collapsed) {
+            e.preventDefault()
+            setTooltipPosition(null)
+            if (!expanded) {
+              const bounds = e.currentTarget.getBoundingClientRect()
+              const submenuHeight = (item.children?.length ?? 0) * 36 + 16
+              setSubmenuPosition({
+                top: Math.max(8, Math.min(bounds.top, window.innerHeight - submenuHeight - 8)),
+                left: bounds.right + 8,
+              })
+            } else {
+              setSubmenuPosition(null)
+            }
+            setExpanded(!expanded)
+          } else if (hasChildren) {
             e.preventDefault()
             setExpanded(!expanded)
           } else {
             if (onClick) onClick()
           }
         }}
-        title={collapsed ? item.name : undefined}
-        className={`flex items-center rounded-xl transition-colors duration-200 group relative ${collapsed ? "justify-center p-2.5" : isMobile ? "px-4 py-2.5" : "px-3 py-2.5"} ${
-          isActive ? "bg-orange-50 text-orange-700 font-semibold" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+        className={`flex items-center rounded-xl transition-colors duration-200 group relative ${collapsed ? "justify-center p-2" : isMobile ? "px-4 py-2.5" : "px-3 py-2.5"} ${
+          isActive ? "text-orange-700 font-semibold" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
         }`}
       >
         {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-orange-500 rounded-r-full" />}
-        <span className={`flex-shrink-0 transition-colors ${isActive ? "text-orange-600" : "text-slate-400 group-hover:text-slate-700"}`}>{item.icon}</span>
+        <span className={`flex-shrink-0 transition-colors ${collapsed ? "absolute left-1/2 -translate-x-1/2" : ""} ${isActive ? "text-orange-600" : "text-slate-400 group-hover:text-slate-700"}`}>{item.icon}</span>
         
-        <span className={`ml-3 text-sm font-medium whitespace-nowrap transition-all duration-200 flex-1 flex items-center justify-between ${collapsed ? "w-0 opacity-0 overflow-hidden ml-0" : "w-auto opacity-100"}`}>
+        <span className={`ml-3 text-sm font-medium whitespace-nowrap transition-all duration-200 flex items-center justify-between ${collapsed ? "w-0 flex-none opacity-0 overflow-hidden ml-0" : "w-auto flex-1 opacity-100"}`}>
           <span>{item.name}</span>
           {hasChildren && (
             <span className={`text-[10px] text-slate-400 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}>
@@ -387,7 +440,7 @@ function SidebarMenuItem({ item, isActive, collapsed, isMobile, onClick }: { ite
                 onClick={onClick}
                 className={`flex items-center gap-2.5 py-2 px-3 text-xs rounded-2xl transition-all ${
                   isSubActive 
-                    ? "text-orange-700 font-semibold bg-orange-50"
+                    ? "text-orange-700 font-semibold"
                     : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                 }`}
               >
@@ -399,6 +452,49 @@ function SidebarMenuItem({ item, isActive, collapsed, isMobile, onClick }: { ite
         </div>
       )}
     </div>
+    {collapsed && !expanded && tooltipPosition && typeof document !== "undefined" && createPortal(
+      <span
+        aria-hidden="true"
+        className="pointer-events-none fixed z-[100] flex -translate-y-1/2 items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white shadow-lg ring-1 ring-white/10 animate-in fade-in zoom-in-95 duration-150"
+        style={{ top: tooltipPosition.top, left: tooltipPosition.left }}
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-orange-400" />
+        {item.name}
+      </span>,
+      document.body
+    )}
+    {collapsed && hasChildren && expanded && submenuPosition && typeof document !== "undefined" && createPortal(
+      <div
+        ref={submenuRef}
+        className="fixed z-[110] flex min-w-44 flex-col gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-xl animate-in fade-in slide-in-from-left-1 duration-150"
+        style={{ top: submenuPosition.top, left: submenuPosition.left }}
+      >
+        {item.children?.map((child) => {
+          const isSubActive = pathname === child.path
+          return (
+            <Link
+              key={child.path}
+              href={child.path}
+              onClick={() => {
+                setExpanded(false)
+                setSubmenuPosition(null)
+                onClick?.()
+              }}
+              className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs transition-colors ${
+                isSubActive
+                  ? "bg-orange-50 font-semibold text-orange-700"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+              }`}
+            >
+              <span className="shrink-0">{child.icon}</span>
+              <span className="whitespace-nowrap">{child.name}</span>
+            </Link>
+          )
+        })}
+      </div>,
+      document.body
+    )}
+    </>
   )
 }
 
@@ -424,7 +520,7 @@ export function useMobileDockVisibility() {
 // Main Layout Component
 // ──────────────────────────────────────
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const [sidebarExpanded, setSidebarExpanded] = useState(true)
+  const [sidebarExpanded, setSidebarExpanded] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [hideMobileDock, setHideMobileDock] = useState(false)
   const pathname = usePathname()
@@ -533,7 +629,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           className={`flex flex-col bg-white z-50 transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] ${
             isMobile
               ? `fixed inset-x-0 bottom-0 ${mobileSidebarOpen ? "translate-y-0" : "translate-y-full"} w-full max-h-[82vh] rounded-t-3xl border-t border-slate-200 shadow-[0_-12px_32px_-16px_rgba(15,23,42,0.2)] overflow-hidden`
-              : `relative my-3 ml-3 h-[calc(100%-1.5rem)] shrink-0 overflow-hidden rounded-2xl border border-slate-200 shadow-[0_8px_24px_-16px_rgba(15,23,42,0.18)] ${collapsed ? "w-[68px]" : "w-64"}`
+              : `relative my-3 ml-3 h-[calc(100%-1.5rem)] shrink-0 overflow-hidden rounded-2xl border border-slate-200 shadow-[0_8px_24px_-16px_rgba(15,23,42,0.18)] ${collapsed ? "w-[52px]" : "w-64"}`
           }`}
         >
           {isMobile && (
@@ -544,10 +640,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           {/* Header */}
           <div className={`flex flex-col border-b border-slate-100 flex-shrink-0 transition-all duration-300 ${
-            collapsed && !isMobile ? "h-16 justify-center items-center px-2" : "min-h-[84px] justify-center px-5 py-4"
+            collapsed && !isMobile ? "h-14 justify-center items-center px-0" : "min-h-[84px] justify-center px-5 py-4"
           }`}>
-            <div className="flex items-center w-full justify-between">
-              <div className="flex items-center gap-2.5">
+            <div className={`flex items-center w-full ${collapsed && !isMobile ? "justify-center" : "justify-between"}`}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isMobile) setSidebarExpanded(prev => !prev)
+                }}
+                title={!isMobile ? (collapsed ? "Expand sidebar" : "Collapse sidebar") : undefined}
+                aria-label={!isMobile ? (collapsed ? "Expand sidebar" : "Collapse sidebar") : "All In One"}
+                className={`flex min-w-0 items-center transition-colors ${collapsed && !isMobile ? "justify-center" : "gap-2.5"} ${isMobile ? "cursor-default" : "cursor-pointer hover:opacity-80"}`}
+              >
                 <img
                   src="/logo.png"
                   alt="All In One Logo"
@@ -566,37 +670,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     </span>
                   </div>
                 </div>
-              </div>
+              </button>
 
-              <div className="flex items-center gap-1">
-                {!isMobile && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setSidebarExpanded(prev => !prev)
-                    }}
-                    title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                    aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                    className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-slate-400 transition-all hover:bg-orange-100 hover:text-orange-700"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      {collapsed
-                        ? <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                        : <path strokeLinecap="round" strokeLinejoin="round" d="M15 5l-7 7 7 7" />}
-                    </svg>
-                  </button>
-                )}
-                {isMobile && (
-                  <button 
-                    onClick={() => setMobileSidebarOpen(false)} 
-                    className="w-7 h-7 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200/70 transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
-              </div>
+              {isMobile && (
+                <button
+                  type="button"
+                  onClick={() => setMobileSidebarOpen(false)}
+                  aria-label="Close menu"
+                  className="w-7 h-7 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200/70 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
             </div>
           </div>
 
@@ -604,41 +691,45 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {isAdmin && (
             <div className={`border-b border-slate-100/50 animate-in fade-in duration-200 ${
               collapsed && !isMobile
-                ? "flex justify-center px-2 py-3"
+                ? "flex justify-center border-b border-slate-100/70 px-0 py-2.5"
                 : "flex flex-col gap-1.5 px-4 pt-3 pb-2"
             }`}>
               {collapsed && !isMobile ? (
                 <span
                   title={`Admin View Node: ${userBranch}`}
                   aria-label={`Admin View Node: ${userBranch}`}
-                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-orange-200 bg-orange-50 text-[10px] font-black text-orange-700"
+                  className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-orange-50 to-amber-50 text-[9px] font-black tracking-tight text-orange-700 ring-1 ring-inset ring-orange-200/80 shadow-sm"
                 >
                   {userBranch}
+                  <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border-2 border-white bg-emerald-500" />
                 </span>
               ) : (
                 <>
-                  <span className="text-[10px] text-slate-400 font-bold tracking-wider uppercase px-1 flex items-center gap-1">
-                    ⚙️ Admin View Node
+                  <span className="flex items-center gap-1.5 px-1 text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    Admin View Node
                   </span>
-                  <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl">
+                  <div className="grid grid-cols-2 gap-1 rounded-xl border border-slate-200/70 bg-slate-50 p-1">
                     <button
                       onClick={() => changeBranch("MDY")}
-                      className={`py-1.5 text-xs font-black rounded-xl transition-all duration-200 ${
+                      className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-black transition-all duration-200 ${
                         userBranch === "MDY"
-                          ? "bg-white text-orange-600 shadow-sm scale-[1.02]"
+                          ? "bg-white text-orange-600 shadow-sm ring-1 ring-slate-200/80"
                           : "text-slate-500 hover:text-slate-800"
                       }`}
                     >
+                      {userBranch === "MDY" && <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />}
                       MDY
                     </button>
                     <button
                       onClick={() => changeBranch("YGN")}
-                      className={`py-1.5 text-xs font-black rounded-xl transition-all duration-200 ${
+                      className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-black transition-all duration-200 ${
                         userBranch === "YGN"
-                          ? "bg-white text-orange-600 shadow-sm"
+                          ? "bg-white text-orange-600 shadow-sm ring-1 ring-slate-200/80"
                           : "text-slate-500 hover:text-slate-800"
                       }`}
                     >
+                      {userBranch === "YGN" && <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />}
                       YGN
                     </button>
                   </div>
@@ -652,7 +743,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             isMobile 
               ? "space-y-1.5 px-4 pb-6" 
               : collapsed 
-                ? "space-y-1 px-2" 
+                ? "space-y-1 px-0"
                 : "space-y-1 px-3"
           }`}>
             {MENU_ITEMS.map(item => {
