@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { intakeCorsJson, intakeCorsOptions, isAllowedIntakeRequest } from '@/lib/intakeCors';
 
 const R2 = new S3Client({
   region: 'auto',
@@ -10,24 +10,32 @@ const R2 = new S3Client({
   },
 });
 
+export function OPTIONS(request: Request) {
+  return intakeCorsOptions(request);
+}
+
 export async function POST(request: Request) {
+  if (!isAllowedIntakeRequest(request)) {
+    return intakeCorsJson(request, { error: 'Origin not allowed' }, { status: 403 });
+  }
+
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File;
 
     if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+      return intakeCorsJson(request, { error: 'No file provided' }, { status: 400 });
     }
 
     const bucketName = process.env.R2_BUCKET_NAME;
     const publicBaseUrl = process.env.R2_PUBLIC_URL || process.env.R2_PUBLIC_DOMAIN || process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
 
     if (!bucketName) {
-      return NextResponse.json({ error: 'R2_BUCKET_NAME is missing' }, { status: 500 });
+      return intakeCorsJson(request, { error: 'R2_BUCKET_NAME is missing' }, { status: 500 });
     }
 
     if (!publicBaseUrl) {
-      return NextResponse.json({ error: 'R2 public URL is missing. Set R2_PUBLIC_URL or R2_PUBLIC_DOMAIN.' }, { status: 500 });
+      return intakeCorsJson(request, { error: 'R2 public URL is missing. Set R2_PUBLIC_URL or R2_PUBLIC_DOMAIN.' }, { status: 500 });
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -45,9 +53,9 @@ export async function POST(request: Request) {
 
     const publicUrl = publicBaseUrl.endsWith('/') ? `${publicBaseUrl}${fileName}` : `${publicBaseUrl}/${fileName}`;
 
-    return NextResponse.json({ ok: true, url: publicUrl });
+    return intakeCorsJson(request, { ok: true, url: publicUrl });
   } catch (error: any) {
     console.error('R2 Upload API Error:', error);
-    return NextResponse.json({ error: error.message || 'R2 Upload Failed' }, { status: 500 });
+    return intakeCorsJson(request, { error: error.message || 'R2 Upload Failed' }, { status: 500 });
   }
 }

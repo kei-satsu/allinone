@@ -20,6 +20,9 @@ const initialForm = {
   remark_italic: false,
 };
 
+type VoucherMode = "manual" | "kota";
+type SenderFields = Pick<typeof initialForm, "sender_name" | "sender_phone" | "sender_loc">;
+
 const remarkPresetValues = {
   small: 12,
   normal: 18,
@@ -62,6 +65,15 @@ const fieldOrder = [
 
 export default function VoucherFormPage() {
   const [formData, setFormData] = useState(initialForm);
+  const [mode, setMode] = useState<VoucherMode>("manual");
+  const [manualSender, setManualSender] = useState<SenderFields>({
+    sender_name: "",
+    sender_phone: "",
+    sender_loc: "",
+  });
+  const [pastedMessage, setPastedMessage] = useState("");
+  const [isParsing, setIsParsing] = useState(false);
+  const [parseError, setParseError] = useState("");
   const firstInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -79,6 +91,15 @@ export default function VoucherFormPage() {
       event.target instanceof HTMLInputElement && event.target.type === "checkbox"
         ? event.target.checked
         : value;
+    if (mode === "manual" && typeof nextValue === "string") {
+      if (name === "sender_name") {
+        setManualSender((current) => ({ ...current, sender_name: nextValue }));
+      } else if (name === "sender_phone") {
+        setManualSender((current) => ({ ...current, sender_phone: nextValue }));
+      } else if (name === "sender_loc") {
+        setManualSender((current) => ({ ...current, sender_loc: nextValue }));
+      }
+    }
     setFormData((current) => {
       const next = { ...current, [name]: nextValue };
       if (
@@ -94,6 +115,88 @@ export default function VoucherFormPage() {
       }
       return next;
     });
+  };
+
+  const handleModeChange = (nextMode: VoucherMode) => {
+    if (nextMode === mode) return;
+
+    if (nextMode === "kota") {
+      setManualSender({
+        sender_name: formData.sender_name,
+        sender_phone: formData.sender_phone,
+        sender_loc: formData.sender_loc,
+      });
+      setFormData((current) => ({
+        ...current,
+        sender_name: "KOTA",
+        sender_phone: "09-",
+        sender_loc: "",
+      }));
+    } else {
+      setFormData((current) => ({ ...current, ...manualSender }));
+    }
+    setMode(nextMode);
+  };
+
+  const handleParseMessage = async () => {
+    if (!pastedMessage.trim()) {
+      setParseError("AI ဖြင့်ဖတ်ရန် စာသားကို အရင်ထည့်ပေးပါ။");
+      return;
+    }
+
+    setIsParsing(true);
+    setParseError("");
+    try {
+      const response = await fetch("/api/voc/parse-kota", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: pastedMessage,
+          today: formData.received_date,
+        }),
+      });
+      const result = (await response.json()) as {
+        data?: {
+          received_date?: string;
+          sender_loc?: string;
+          receiver_name?: string;
+          receiver_phone?: string;
+          receiver_address?: string;
+          cod_amount?: string;
+          note?: string;
+        };
+        error?: string;
+      };
+
+      if (!response.ok || !result.data) {
+        throw new Error(result.error || "စာသားကိုဖတ်၍ မရပါ။ ထပ်ကြိုးစားပါ။");
+      }
+
+      setFormData((current) => {
+        const codAmount = result.data?.cod_amount || "";
+        return {
+          ...current,
+          received_date: result.data?.received_date || current.received_date,
+          sender_name: "KOTA",
+          sender_phone: "09-",
+          sender_loc: result.data?.sender_loc || current.sender_loc,
+          receiver_name: result.data?.receiver_name || current.receiver_name,
+          receiver_phone: result.data?.receiver_phone || current.receiver_phone,
+          receiver_address: result.data?.receiver_address || current.receiver_address,
+          cod_amount: codAmount || current.cod_amount,
+          deli_fee: "0",
+          fee_type: "Deli",
+          total_amount: codAmount || current.total_amount,
+          note: result.data?.note || current.note,
+        };
+      });
+    } catch (error) {
+      setParseError(
+        error instanceof Error ? error.message : "အချက်အလက်ထည့်ရာတွင် အမှားဖြစ်နေပါသည်။"
+      );
+    } finally {
+      setIsParsing(false);
+    }
   };
 
   // Enter နှိပ်လျှင် နောက် Field သို့ ရွှေ့ပေးမည့် Function
@@ -166,7 +269,11 @@ export default function VoucherFormPage() {
     setFormData({
       ...initialForm,
       received_date: formData.received_date,
+      ...(mode === "kota" ? { sender_name: "KOTA", sender_phone: "09-" } : {}),
     });
+    setManualSender({ sender_name: "", sender_phone: "", sender_loc: "" });
+    setPastedMessage("");
+    setParseError("");
     firstInputRef.current?.focus();
   };
 
@@ -210,6 +317,32 @@ export default function VoucherFormPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            <div className="flex rounded-lg border border-slate-700 bg-slate-950 p-1">
+              <button
+                type="button"
+                onClick={() => handleModeChange("manual")}
+                aria-pressed={mode === "manual"}
+                className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${
+                  mode === "manual"
+                    ? "bg-slate-700 text-white"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Manual
+              </button>
+              <button
+                type="button"
+                onClick={() => handleModeChange("kota")}
+                aria-pressed={mode === "kota"}
+                className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${
+                  mode === "kota"
+                    ? "bg-orange-500 text-white"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Kota + AI
+              </button>
+            </div>
             <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5">
               <span className="text-xs font-bold text-slate-400 uppercase">
                 Date:
@@ -233,6 +366,42 @@ export default function VoucherFormPage() {
             </button>
           </div>
         </div>
+
+        {mode === "kota" && (
+          <section className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-4 space-y-3">
+            <label htmlFor="kota-message" className="block text-sm font-bold text-orange-300">
+              Kota စာသားကို ကူးထည့်ပါ
+            </label>
+            <textarea
+              id="kota-message"
+              value={pastedMessage}
+              onChange={(event) => setPastedMessage(event.target.value)}
+              rows={6}
+              maxLength={10_000}
+              placeholder={"Nov 4 pg\nNang Seng Laung\n09895108014\nအမှတ်၂၁၂ ...\nFiber 1 = 45500\nDeli = 4500\nTotal = 50,000 ks\nCod\nဖုန်းကြိုဆက်ပီး ပို့ရန်"}
+              className="w-full rounded-lg border-2 border-slate-700 bg-slate-950 p-3 text-sm text-slate-100 placeholder-slate-500 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/20"
+              aria-describedby={parseError ? "kota-parse-error" : undefined}
+            />
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs text-slate-400">
+                Fiber အမျိုးအစားကို Sender City၊ Total ကို COD ထဲထည့်ပြီး Deli Fee ကို 0 ထားပါမည်။ ဖုန်းနှင့် လိပ်စာများကို Google Gemini သို့ ပို့၍ ခွဲထုတ်ပါမည်။
+              </p>
+              <button
+                type="button"
+                onClick={handleParseMessage}
+                disabled={isParsing}
+                className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isParsing ? "AI ဖတ်နေသည်..." : "✨ AI ဖြင့် အချက်အလက်ထည့်ရန်"}
+              </button>
+            </div>
+            {parseError && (
+              <p id="kota-parse-error" role="alert" className="text-sm font-medium text-red-400">
+                {parseError}
+              </p>
+            )}
+          </section>
+        )}
 
         {/* Main Content Grid */}
         <div className="space-y-5">
@@ -259,6 +428,7 @@ export default function VoucherFormPage() {
                     placeholder="အမည်"
                     className={fieldInput}
                     required
+                    readOnly={mode === "kota"}
                   />
                 </div>
                 <div>
@@ -272,17 +442,23 @@ export default function VoucherFormPage() {
                     placeholder="09xxxxxxxxx"
                     className={`${fieldInput} font-mono`}
                     required
+                    readOnly={mode === "kota"}
                   />
                 </div>
                 <div className="col-span-2">
                   <label className={fieldLabel}>
-                    City / Address <span className="text-orange-500">*</span>
+                    {mode === "kota" ? "Item / City" : "City / Address"}{" "}
+                    <span className="text-orange-500">*</span>
                   </label>
                   <input
                     name="sender_loc"
                     value={formData.sender_loc}
                     onChange={handleChange}
-                    placeholder="မြို့ / လိပ်စာ"
+                    placeholder={
+                      mode === "kota"
+                        ? "ပစ္စည်းအမျိုးအစား (ဥပမာ - Fiber 1)"
+                        : "မြို့ / လိပ်စာ"
+                    }
                     className={fieldInput}
                     required
                   />

@@ -14,6 +14,14 @@ pnpm dev
 bun dev
 ```
 
+## Kota voucher AI
+
+The VOC voucher form includes an optional Kota mode that extracts recipient and
+voucher details from pasted Burmese text using Gemini 3.5 Flash-Lite. Add a Gemini API key to
+`.env.local` and to the deployment environment as `GEMINI_API_KEY` (server-side
+only; do not prefix it with `NEXT_PUBLIC_`). Restart the app after changing the
+environment. Pasted message content is sent to Google's Gemini API for parsing.
+
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.

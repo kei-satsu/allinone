@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { intakeCorsJson, intakeCorsOptions, isAllowedIntakeRequest } from '@/lib/intakeCors';
 
 // 1. Branch အလိုက် Telegram Channel ID Mapping သတ်မှတ်ခြင်း
 const BRANCH_CHANNEL_MAP: Record<string, string | undefined> = {
@@ -7,7 +7,15 @@ const BRANCH_CHANNEL_MAP: Record<string, string | undefined> = {
   // သုံးစွဲနေသော Branch အသစ်များရှိပါက ဒီနေရာတွင် ဆက်လက် ထည့်သွင်းနိုင်ပါသည်
 };
 
+export function OPTIONS(request: Request) {
+  return intakeCorsOptions(request);
+}
+
 export async function POST(req: Request) {
+  if (!isAllowedIntakeRequest(req)) {
+    return intakeCorsJson(req, { ok: false, error: 'Origin not allowed' }, { status: 403 });
+  }
+
   try {
     const body = await req.json();
     const { imageUrl, note, barcode, branch } = body;
@@ -16,7 +24,7 @@ export async function POST(req: Request) {
 
     if (!botToken) {
       console.error('TELEGRAM_BOT_TOKEN ကို Environment Variables ထဲတွင် ရှာမတွေ့ပါ။');
-      return NextResponse.json(
+      return intakeCorsJson(req,
         { ok: false, error: 'Server configuration error: Missing bot token' },
         { status: 500 }
       );
@@ -30,7 +38,7 @@ export async function POST(req: Request) {
 
     if (!targetChatId) {
       console.error(`Branch [${branch}] အတွက် သတ်မှတ်ထားသော Channel ID မရှိပါ။`);
-      return NextResponse.json(
+      return intakeCorsJson(req,
         { ok: false, error: `No Telegram channel configured for branch: ${branch}` },
         { status: 400 }
       );
@@ -58,17 +66,17 @@ export async function POST(req: Request) {
 
     if (!telegramRes.ok || !result.ok) {
       console.error('Telegram API Error Response:', result);
-      return NextResponse.json(
+      return intakeCorsJson(req,
         { ok: false, error: result.description || 'Failed to send message to Telegram' },
         { status: telegramRes.status || 400 }
       );
     }
 
-    return NextResponse.json({ ok: true, data: result });
+    return intakeCorsJson(req, { ok: true, data: result });
 
   } catch (error: any) {
     console.error('Telegram Route Server Error:', error);
-    return NextResponse.json(
+    return intakeCorsJson(req,
       { ok: false, error: error.message || 'Internal Server Error' },
       { status: 500 }
     );

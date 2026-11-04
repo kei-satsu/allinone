@@ -1,14 +1,14 @@
-import { NextResponse } from 'next/server'
 import { supabaseServer } from '@/lib/supabaseServer'
+import { intakeCorsJson, intakeCorsOptions, isAllowedIntakeRequest } from '@/lib/intakeCors'
 
 export const dynamic = 'force-dynamic'
 
 const TABLES = new Set(['orders', 'senders', 'riders', 'cities', 'cash_handovers'])
 
-function responseError(error: unknown, status = 500) {
+function responseError(request: Request, error: unknown, status = 500) {
   if (error && typeof error === 'object') {
     const databaseError = error as { message?: string; code?: string; details?: string; hint?: string }
-    return NextResponse.json({
+    return intakeCorsJson(request, {
       error: databaseError.message || 'Database request failed',
       code: databaseError.code,
       details: databaseError.details,
@@ -16,7 +16,7 @@ function responseError(error: unknown, status = 500) {
     }, { status })
   }
 
-  return NextResponse.json({ error: error instanceof Error ? error.message : 'Database request failed' }, { status })
+  return intakeCorsJson(request, { error: error instanceof Error ? error.message : 'Database request failed' }, { status })
 }
 
 function applyFilters(query: any, filters: any[] = []) {
@@ -38,6 +38,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ tab
   return mutate(request, params, 'insert')
 }
 
+export function OPTIONS(request: Request) {
+  return intakeCorsOptions(request)
+}
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ table: string }> }) {
   return mutate(request, params, 'update')
 }
@@ -47,9 +51,11 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ t
 }
 
 async function mutate(request: Request, params: Promise<{ table: string }>, operation: 'insert' | 'update' | 'delete') {
+  if (!isAllowedIntakeRequest(request)) return responseError(request, new Error('Origin not allowed'), 403)
+
   try {
     const { table } = await params
-    if (!TABLES.has(table)) return responseError(new Error('Unsupported table'), 404)
+    if (!TABLES.has(table)) return responseError(request, new Error('Unsupported table'), 404)
     const body = await request.json()
     let query: any = supabaseServer.from(table)
     if (operation === 'insert') query = query.insert(body.rows || body.data || body)
@@ -58,17 +64,19 @@ async function mutate(request: Request, params: Promise<{ table: string }>, oper
     query = applyFilters(query, body.filters)
     if (body.select) query = query.select(body.select)
     const result = await query
-    if (result.error) return responseError(result.error)
-    return NextResponse.json({ data: result.data || [] }, { status: operation === 'insert' ? 201 : 200 })
+    if (result.error) return responseError(request, result.error)
+    return intakeCorsJson(request, { data: result.data || [] }, { status: operation === 'insert' ? 201 : 200 })
   } catch (error) {
-    return responseError(error, 400)
+    return responseError(request, error, 400)
   }
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ table: string }> }) {
+  if (!isAllowedIntakeRequest(request)) return responseError(request, new Error('Origin not allowed'), 403)
+
   try {
     const { table } = await params
-    if (!TABLES.has(table)) return responseError(new Error('Unsupported table'), 404)
+    if (!TABLES.has(table)) return responseError(request, new Error('Unsupported table'), 404)
     const input = JSON.parse(new URL(request.url).searchParams.get('query') || '{}')
     let query: any = supabaseServer.from(table).select(input.select || '*', { count: 'exact' })
     query = applyFilters(query, input.filters)
@@ -76,9 +84,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ tabl
     if (input.limit !== undefined) query = query.limit(input.limit)
     if (input.range) query = query.range(input.range.from, input.range.to)
     const result = await query
-    if (result.error) return responseError(result.error)
-    return NextResponse.json({ data: result.data || [], total: result.count || 0 })
+    if (result.error) return responseError(request, result.error)
+    return intakeCorsJson(request, { data: result.data || [], total: result.count || 0 })
   } catch (error) {
-    return responseError(error, 400)
+    return responseError(request, error, 400)
   }
 }
