@@ -11,7 +11,22 @@ interface QueueItem {
   payload: any;
 }
 
- 
+async function updatePendingEntryOrder(orderId: string | number, order: Record<string, unknown>) {
+  const editableOrder = { ...order }
+  delete editableOrder.status
+  delete editableOrder.deliver_date
+  delete editableOrder.deliver_rider_id
+
+  const { error } = await apiClient.from('orders').update(editableOrder).eq('id', orderId)
+  if (error) throw error
+
+  const { error: transitionError } = await apiClient
+    .from('orders')
+    .update({ status: 'At Office' })
+    .eq('id', orderId)
+    .eq('status', 'Pending')
+  if (transitionError) throw transitionError
+}
 
 export default function PendingEntry() {
   const router = useRouter()
@@ -483,16 +498,14 @@ const loadCities = async (targetBranch?: string) => {
 
           // Update order with sender id
           const finalOrder = { ...payload.order, sender_id: senderToUse.id }
-          const { error: oErr } = await apiClient.from('orders').update(finalOrder).eq('id', finalOrder.id)
-          if (oErr) throw oErr
+          await updatePendingEntryOrder(finalOrder.id, finalOrder)
 
           // Ensure dropdown state has this sender
           setSenders(prev => prev.some(s => String(s.id) === String(senderToUse.id)) ? prev : [...prev, senderToUse])
         } 
         // 🌟 ၂။ ပုံမှန် ရှိပြီးသား Sender မို့ အော်ဒါတစ်ခုတည်း Update လုပ်မည့်အပိုင်း
         else if (payload && payload.type === 'update_order') {
-          const { error } = await apiClient.from('orders').update(payload.order).eq('id', payload.order.id)
-          if (error) throw error
+          await updatePendingEntryOrder(payload.order.id, payload.order)
         } else if (payload && payload.type === 'order') {
           const { error } = await apiClient.from('orders').insert([payload.order || payload])
           if (error) throw error
@@ -555,7 +568,7 @@ const handleSelectItem = (item: any, shouldFocusInput = true, branchOverride?: s
     fee_type: item.fee_type || 'Deli',
     total_amount: item.total_amount || 0,
     pickup_rider_id: item.pickup_rider_id || persistPickupRiderId || '',
-    status: item.status === 'Pending' ? 'At Office' : (item.status || 'At Office'),
+    status: item.status === 'Pending' ? 'At Office' : (item.status ?? ''),
     deliver_rider_id: item.deliver_rider_id || '',
     deliver_date: item.deliver_date || '',
     note: item.note || '',
@@ -611,15 +624,6 @@ setOcrWords([]);
     else if (s.length >= 5 && s.length < 8) formatted = `${s.slice(0, 2)}-${s.slice(2, 5)}-${s.slice(5)}`
     else if (s.length >= 8) formatted = `${s.slice(0, 2)}-${s.slice(2, 5)}-${s.slice(5, 8)}-${s.slice(8, 11)}`
     setFormData(prev => ({ ...prev, receiver_phone: formatted }))
-  }
-
-  const handleStatusChange = (status: string) => {
-    const isDateRelevant = ['On Way', 'On Hold', 'Delivered', 'Handover', 'Returned'].includes(status)
-    const nextDeliverDate = isDateRelevant
-      ? formData.deliver_date || today
-      : ''
-
-    setFormData(prev => ({ ...prev, status, deliver_date: nextDeliverDate }))
   }
 
   const handleSenderPhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -713,15 +717,11 @@ const logNote = [
     ...formData,
     history: updatedHistory, // 👈 ✨ [အသစ်ထည့်ရန်] history ကို Payload ထဲ ထည့်ပေးလိုက်ပါ
     pickup_rider_id: formData.pickup_rider_id || null,
-    deliver_rider_id: formData.deliver_rider_id || null,
+    status: selectedItem.status,
+    deliver_date: selectedItem.deliver_date,
+    deliver_rider_id: selectedItem.deliver_rider_id,
     cleared_date: formData.cleared_date || null,
   }
-
-    if (formData.status === 'On Way' || formData.status === 'On Hold' || formData.status === 'Delivered') {
-      baseOrderPayload.deliver_date = formData.deliver_date || null
-    } else {
-      delete baseOrderPayload.deliver_date
-    }
 
     try {
       if (isOnlineNow) {
@@ -765,8 +765,7 @@ const logNote = [
         }
 
         // ပြီးမှ Order ကို Update လုပ်မယ်
-        const { error: orderError } = await apiClient.from('orders').update(baseOrderPayload).eq('id', selectedItem.id)
-        if (orderError) throw orderError
+        await updatePendingEntryOrder(selectedItem.id, baseOrderPayload)
 
        // ── 💡 ပုံရွှေ့ပေးမည့် Logic အသစ် (နေရာ ၂ ခုလုံးတွင် ဤကုဒ်ဖြင့် အစားထိုးပါ) ──
 
@@ -1477,7 +1476,11 @@ if (updatedPending.length > 0) {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelStyle}>Current Status</label>
-            <select value={formData.status} onChange={e => handleStatusChange(e.target.value)} className={winSelect} disabled={!selectedItem} onFocus={handleSelectFocus}>
+            <select value={formData.status} className={winSelect} disabled onFocus={handleSelectFocus}>
+              <option value="">—</option>
+              {formData.status && !['At Office', 'On Way', 'On Hold', 'Delivered', 'Handover', 'In-Transit', 'Via-Agent'].includes(formData.status) && (
+                <option value={formData.status}>{formData.status}</option>
+              )}
               <option value="At Office">📦 At Office</option>
               <option value="On Way">🚵 On Way</option>
               <option value="On Hold">⏸️ On Hold</option>
@@ -1492,16 +1495,18 @@ if (updatedPending.length > 0) {
             <input
               type="date"
               value={formData.deliver_date}
-              onChange={e => setFormData({...formData, deliver_date: e.target.value})}
               className={`${winInput} font-mono ${!['On Way', 'On Hold', 'Delivered', 'Handover', 'Returned'].includes(formData.status) ? 'bg-gray-50 text-gray-400 cursor-not-allowed border-gray-200' : ''}`}
-              disabled={!selectedItem || !['On Way', 'On Hold', 'Delivered', 'Handover', 'Returned'].includes(formData.status)}
+              disabled
             />
           </div>
         </div>
 
         <div>
           <label className={labelStyle}>Delivery Rider</label>
-          <select value={formData.deliver_rider_id} onChange={e => setFormData({...formData, deliver_rider_id: e.target.value})} className={winSelect} disabled={!selectedItem} onFocus={handleSelectFocus}>
+          <select value={formData.deliver_rider_id} className={winSelect} disabled onFocus={handleSelectFocus}>
+            {formData.deliver_rider_id && !riders.some(r => String(r.id) === String(formData.deliver_rider_id)) && (
+              <option value={formData.deliver_rider_id}>{getRiderName(formData.deliver_rider_id)}</option>
+            )}
             <option value="">Select delivery rider...</option>
             {riders.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
