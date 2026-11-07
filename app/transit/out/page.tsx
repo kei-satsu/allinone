@@ -67,6 +67,13 @@ const TRANSIT_AGE_OPTIONS = [
   { value: '1_month', label: '1 လကျော်', days: 30 },
 ]
 
+type DeliverableOrder = {
+  id: string | number
+  item_id?: string
+  deliver_date?: string | null
+  agent_fee?: number | string | null
+}
+
 const getTransitAgeDays = (transitDate: unknown) => {
   if (!transitDate) return null
 
@@ -77,6 +84,13 @@ const getTransitAgeDays = (transitDate: unknown) => {
   today.setHours(0, 0, 0, 0)
   date.setHours(0, 0, 0, 0)
   return Math.floor((today.getTime() - date.getTime()) / 86_400_000)
+}
+
+const getLocalDateInputValue = () => {
+  const date = new Date()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
 }
 
 
@@ -118,6 +132,9 @@ useEffect(() => {
 }, [orders])
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; order: any } | null>(null)
+  const [deliveryDialog, setDeliveryDialog] = useState<{ order: DeliverableOrder; deliverDate: string; agentFee: string } | null>(null)
+  const [savingDelivery, setSavingDelivery] = useState(false)
+  const [deliveryError, setDeliveryError] = useState('')
   const [previewImage, setPreviewImage] = useState<string | null>(null) 
   const [imgScale, setImgScale] = useState<number>(1)
   const [imgRotation, setImgRotation] = useState<number>(0)
@@ -408,7 +425,7 @@ const start = append ? ordersRef.current.length : 0;
     }
 
     const menuWidth = 160  
-    const menuHeight = 160 
+    const menuHeight = 220
 
     let x = e.clientX
     let y = e.clientY
@@ -429,6 +446,56 @@ const start = append ? ordersRef.current.length : 0;
 
       if (error) alert(error.message)
       else fetchData() 
+    }
+  }
+
+  const openDeliveryDialog = (order: DeliverableOrder) => {
+    setDeliveryError('')
+    setDeliveryDialog({
+      order,
+      deliverDate: order.deliver_date || getLocalDateInputValue(),
+      agentFee: order.agent_fee == null ? '' : String(order.agent_fee),
+    })
+    setContextMenu(null)
+  }
+
+  const handleConfirmDelivery = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!deliveryDialog || savingDelivery) return
+
+    const feeInput = deliveryDialog.agentFee.trim()
+    const agentFee = Number(feeInput)
+    if (!deliveryDialog.deliverDate || !feeInput || !Number.isFinite(agentFee) || agentFee < 0) {
+      setDeliveryError('Valid delivery date and non-negative agent fee are required.')
+      return
+    }
+
+    setSavingDelivery(true)
+    setDeliveryError('')
+    const updates = {
+      status: 'Delivered',
+      deliver_date: deliveryDialog.deliverDate,
+      agent_fee: agentFee,
+    }
+
+    try {
+      const { error } = await apiClient
+        .from('orders')
+        .update(updates)
+        .eq('id', deliveryDialog.order.id)
+
+      if (error) throw error
+
+      setOrders(currentOrders => currentOrders.map(order =>
+        order.id === deliveryDialog.order.id ? { ...order, ...updates } : order
+      ))
+      setDeliveryDialog(null)
+      await fetchData()
+    } catch (error) {
+      console.error('Error marking order as delivered:', error)
+      setDeliveryError(error instanceof Error ? error.message : 'Could not update delivery details.')
+    } finally {
+      setSavingDelivery(false)
     }
   }
 
@@ -742,7 +809,7 @@ const start = append ? ordersRef.current.length : 0;
             onRowMouseEnter={handleRowMouseEnter}
             onStopDragging={() => setIsDraggingSelection(false)}
             onRowClick={(order) => setEditingOrder(order)}
-            onRowContextMenu={() => {}}
+            onRowContextMenu={handleRowContextMenu}
             onPreviewImage={setPreviewImage}
           />
 
@@ -840,7 +907,16 @@ const start = append ? ordersRef.current.length : 0;
               View History Log
             </button>
 
-            
+            <button
+              onClick={() => openDeliveryDialog(contextMenu.order)}
+              disabled={contextMenu.order.status === 'Delivered'}
+              className="w-full text-left px-4 py-3 sm:px-3 sm:py-2 text-sm sm:text-xs text-green-700 hover:bg-green-50 active:bg-green-100 disabled:text-gray-400 disabled:cursor-not-allowed disabled:hover:bg-white font-medium flex items-center gap-3 sm:gap-2 border-t border-gray-100"
+            >
+              <svg className="w-4 h-4 text-green-600 sm:w-3.5 sm:h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              {contextMenu.order.status === 'Delivered' ? 'Already Delivered' : 'Mark as Delivered'}
+            </button>
 
             <button 
               onClick={() => { handleDeleteOrder(contextMenu.order.id); setContextMenu(null); }}
@@ -867,6 +943,75 @@ const start = append ? ordersRef.current.length : 0;
 </button>
           </div>
         </>
+      )}
+
+      {deliveryDialog && (
+        <div
+          className="fixed inset-0 z-[70] bg-gray-900/60 backdrop-blur-[3px] flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => { if (!savingDelivery) setDeliveryDialog(null) }}
+        >
+          <div className="absolute inset-0" />
+          <form
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delivery-dialog-title"
+            onSubmit={handleConfirmDelivery}
+            onClick={event => event.stopPropagation()}
+            className="relative w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-xl shadow-2xl overflow-hidden"
+          >
+            <div className="px-5 py-4 border-b border-gray-200 bg-green-50">
+              <h2 id="delivery-dialog-title" className="text-sm font-bold text-gray-900">Confirm Delivery</h2>
+              <p className="mt-1 text-xs text-gray-600">Order ID: {deliveryDialog.order.item_id || deliveryDialog.order.id}</p>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <label htmlFor="transit-deliver-date" className="block text-xs font-semibold text-gray-700 mb-1.5">Deliver Date</label>
+                <input
+                  id="transit-deliver-date"
+                  type="date"
+                  required
+                  value={deliveryDialog.deliverDate}
+                  onChange={event => setDeliveryDialog(current => current ? { ...current, deliverDate: event.target.value } : current)}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-green-600 focus:outline-none focus:ring-2 focus:ring-green-100"
+                />
+              </div>
+              <div>
+                <label htmlFor="transit-agent-fee" className="block text-xs font-semibold text-gray-700 mb-1.5">Agent Fee (Ks)</label>
+                <input
+                  id="transit-agent-fee"
+                  type="number"
+                  min="0"
+                  step="1"
+                  required
+                  inputMode="numeric"
+                  value={deliveryDialog.agentFee}
+                  onChange={event => setDeliveryDialog(current => current ? { ...current, agentFee: event.target.value } : current)}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-green-600 focus:outline-none focus:ring-2 focus:ring-green-100"
+                />
+              </div>
+              {deliveryError && <p role="alert" className="text-sm text-red-600">{deliveryError}</p>}
+            </div>
+
+            <div className="px-5 py-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={savingDelivery}
+                onClick={() => setDeliveryDialog(null)}
+                className="px-4 py-2 rounded-md border border-gray-300 bg-white text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingDelivery}
+                className="px-4 py-2 rounded-md bg-green-600 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+              >
+                {savingDelivery ? 'Saving...' : 'Confirm Delivered'}
+              </button>
+            </div>
+          </form>
+        </div>
       )}
 
       {/* ── Edit Modal Form ── */}
