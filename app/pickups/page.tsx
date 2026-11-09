@@ -1181,7 +1181,7 @@ export default function PickupsPage() {
               </div>
               <p className="text-sm text-red-700">
                 <span className="font-bold">{selectedPickup.senders?.name}</span> ၏ Pickup ကို
-                အပြီးအပိုင် ဖျက်မည်။ ဤလုပ်ဆောင်ချက်ကို ပြန်မလုပ်နိုင်ပါ။
+                အပြီးအပိုင် ဖျက်မည်။
               </p>
             </div>
             <div className="flex gap-2 pt-2">
