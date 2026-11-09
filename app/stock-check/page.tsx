@@ -29,7 +29,7 @@ type StockOrder = {
   [key: string]: unknown
 }
 
-type StockStatus = 'All' | 'At Office' | 'On Hold' | 'Arrived' | 'Checked'
+type StockStatus = 'All' | 'At Office' | 'On Hold' | 'On Way' | 'Arrived' | 'Checked'
 type StockColumnFilters = Record<string, string | string[]>
 type QueryResult = { data: StockOrder[] | StockOrder | null; error: Error | null }
 type QueryFactory = (from: number, to: number) => PromiseLike<QueryResult>
@@ -53,7 +53,6 @@ const COLUMN_DEFS: ColumnDef[] = [
   { key: 'branch', label: 'Origin', defaultVisible: false },
 ]
 
-const STOCK_STATUSES = ['At Office', 'On Hold', 'Arrived']
 const PAGE_SIZE = 500
 
 function subscribeToBranch(onStoreChange: () => void) {
@@ -106,7 +105,8 @@ function belongsInStockCheck(order: StockOrder, branch: string) {
   if (origin === currentBranch && status === 'On Hold') return true
 
   const lastDestination = String(getLastTransitLeg(order)?.transit_to || '').trim().toUpperCase()
-  return lastDestination === currentBranch && (status === 'On Hold' || status === 'Arrived')
+  return lastDestination === currentBranch
+    && (status === 'On Hold' || status === 'Arrived' || (currentBranch === 'YGN' && status === 'On Way'))
 }
 
 async function fetchAllPages(createQuery: QueryFactory) {
@@ -127,6 +127,10 @@ function branchName(branch: string) {
   return branch || 'Branch'
 }
 
+function getBranchTransitStatus(branch: string): 'On Hold' | 'On Way' {
+  return branch.trim().toUpperCase() === 'YGN' ? 'On Way' : 'On Hold'
+}
+
 function getTodayDate() {
   const today = new Date()
   const month = String(today.getMonth() + 1).padStart(2, '0')
@@ -141,6 +145,8 @@ function hasBeenCheckedToday(order: StockOrder) {
 export default function StockCheckPage() {
   const router = useRouter()
   const userBranch = useSyncExternalStore(subscribeToBranch, getBranchSnapshot, getServerBranchSnapshot)
+  const branchTransitStatus = getBranchTransitStatus(userBranch)
+  const statusOptions: StockStatus[] = ['All', 'At Office', branchTransitStatus, 'Arrived', 'Checked']
   const [orders, setOrders] = useState<StockOrder[]>([])
   const [statusFilter, setStatusFilter] = useState<StockStatus>('All')
   const [columnFilters, setColumnFilters] = useState<StockColumnFilters>({})
@@ -156,6 +162,7 @@ export default function StockCheckPage() {
   const [contextMenu, setContextMenu] = useState<OrderContextMenu | null>(null)
   const [editingOrder, setEditingOrder] = useState<StockOrder | null>(null)
   const [checkingOrderIds, setCheckingOrderIds] = useState<Set<string>>(new Set())
+  const activeStatusFilter = statusOptions.includes(statusFilter) ? statusFilter : 'All'
 
   useEffect(() => {
     if (!userBranch) {
@@ -165,6 +172,8 @@ export default function StockCheckPage() {
 
     let isCurrent = true
     const branch = userBranch.trim().toUpperCase()
+    const stockStatuses = ['At Office', 'On Hold', 'Arrived', ...(branch === 'YGN' ? ['On Way'] : [])]
+    const inboundStatuses = ['On Hold', 'Arrived', ...(branch === 'YGN' ? ['On Way'] : [])]
 
     const loadStockOrders = async () => {
       try {
@@ -173,7 +182,7 @@ export default function StockCheckPage() {
           .select('*')
           .eq('is_deleted', false)
           .eq('branch', branch)
-          .in('status', STOCK_STATUSES)
+          .in('status', stockStatuses)
           .order('created_at', { ascending: false })
           .range(from, to))
 
@@ -181,7 +190,7 @@ export default function StockCheckPage() {
           .from<StockOrder>('orders')
           .select('*')
           .eq('is_deleted', false)
-          .in('status', ['Arrived', 'On Hold'])
+          .in('status', inboundStatuses)
           .filter('transit', 'cs', JSON.stringify([{ transit_to: branch }]))
           .order('created_at', { ascending: false })
           .range(from, to))
@@ -226,8 +235,8 @@ export default function StockCheckPage() {
     const query = search.trim().toLocaleLowerCase()
     return orders.filter((order) => {
       const checkedToday = hasBeenCheckedToday(order)
-      const matchesStatus = statusFilter === 'All'
-        || (statusFilter === 'Checked' ? checkedToday : !checkedToday && order.status === statusFilter)
+      const matchesStatus = activeStatusFilter === 'All'
+        || (activeStatusFilter === 'Checked' ? checkedToday : !checkedToday && order.status === activeStatusFilter)
       const searchableValues = [order.item_id, order.barcode, order.sender_name, order.receiver_name, order.receiver_phone]
       const matchesSearch = !query || searchableValues.some((value) => String(value || '').toLocaleLowerCase().includes(query))
       const matchesColumns = COLUMN_DEFS.filter((column) => column.key !== 'row_number' && visibleCols[column.key]).every((column) => {
@@ -238,14 +247,26 @@ export default function StockCheckPage() {
       })
       return matchesStatus && matchesSearch && matchesColumns
     })
-  }, [columnFilters, orders, search, statusFilter, visibleCols])
+  }, [activeStatusFilter, columnFilters, orders, search, visibleCols])
 
   const selection = useOrderSelection(orders)
-  const statusCounts = useMemo(() => orders.reduce<Record<StockStatus, number>>((counts, order) => {
-    if (hasBeenCheckedToday(order)) counts.Checked += 1
-    else if (order.status === 'At Office' || order.status === 'On Hold' || order.status === 'Arrived') counts[order.status] += 1
+  const statusCounts = useMemo(() => {
+    const counts: Record<StockStatus, number> = {
+      All: orders.length,
+      'At Office': 0,
+      'On Hold': 0,
+      'On Way': 0,
+      Arrived: 0,
+      Checked: 0,
+    }
+
+    for (const order of orders) {
+      if (hasBeenCheckedToday(order)) counts.Checked += 1
+      else if (order.status === 'At Office' || order.status === 'On Hold' || order.status === 'On Way' || order.status === 'Arrived') counts[order.status] += 1
+    }
+
     return counts
-  }, { All: orders.length, 'At Office': 0, 'On Hold': 0, Arrived: 0, Checked: 0 }), [orders])
+  }, [orders])
 
   const handleCheckOrder = async (order: StockOrder) => {
     if (checkingOrderIds.has(order.id)) return
@@ -305,12 +326,11 @@ export default function StockCheckPage() {
 
   const activeColumnFilterCount = Object.values(columnFilters).filter((value) => Array.isArray(value) ? value.length > 0 : Boolean(value.trim())).length
 
-  const statusOptions: StockStatus[] = ['All', 'At Office', 'On Hold', 'Arrived', 'Checked']
   const renderStatusTabs = () => (
     <nav aria-label="Stock status" className="flex items-center gap-1">
       {statusOptions.map((status) => (
-        <button key={status} type="button" onClick={() => setStatusFilter(status)} aria-pressed={statusFilter === status} className={`flex min-h-8 shrink-0 items-center gap-1.5 border px-2.5 text-[11px] font-semibold transition ${statusFilter === status ? 'border-orange-600 bg-orange-600 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-orange-300 hover:text-orange-700'}`}>
-          {status}<span className={`tabular-nums ${statusFilter === status ? 'text-white/70' : 'text-slate-400'}`}>{statusCounts[status]}</span>
+        <button key={status} type="button" onClick={() => setStatusFilter(status)} aria-pressed={activeStatusFilter === status} className={`flex min-h-8 shrink-0 items-center gap-1.5 border px-2.5 text-[11px] font-semibold transition ${activeStatusFilter === status ? 'border-orange-600 bg-orange-600 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-orange-300 hover:text-orange-700'}`}>
+          {status}<span className={`tabular-nums ${activeStatusFilter === status ? 'text-white/70' : 'text-slate-400'}`}>{statusCounts[status]}</span>
         </button>
       ))}
     </nav>
