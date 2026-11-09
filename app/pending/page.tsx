@@ -1548,6 +1548,7 @@ if (updatedPending.length > 0) {
           setCityError('');
         }}
         disabled={!selectedItem}
+        tabIndex={-1}
         aria-label="Add new city"
         title={isAddingCity ? 'Cancel' : 'Add New City'}
         className="shrink-0 rounded-lg border border-blue-200 bg-blue-50 px-2 text-[11px] font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
@@ -1631,6 +1632,7 @@ if (updatedPending.length > 0) {
           setSubCityError('');
         }}
         disabled={!selectedItem || !formData.receiver_loc || savingSubCity}
+        tabIndex={-1}
         aria-label={isAddingSubCity ? 'Cancel adding sub city' : 'Add sub city'}
         title={isAddingSubCity ? 'Cancel' : 'Add Sub City'}
         className="shrink-0 rounded-lg border border-emerald-200 bg-emerald-50 px-2 text-[11px] font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
