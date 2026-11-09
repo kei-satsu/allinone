@@ -3,7 +3,7 @@ import { intakeCorsJson, intakeCorsOptions, isAllowedIntakeRequest } from '@/lib
 
 export const dynamic = 'force-dynamic'
 
-const TABLES = new Set(['orders', 'senders', 'riders', 'cities', 'cash_handovers'])
+const TABLES = new Set(['orders', 'senders', 'riders', 'cities', 'sub_cities', 'cash_handovers'])
 
 function responseError(request: Request, error: unknown, status = 500) {
   if (error && typeof error === 'object') {

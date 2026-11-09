@@ -48,6 +48,7 @@ const COLUMN_DEFS: ColumnDef[] = [
   { key: 'receiver_phone', label: 'Phone', defaultVisible: true },
   { key: 'receiver_address', label: 'Full Address', defaultVisible: false },
   { key: 'receiver_loc', label: 'R. City', defaultVisible: true },
+  { key: 'sub_city', label: 'Sub City', defaultVisible: true },
   { key: 'fee_type', label: 'Type', defaultVisible: true },
   { key: 'cod_amount', label: 'COD (Ks)', defaultVisible: true },
   { key: 'deli_fee', label: 'Deli Fee (Ks)', defaultVisible: true },

@@ -273,6 +273,7 @@ const handleExportExcel = async () => {
       'Receiver Phone': order.receiver_phone || '-',
       'Receiver Address': order.receiver_address || '-',
       'Receiver Location': order.receiver_loc || '-',
+      'Receiver Sub City': order.sub_city || '-',
       'COD Amount': Number(order.cod_amount) || 0,
       'Deli Fee': Number(order.deli_fee) || 0,
       'Fee Type': order.fee_type || '-',

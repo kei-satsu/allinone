@@ -657,6 +657,7 @@ const resolveBulkStatus = (selectedStatus: string, selectedCityId: string) => {
                   <th className="py-2.5 px-3">Receiver Name</th>
                   <th className="py-2.5 px-3">Phone</th>
                   <th className="py-2.5 px-3">Full Address</th>
+                  <th className="py-2.5 px-3">Sub City</th>
                   <th className="py-2.5 px-3">COD</th>
                   <th className="py-2.5 px-3">Deli Fee</th>
                   <th className="py-2.5 px-3">Type</th>
@@ -688,6 +689,7 @@ const resolveBulkStatus = (selectedStatus: string, selectedCityId: string) => {
                         <td className="py-2.5 px-3 text-gray-900 font-semibold">{o.receiver_name}</td>
                         <td className="py-2.5 px-3 font-mono text-gray-600">{o.receiver_phone}</td>
                         <td className="py-2.5 px-3 text-gray-500 max-w-xs truncate" title={o.receiver_address}>{o.receiver_address || '-'}</td>
+                        <td className="py-2.5 px-3 text-gray-500">{o.sub_city || '-'}</td>
                         <td className="py-2.5 px-3 font-mono text-gray-600">{o.cod_amount}</td>
                         <td className="py-2.5 px-3 font-mono text-gray-600">{o.deli_fee}</td>
                         <td className="py-2.5 px-3 font-mono text-gray-600">{o.fee_type}</td>

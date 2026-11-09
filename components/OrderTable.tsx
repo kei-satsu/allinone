@@ -455,6 +455,7 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
                     <div className="min-w-0"><span className="mb-0.5 block text-[10px] font-bold uppercase text-slate-500">Sender</span><span className="block truncate font-semibold text-slate-800">{o.sender_name || '-'}</span></div>
                     <div className="min-w-0"><span className="mb-0.5 block text-[10px] font-bold uppercase text-slate-500">Receiver</span><span className="block truncate font-semibold text-slate-800">{o.receiver_name || '-'}</span></div>
                     <div className="col-span-2 min-w-0"><span className="mb-0.5 block text-[10px] font-bold uppercase text-slate-500">Receiver Address</span><span className="block whitespace-normal break-words font-semibold leading-relaxed text-slate-800">{o.receiver_address || '-'}</span></div>
+                    <div className="min-w-0"><span className="mb-0.5 block text-[10px] font-bold uppercase text-slate-500">Sub City</span><span className="block truncate font-semibold text-slate-800">{o.sub_city || '-'}</span></div>
                     <div className="min-w-0"><span className="mb-0.5 block text-[10px] font-bold uppercase text-slate-500">Last Check</span><span className="block truncate font-semibold text-slate-800">{renderCell(o, 'last_check')}</span></div>
                     <div className="min-w-0"><span className="mb-0.5 block text-[10px] font-bold uppercase text-slate-500">Transit To</span><span className="block truncate font-semibold text-slate-800">{renderCell(o, 'transit_to')}</span></div>
                     {o.receiver_phone && <a href={`tel:${o.receiver_phone}`} className="self-end text-right text-[11px] font-semibold text-orange-700" onClick={(e) => e.stopPropagation()}>{o.receiver_phone}</a>}
@@ -467,6 +468,10 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
                   <div>
                     <span className="mb-0.5 block text-[11px] font-extrabold uppercase tracking-wide text-slate-600">Receiver</span>
                     <span className="block truncate text-[13px] font-bold text-slate-800">{o.receiver_name || '-'} ({o.receiver_loc || '-'})</span>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="mb-0.5 block text-[11px] font-extrabold uppercase tracking-wide text-slate-600">Sub City</span>
+                    <span className="block truncate text-[13px] font-bold text-slate-800">{o.sub_city || '-'}</span>
                   </div>
                   {o.receiver_phone && (
                     <div className="col-span-2 pt-0.5">

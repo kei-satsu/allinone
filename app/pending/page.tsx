@@ -1,8 +1,7 @@
 "use client"
 import { useState, useEffect, useRef } from 'react'
-import { apiClient } from '@/lib/databaseApi'
+import { apiClient, createCity } from '@/lib/databaseApi'
 import { useRouter } from 'next/navigation'
-import AddCityForm from "@/components/AddCityForm";
 import { createWorker } from 'tesseract.js'
 
 
@@ -52,7 +51,6 @@ export default function PendingEntry() {
   const [syncQueue, setSyncQueue] = useState<QueueItem[]>([])
   const [isOnline, setIsOnline] = useState(true)
   const [syncing, setSyncing] = useState(false)
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [showSubmitConfirmation, setShowSubmitConfirmation] = useState(false)
   const [canConfirmSubmit, setCanConfirmSubmit] = useState(false)
 
@@ -114,6 +112,7 @@ const appendLog = (currentHistory: any[], action: string, note: string) => {
     receiver_phone: '',
     receiver_address: '',
     receiver_loc: userBranch,
+    sub_city: '',
     cod_amount: 0,
     deli_fee: 0,
     fee_type: 'Deli',
@@ -234,8 +233,25 @@ interface City {
   sort_order?: number;
 }
 
+interface SubCity {
+  id?: number;
+  city: string;
+  sub_city: string;
+}
+
 // 2. State
 const [cities, setCities] = useState<City[]>([]);
+const [isAddingCity, setIsAddingCity] = useState(false);
+const [newCityId, setNewCityId] = useState('');
+const [newCityName, setNewCityName] = useState('');
+const [savingCity, setSavingCity] = useState(false);
+const [cityError, setCityError] = useState('');
+const [subCities, setSubCities] = useState<SubCity[]>([]);
+const [subCitiesLoading, setSubCitiesLoading] = useState(false);
+const [subCityError, setSubCityError] = useState('');
+const [isAddingSubCity, setIsAddingSubCity] = useState(false);
+const [newSubCityName, setNewSubCityName] = useState('');
+const [savingSubCity, setSavingSubCity] = useState(false);
 
 // မိမိ ရောက်နေသော / သုံးနေသော Current Branch ID (ဥပမာ 'YGN')
 
@@ -260,6 +276,115 @@ const loadCities = async (targetBranch?: string) => {
     const otherCities = data.filter((city: any) => city["C.ID"] !== activeBranch);
 
     setCities([...topCity, ...otherCities]);
+  }
+};
+
+const handleAddCity = async () => {
+  const cityId = newCityId.trim();
+  const cityName = newCityName.trim();
+  if (!cityId || !cityName || savingCity) return;
+
+  if (cities.some((city) => city['C.ID'].trim().toLocaleLowerCase() === cityId.toLocaleLowerCase())) {
+    setCityError('ဒီ City ID ရှိပြီးသားဖြစ်ပါတယ်။');
+    return;
+  }
+
+  setSavingCity(true);
+  setCityError('');
+  try {
+    await createCity({ 'C.ID': cityId, name: cityName });
+    const newCity = { 'C.ID': cityId, name: cityName };
+    const updatedCities = [...cities, newCity];
+    const activeBranch = userBranch.trim().toUpperCase();
+    const topCity = updatedCities.filter((city) => city['C.ID'] === activeBranch);
+    const otherCities = updatedCities.filter((city) => city['C.ID'] !== activeBranch);
+
+    setCities([...topCity, ...otherCities]);
+    setFormData((current) => ({ ...current, receiver_loc: cityId, sub_city: '' }));
+    setIsAddingCity(false);
+    setNewCityId('');
+    setNewCityName('');
+    setIsAddingSubCity(false);
+    setNewSubCityName('');
+    setSubCityError('');
+  } catch (error) {
+    setCityError(error instanceof Error ? error.message : 'City ကို သိမ်း၍မရပါ။');
+  } finally {
+    setSavingCity(false);
+  }
+};
+
+useEffect(() => {
+  const city = formData.receiver_loc;
+  if (!city) {
+    setSubCities([]);
+    setSubCitiesLoading(false);
+    setSubCityError('');
+    return;
+  }
+
+  let isCurrent = true;
+  setSubCitiesLoading(true);
+  setSubCityError('');
+
+  const loadSubCities = async () => {
+    try {
+      const { data, error } = await apiClient
+        .from<SubCity>('sub_cities')
+        .select('*')
+        .eq('city', city)
+        .order('sub_city', { ascending: true });
+
+      if (error) throw error;
+      if (isCurrent) setSubCities(Array.isArray(data) ? data : data ? [data] : []);
+    } catch (error) {
+      if (isCurrent) {
+        setSubCities([]);
+        setSubCityError(error instanceof Error ? error.message : 'Sub City စာရင်းကို ရယူ၍မရပါ။');
+      }
+    } finally {
+      if (isCurrent) setSubCitiesLoading(false);
+    }
+  };
+
+  void loadSubCities();
+  return () => { isCurrent = false };
+}, [formData.receiver_loc]);
+
+const handleAddSubCity = async () => {
+  const city = formData.receiver_loc;
+  const subCity = newSubCityName.trim();
+  if (!city || !subCity || savingSubCity) return;
+
+  const existing = subCities.find(
+    (item) => item.sub_city.trim().toLocaleLowerCase() === subCity.toLocaleLowerCase(),
+  );
+  if (existing) {
+    setFormData((current) => ({ ...current, sub_city: existing.sub_city }));
+    setSubCityError('ဒီ City အတွက် Sub City ရှိပြီးသားဖြစ်ပါတယ်။');
+    return;
+  }
+
+  setSavingSubCity(true);
+  setSubCityError('');
+  try {
+    const { error } = await apiClient
+      .from<SubCity>('sub_cities')
+      .insert({ city, sub_city: subCity });
+    if (error) throw error;
+
+    setSubCities((current) => [...current, { city, sub_city: subCity }].sort(
+      (left, right) => left.sub_city.localeCompare(right.sub_city),
+    ));
+    setFormData((current) => current.receiver_loc === city
+      ? { ...current, sub_city: subCity }
+      : current);
+    setNewSubCityName('');
+    setIsAddingSubCity(false);
+  } catch (error) {
+    setSubCityError(error instanceof Error ? error.message : 'Sub City ကို သိမ်း၍မရပါ။');
+  } finally {
+    setSavingSubCity(false);
   }
 };
 
@@ -542,6 +667,13 @@ const loadCities = async (targetBranch?: string) => {
 const handleSelectItem = (item: any, shouldFocusInput = true, branchOverride?: string) => {
   const activeBranch = branchOverride || userBranch || localStorage.getItem('user_branch') || ''
 
+  setIsAddingCity(false)
+  setNewCityId('')
+  setNewCityName('')
+  setCityError('')
+  setIsAddingSubCity(false)
+  setNewSubCityName('')
+  setSubCityError('')
   setSelectedItem(item)
   setOriginalCod(item.cod_amount || 0)
   setZoomScale(1); setRotation(0); setPosition({ x: 0, y: 0 })
@@ -563,6 +695,7 @@ const handleSelectItem = (item: any, shouldFocusInput = true, branchOverride?: s
     receiver_phone: item.receiver_phone || '',
     receiver_address: item.receiver_address || '',
     receiver_loc: item.receiver_loc || activeBranch,
+    sub_city: item.sub_city || '',
     cod_amount: item.cod_amount || 0,
     deli_fee: item.deli_fee || 0,
     fee_type: item.fee_type || 'Deli',
@@ -700,6 +833,7 @@ const logNote = [
   `Sender: ${formData.sender_name || 'N/A'} (${formData.sender_phone || 'N/A'})`,
   `Receiver: ${formData.receiver_name || 'N/A'} (${formData.receiver_phone || 'N/A'})`,
   `City: ${formData.receiver_loc || 'N/A'}`,
+  `Sub City: ${formData.sub_city || 'N/A'}`,
   `COD: ${formData.cod_amount || 0} Ks`,
   `Deli: ${formData.deli_fee || 0} Ks`,
   `Total: ${formData.total_amount || 0} Ks`,
@@ -1385,31 +1519,156 @@ if (updatedPending.length > 0) {
   <label className={labelStyle}>Address</label>
   <input type="text" value={formData.receiver_address} onChange={e => setFormData({...formData, receiver_address: e.target.value})} className={winInput} disabled={!selectedItem} placeholder="လမ်း၊ အိမ်နံပါတ်၊ ရပ်ကွက် ဖြည့်သွင်းရန်" />
 </div>
-<div className="sm:col-span-2">
-  <div className="flex justify-between items-center mb-1.5">
-    <label className="block text-gray-600 font-semibold uppercase text-xs tracking-wide">City</label>
-    <button
-      type="button"
-      onClick={() => setIsModalOpen(true)}
-      className="text-[11px] text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1 bg-blue-50 hover:bg-blue-100/80 px-2 py-1 rounded-lg border border-blue-200 transition-all active:scale-95"
-    >
-      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-      </svg>
-      Add New City
-    </button>
+<div className="sm:col-span-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+  <div className="min-w-0">
+    <label className={`${labelStyle} mb-1.5 block`}>City</label>
+    <div className="flex min-w-0 gap-1.5">
+      <select
+        value={formData.receiver_loc}
+        onChange={e => {
+          setFormData({...formData, receiver_loc: e.target.value, sub_city: ''});
+          setIsAddingSubCity(false);
+          setNewSubCityName('');
+          setSubCityError('');
+        }}
+        className={`${winSelect} min-w-0 flex-1`}
+        disabled={!selectedItem || savingSubCity || savingCity}
+      >
+        <option value="">-- Select City --</option>
+        {cities.map((city) => (
+          <option key={city["C.ID"]} value={city["C.ID"]}>{city.name}</option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={() => {
+          setIsAddingCity((current) => !current);
+          setNewCityId('');
+          setNewCityName('');
+          setCityError('');
+        }}
+        disabled={!selectedItem}
+        aria-label="Add new city"
+        title={isAddingCity ? 'Cancel' : 'Add New City'}
+        className="shrink-0 rounded-lg border border-blue-200 bg-blue-50 px-2 text-[11px] font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {isAddingCity ? 'Cancel' : '+ City'}
+      </button>
+    </div>
+    {isAddingCity && (
+      <div className="mt-2 space-y-2">
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            type="text"
+            value={newCityId}
+            onChange={(e) => {
+              setNewCityId(e.target.value);
+              setCityError('');
+            }}
+            className={winInput}
+            disabled={!selectedItem || savingCity}
+            placeholder="City ID / Code"
+            aria-label="New city ID"
+          />
+          <input
+            type="text"
+            value={newCityName}
+            onChange={(e) => {
+              setNewCityName(e.target.value);
+              setCityError('');
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void handleAddCity();
+              }
+            }}
+            className={winInput}
+            disabled={!selectedItem || savingCity}
+            placeholder="City name"
+            aria-label="New city name"
+          />
+        </div>
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => void handleAddCity()}
+            disabled={!newCityId.trim() || !newCityName.trim() || savingCity}
+            className="rounded bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {savingCity ? 'Saving...' : 'Save City'}
+          </button>
+        </div>
+        {cityError && <p role="alert" className="text-xs text-rose-600">{cityError}</p>}
+      </div>
+    )}
   </div>
-  <select 
-    value={formData.receiver_loc} 
-    onChange={e => setFormData({...formData, receiver_loc: e.target.value})} 
-    className={winSelect}  
-    disabled={!selectedItem} 
-  >
-    <option value="">-- Select City --</option>
-    {cities.map((city) => (
-      <option key={city["C.ID"]} value={city["C.ID"]}>{city.name}</option>
-    ))}
-  </select>
+
+  <div className="min-w-0">
+    <label className={`${labelStyle} mb-1.5 block`}>Sub City</label>
+    <div className="flex min-w-0 gap-1.5">
+      <select
+        value={formData.sub_city}
+        onChange={e => setFormData({...formData, sub_city: e.target.value})}
+        className={`${winSelect} min-w-0 flex-1`}
+        disabled={!selectedItem || !formData.receiver_loc || subCitiesLoading}
+      >
+        <option value="">
+          {!formData.receiver_loc ? 'အရင် City ရွေးပါ' : subCitiesLoading ? 'Loading...' : '-- Select Sub City --'}
+        </option>
+        {formData.sub_city && !subCities.some((city) => city.sub_city === formData.sub_city) && (
+          <option value={formData.sub_city}>{formData.sub_city}</option>
+        )}
+        {subCities.map((city) => (
+          <option key={city.id ?? `${city.city}-${city.sub_city}`} value={city.sub_city}>{city.sub_city}</option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={() => {
+          setIsAddingSubCity((current) => !current);
+          setNewSubCityName('');
+          setSubCityError('');
+        }}
+        disabled={!selectedItem || !formData.receiver_loc || savingSubCity}
+        aria-label={isAddingSubCity ? 'Cancel adding sub city' : 'Add sub city'}
+        title={isAddingSubCity ? 'Cancel' : 'Add Sub City'}
+        className="shrink-0 rounded-lg border border-emerald-200 bg-emerald-50 px-2 text-[11px] font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {isAddingSubCity ? 'Cancel' : '+ Sub City'}
+      </button>
+    </div>
+    {isAddingSubCity && (
+      <div className="mt-2 flex gap-2">
+        <input
+          type="text"
+          value={newSubCityName}
+          onChange={(e) => {
+            setNewSubCityName(e.target.value);
+            setSubCityError('');
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void handleAddSubCity();
+            }
+          }}
+          className={winInput}
+          disabled={!selectedItem || savingSubCity}
+          placeholder="Sub City အသစ်အမည်"
+        />
+        <button
+          type="button"
+          onClick={() => void handleAddSubCity()}
+          disabled={!newSubCityName.trim() || savingSubCity}
+          className="shrink-0 rounded bg-emerald-600 px-3 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {savingSubCity ? 'Saving...' : 'Save'}
+        </button>
+      </div>
+    )}
+    {subCityError && <p role="alert" className="mt-1 text-xs text-rose-600">{subCityError}</p>}
+  </div>
 </div>
         </div>
       </div>
@@ -1578,12 +1837,6 @@ if (updatedPending.length > 0) {
   </form>
 </div>
       </div> 
-      <AddCityForm 
-      isOpen={isModalOpen} 
-      onClose={() => setIsModalOpen(false)} 
-      onCityAdded={loadCities} 
-    />     
-
 {showSubmitConfirmation && (
   <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
     <div

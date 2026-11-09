@@ -26,6 +26,7 @@ const COLUMN_DEFS = [
   { key: 'receiver_phone', label: 'Phone', defaultVisible: true },
   { key: 'receiver_address', label: 'Full Address', defaultVisible: false },
   { key: 'receiver_loc', label: 'R. City', defaultVisible: true },
+  { key: 'sub_city', label: 'Sub City', defaultVisible: true },
   { key: 'fee_type', label: 'Type', defaultVisible: true },
   { key: 'cod_amount', label: 'COD (Ks)', defaultVisible: true },
   { key: 'deli_fee', label: 'Deli Fee (Ks)', defaultVisible: true },
@@ -1250,7 +1251,7 @@ ref={tableRef}
             <div className="space-y-1 pt-1">
               <span className="text-gray-400 text-xs block">Receiver (ယူသူ)</span>
               <div className="text-gray-900 font-semibold text-sm break-words">
-                {viewingDetailOrder.receiver_name || '-'} <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded ml-1">({viewingDetailOrder.receiver_loc || '-'})</span>
+                {viewingDetailOrder.receiver_name || '-'} <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded ml-1">({viewingDetailOrder.receiver_loc || '-'}{viewingDetailOrder.sub_city ? `, ${viewingDetailOrder.sub_city}` : ''})</span>
               </div>
             </div>
 

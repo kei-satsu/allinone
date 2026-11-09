@@ -16,6 +16,7 @@ const COLUMN_DEFS = [
   { key: "receiver_name", label: "Receiver", defaultVisible: true },
   { key: "receiver_phone", label: "Phone", defaultVisible: true },
   { key: "receiver_loc", label: "R. City", defaultVisible: false },
+  { key: "sub_city", label: "Sub City", defaultVisible: true },
   { key: "receiver_address", label: "Full Address", defaultVisible: false },
   { key: "fee_type", label: "Type", defaultVisible: true },
   { key: "cod_amount", label: "COD (Ks)", defaultVisible: true },
@@ -2598,6 +2599,12 @@ export default function DailyReport() {
                       <span className="text-gray-400 block">Full Address:</span>{" "}
                       <span className="text-gray-800 font-semibold break-words">
                         {o.receiver_address || "-"}
+                      </span>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-gray-400 block">Sub City:</span>{" "}
+                      <span className="text-gray-800 font-semibold break-words">
+                        {o.sub_city || "-"}
                       </span>
                     </div>
                   </div>

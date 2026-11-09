@@ -72,6 +72,7 @@ useEffect(() => {
     receiver_phone: '',
     receiver_address: '',
     receiver_loc: 'MDY',
+    sub_city: '',
     cod_amount: 0,
     deli_fee: 0,
     fee_type: 'Deli',
@@ -373,7 +374,7 @@ useEffect(() => {
         ...prev,
         sender_id: null,
         sender_name: '', sender_phone: '', sender_loc: userBranch || 'MDY',
-        receiver_name: '', receiver_phone: '', receiver_address: '',
+        receiver_name: '', receiver_phone: '', receiver_address: '', sub_city: '',
         cod_amount: 0, deli_fee: 0, fee_type: 'Deli', total_amount: 0, note: '', cleared_date: '',
         pickup_rider_id: '', deliver_rider_id: '', status: 'At Office', deliver_date: '',
         image_url: '' // Reset Image
@@ -638,6 +639,10 @@ useEffect(() => {
         ))}
       </select>
     </div>
+  </div>
+  <div className="mt-4">
+    <label className={labelStyle}>Sub City</label>
+    <input type="text" value={formData.sub_city} onChange={e => setFormData({...formData, sub_city: e.target.value})} className={winInput} placeholder="Enter township / sub-city..." />
   </div>
 </div>
           </div>

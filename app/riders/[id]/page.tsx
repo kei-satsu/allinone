@@ -16,6 +16,7 @@ type RiderOrder = {
   sender_loc?: string
   receiver_name?: string
   receiver_address?: string
+  sub_city?: string
   received_date?: string
   deliver_date?: string
   cod_amount?: number | string
@@ -230,6 +231,7 @@ export default function RiderDetailPage() {
       'Sender LOC',
       'Receiver',
       'Receiver Address',
+      'Sub City',
       'COD (Ks)',
       'Deli Fee (Ks)',
       'Total (Ks)',
@@ -252,6 +254,7 @@ export default function RiderDetailPage() {
         order.sender_loc || '',
         order.receiver_name || '',
         order.receiver_address || '',
+        order.sub_city || '',
         Number(order.cod_amount) || 0,
         Number(order.deli_fee) || 0,
         Number(order.total_amount) || 0,
@@ -416,6 +419,7 @@ export default function RiderDetailPage() {
                     <th className={tableTh}>Sender LOC</th>
                     <th className={tableTh}>Receiver</th>
                     <th className={tableTh}>Receiver Address</th>
+                    <th className={tableTh}>Sub City</th>
                     <th className={tableTh}>COD</th>
                     <th className={tableTh}>Deli Fee</th>
                     <th className={tableTh}>Total</th>
@@ -432,6 +436,7 @@ export default function RiderDetailPage() {
                       <td className="py-2.5 px-3 text-gray-500">{o.sender_loc || '-'}</td>
                       <td className="py-2.5 px-3 font-medium text-gray-800">{o.receiver_name}</td>
                       <td className="py-2.5 px-3 text-gray-500 max-w-[180px] truncate">{o.receiver_address || '-'}</td>
+                      <td className="py-2.5 px-3 text-gray-500">{o.sub_city || '-'}</td>
                       <td className="py-2.5 px-3 text-right font-mono text-green-600">{o.cod_amount?.toLocaleString()}</td>
                       <td className="py-2.5 px-3 text-right font-mono text-gray-600">{o.deli_fee?.toLocaleString()}</td>
                       <td className="py-2.5 px-3 text-right font-mono font-bold text-gray-900">{o.total_amount?.toLocaleString()}</td>

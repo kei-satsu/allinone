@@ -122,6 +122,7 @@ const handlePermanentDelete = async (order: ParcelOrder) => {
               <th className="py-2.5 px-4">Item ID</th>
               <th className="py-2.5 px-3">Sender</th>
               <th className="py-2.5 px-3">Receiver</th>
+              <th className="py-2.5 px-3">Sub City</th>
               <th className="py-2.5 px-3">Deleted At</th>
               <th className="py-2.5 px-3">Deleted By</th>
               <th className="py-2.5 px-4 text-center">Actions</th>
@@ -130,11 +131,11 @@ const handlePermanentDelete = async (order: ParcelOrder) => {
           <tbody className="divide-y divide-gray-100">
             {loading ? (
               <tr>
-                <td colSpan={6} className="p-20 text-center text-gray-400">Loading Trash Records...</td>
+                <td colSpan={7} className="p-20 text-center text-gray-400">Loading Trash Records...</td>
               </tr>
             ) : deletedOrders.length === 0 ? (
               <tr>
-                <td colSpan={6} className="p-16 text-center text-gray-400 font-medium">အမှိုက်ပုံးထဲတွင် မည်သည့်မှတ်တမ်းမှ မရှိပါ။</td>
+                <td colSpan={7} className="p-16 text-center text-gray-400 font-medium">အမှိုက်ပုံးထဲတွင် မည်သည့်မှတ်တမ်းမှ မရှိပါ။</td>
               </tr>
             ) : deletedOrders.map((o) => (
               <tr
@@ -146,6 +147,7 @@ const handlePermanentDelete = async (order: ParcelOrder) => {
                 <td className="py-2.5 px-4 font-mono font-medium text-gray-900">{o.item_id}</td>
                 <td className="py-2.5 px-3 text-gray-700">{o.sender_name} ({o.sender_loc})</td>
                 <td className="py-2.5 px-3 text-gray-700">{o.receiver_name} ({o.receiver_loc})</td>
+                <td className="py-2.5 px-3 text-gray-700">{o.sub_city || '-'}</td>
                 <td className="py-2.5 px-3 text-red-500 font-medium">
                   {o.deleted_at ? new Date(o.deleted_at).toLocaleString() : '-'}
                 </td>

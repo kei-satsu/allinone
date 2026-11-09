@@ -16,6 +16,7 @@ const COLUMN_DEFS = [
   { key: 'receiver_name', label: 'Receiver', defaultVisible: true },
   { key: 'receiver_phone', label: 'Phone', defaultVisible: true },
   { key: 'receiver_loc', label: 'R. City', defaultVisible: false },
+  { key: 'sub_city', label: 'Sub City', defaultVisible: true },
   { key: 'receiver_address', label: 'Full Address', defaultVisible: true },
   { key: 'fee_type', label: 'Type', defaultVisible: true },
   { key: 'cod_amount', label: 'COD (Ks)', defaultVisible: true },
@@ -347,7 +348,7 @@ const exportToExcel = () => {
   
   const exportKeys = [
     'item_id', 'received_date', 'sender_name', 'sender_loc', 
-    'receiver_name', 'receiver_phone', 'receiver_address', 'receiver_loc', 
+    'receiver_name', 'receiver_phone', 'receiver_address', 'receiver_loc', 'sub_city',
     'cod_amount', 'deli_fee', 'fee_type', 'total_amount', 'agent_fee', 
     'status', 'transit_to', 'transit_date'
   ];
@@ -1356,6 +1357,7 @@ const rows = allCities.map(city => {
                   <div><span className="text-gray-400 block">Deliver Date:</span> <span className="text-gray-800 font-semibold">{o.deliver_date || '-'}</span></div>
                   <div><span className="text-gray-400 block">Cleared Date:</span> <span className="text-gray-800 font-semibold">{o.cleared_date || '-'}</span></div>
                   <div className="col-span-2"><span className="text-gray-400 block">Full Address:</span> <span className="text-gray-800 font-semibold break-words">{o.receiver_address || '-'}</span></div>
+                  <div className="col-span-2"><span className="text-gray-400 block">Sub City:</span> <span className="text-gray-800 font-semibold break-words">{o.sub_city || '-'}</span></div>
                 </div>
               )}
             </div>

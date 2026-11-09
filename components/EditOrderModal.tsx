@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from 'react'
-import { apiClient } from '@/lib/databaseApi'
+import { apiClient, createCity } from '@/lib/databaseApi'
 import dynamic from 'next/dynamic'
 
 // ImageUploader ကို Client-side သီးသန့်အလုပ်လုပ်ရန် Dynamic Import သုံးခြင်း
@@ -14,6 +14,17 @@ interface EditOrderModalProps {
   onClose: () => void;
   orderData: any;
   onSaveSuccess: () => void;
+}
+
+interface City {
+  'C.ID': string;
+  name: string;
+}
+
+interface SubCity {
+  id?: number;
+  city: string;
+  sub_city: string;
 }
 
 const MANUAL_CITIES = [
@@ -36,7 +47,21 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
   const [loading, setLoading] = useState(false)
   const [riders, setRiders] = useState<any[]>([])
   const [senders, setSenders] = useState<any[]>([])
-  const [cities, setCities] = useState<any[]>([])
+  const [cities, setCities] = useState<City[]>([])
+  const [subCityData, setSubCityData] = useState<{ city: string; entries: SubCity[]; error: string }>({
+    city: '',
+    entries: [],
+    error: '',
+  })
+  const [isAddingSubCity, setIsAddingSubCity] = useState(false)
+  const [newSubCityName, setNewSubCityName] = useState('')
+  const [savingSubCity, setSavingSubCity] = useState(false)
+  const [isAddingCity, setIsAddingCity] = useState(false)
+  const [newCityId, setNewCityId] = useState('')
+  const [newCityName, setNewCityName] = useState('')
+  const [cityError, setCityError] = useState('')
+  const [savingCity, setSavingCity] = useState(false)
+  const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
   const [filteredSenders, setFilteredSenders] = useState<any[]>([])
   const [showSenderDropdown, setShowSenderDropdown] = useState(false)
   const [originalCod, setOriginalCod] = useState<number>(0)
@@ -56,6 +81,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     receiver_phone: '',
     receiver_address: '',
     receiver_loc: 'MDY',
+    sub_city: '',
     cod_amount: 0,
     deli_fee: 0,
     agent_fee: 0,
@@ -72,6 +98,16 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
     remark: '',
     transit: [] as any[],
   })
+  const subCities = subCityData.city === formData.receiver_loc ? subCityData.entries : []
+  const subCitiesLoading = Boolean(
+    isOpen && formData.receiver_loc && subCityData.city !== formData.receiver_loc,
+  )
+  const subCityError = subCityData.city === formData.receiver_loc ? subCityData.error : ''
+  const clearSubCityError = () => {
+    setSubCityData(current => current.city === formData.receiver_loc
+      ? { ...current, error: '' }
+      : current)
+  }
 
   // 1. Form အချက်အလက်များ မူရင်းအတိုင်း ဖြည့်သွင်းခြင်း
   useEffect(() => {
@@ -98,6 +134,7 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
         receiver_phone: orderData.receiver_phone || '',
         receiver_address: orderData.receiver_address || '',
         receiver_loc: orderData.receiver_loc || 'MDY',
+        sub_city: orderData.sub_city || '',
         cod_amount: orderData.cod_amount || 0,
         deli_fee: orderData.deli_fee || 0,
         agent_fee: orderData.agent_fee || 0,
@@ -114,6 +151,13 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
         remark: orderData.remark || '',
         transit: transitList // UI Input နှင့် တိုက်ရိုက်ချိတ်ဆက်မည့် Array
       })
+      setIsAddingCity(false)
+      setNewCityId('')
+      setNewCityName('')
+      setCityError('')
+      setIsAddingSubCity(false)
+      setNewSubCityName('')
+      setIsImagePreviewOpen(false)
 
       setIsBarcodeLocked(true)
 
@@ -137,12 +181,128 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
 
     async function fetchCities() {
       const { data, error } = await apiClient.from('cities').select('*').order('name', { ascending: true })
-      if (!error && data) setCities(data)
+      if (!error && data) {
+        setCities(current => {
+          const citiesById = new Map(
+            [...current, ...data].map(city => [String(city['C.ID']), city]),
+          )
+          return [...citiesById.values()].sort((left, right) => left.name.localeCompare(right.name))
+        })
+      }
     }
 
     fetchSenders()
     fetchCities()
   }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen || !formData.receiver_loc) return
+
+    let isCurrent = true
+    const city = formData.receiver_loc
+
+    const fetchSubCities = async () => {
+      try {
+        const { data, error } = await apiClient
+          .from<SubCity>('sub_cities')
+          .select('*')
+          .eq('city', city)
+          .order('sub_city', { ascending: true })
+
+        if (error) throw error
+        if (isCurrent) {
+          setSubCityData({ city, entries: Array.isArray(data) ? data : data ? [data] : [], error: '' })
+        }
+      } catch (error) {
+        if (isCurrent) {
+          setSubCityData({
+            city,
+            entries: [],
+            error: error instanceof Error ? error.message : 'Sub City စာရင်းကို ရယူ၍မရပါ။',
+          })
+        }
+      }
+    }
+
+    void fetchSubCities()
+    return () => { isCurrent = false }
+  }, [formData.receiver_loc, isOpen])
+
+  const handleAddCity = async () => {
+    const cityId = newCityId.trim()
+    const cityName = newCityName.trim()
+    if (!cityId || !cityName || savingCity) return
+
+    if (cities.some((city) => String(city['C.ID']).trim().toLocaleLowerCase() === cityId.toLocaleLowerCase())) {
+      setCityError('ဒီ City ID ရှိပြီးသားဖြစ်ပါတယ်။')
+      return
+    }
+
+    setSavingCity(true)
+    setCityError('')
+    try {
+      await createCity({ 'C.ID': cityId, name: cityName })
+      setCities((current) => [...current, { 'C.ID': cityId, name: cityName }].sort(
+        (left, right) => left.name.localeCompare(right.name),
+      ))
+      setFormData((current) => ({ ...current, receiver_loc: cityId, sub_city: '' }))
+      setIsAddingCity(false)
+      setNewCityId('')
+      setNewCityName('')
+      setIsAddingSubCity(false)
+      setNewSubCityName('')
+    } catch (error) {
+      setCityError(error instanceof Error ? error.message : 'City ကို သိမ်း၍မရပါ။')
+    } finally {
+      setSavingCity(false)
+    }
+  }
+
+  const handleAddSubCity = async () => {
+    const city = formData.receiver_loc
+    const subCity = newSubCityName.trim()
+    if (!city || !subCity || savingSubCity) return
+
+    const existing = subCities.find(
+      (item) => item.sub_city.trim().toLocaleLowerCase() === subCity.toLocaleLowerCase(),
+    )
+    if (existing) {
+      setFormData((current) => ({ ...current, sub_city: existing.sub_city }))
+      setSubCityData(current => ({
+        ...current,
+        error: 'ဒီ City အတွက် Sub City ရှိပြီးသားဖြစ်ပါတယ်။',
+      }))
+      return
+    }
+
+    setSavingSubCity(true)
+    try {
+      const { error } = await apiClient
+        .from<SubCity>('sub_cities')
+        .insert({ city, sub_city: subCity })
+      if (error) throw error
+
+      setSubCityData(current => ({
+        city,
+        entries: [...(current.city === city ? current.entries : []), { city, sub_city: subCity }].sort(
+          (left, right) => left.sub_city.localeCompare(right.sub_city),
+        ),
+        error: '',
+      }))
+      setFormData((current) => current.receiver_loc === city
+        ? { ...current, sub_city: subCity }
+        : current)
+      setNewSubCityName('')
+      setIsAddingSubCity(false)
+    } catch (error) {
+      setSubCityData(current => ({
+        ...current,
+        error: error instanceof Error ? error.message : 'Sub City ကို သိမ်း၍မရပါ။',
+      }))
+    } finally {
+      setSavingSubCity(false)
+    }
+  }
 
   useEffect(() => {
     if (!isOpen) return;
@@ -513,26 +673,159 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
                   <input type="text" value={formData.receiver_phone} onChange={handlePhoneChange} className={`${winInput} font-mono`} required />
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2">
                   <label className={labelStyle}>Full Delivery Address</label>
                   <input type="text" value={formData.receiver_address} onChange={e => setFormData({...formData, receiver_address: e.target.value})} className={winInput} />
                 </div>
                 <div>
                   <label className={labelStyle}>Destination City</label>
-                  <select 
-                    value={formData.receiver_loc} 
-                    onChange={e => setFormData({...formData, receiver_loc: e.target.value})} 
-                    className={winSelect}
-                    required
-                  >
-                    <option value="">Select city...</option>
-                    {cities.map((city) => (
-                      <option key={city['C.ID']} value={city['C.ID']}>
-                        {city.name}
+                  <div className="flex min-w-0 gap-1.5">
+                    <select
+                      value={formData.receiver_loc}
+                      onChange={e => {
+                        setFormData({ ...formData, receiver_loc: e.target.value, sub_city: '' })
+                        setIsAddingSubCity(false)
+                        setNewSubCityName('')
+                      }}
+                      className={`${winSelect} min-w-0 flex-1`}
+                      disabled={savingCity || savingSubCity}
+                      required
+                    >
+                      <option value="">Select city...</option>
+                      {formData.receiver_loc && !cities.some(city => String(city['C.ID']) === formData.receiver_loc) && (
+                        <option value={formData.receiver_loc}>{formData.receiver_loc}</option>
+                      )}
+                      {cities.map((city) => (
+                        <option key={city['C.ID']} value={city['C.ID']}>{city.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingCity(current => !current)
+                        setNewCityId('')
+                        setNewCityName('')
+                        setCityError('')
+                      }}
+                      disabled={savingCity}
+                      aria-label={isAddingCity ? 'Cancel adding city' : 'Add city'}
+                      className="shrink-0 rounded-lg border border-blue-200 bg-blue-50 px-2 text-[11px] font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isAddingCity ? 'Cancel' : '+ City'}
+                    </button>
+                  </div>
+                  {isAddingCity && (
+                    <div className="mt-2 space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={newCityId}
+                          onChange={e => {
+                            setNewCityId(e.target.value)
+                            setCityError('')
+                          }}
+                          className={winInput}
+                          disabled={savingCity}
+                          placeholder="City ID / Code"
+                          aria-label="New city ID"
+                        />
+                        <input
+                          type="text"
+                          value={newCityName}
+                          onChange={e => {
+                            setNewCityName(e.target.value)
+                            setCityError('')
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              void handleAddCity()
+                            }
+                          }}
+                          className={winInput}
+                          disabled={savingCity}
+                          placeholder="City name"
+                          aria-label="New city name"
+                        />
+                      </div>
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => void handleAddCity()}
+                          disabled={!newCityId.trim() || !newCityName.trim() || savingCity}
+                          className="rounded bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {savingCity ? 'Saving...' : 'Save City'}
+                        </button>
+                      </div>
+                      {cityError && <p role="alert" className="text-xs text-rose-600">{cityError}</p>}
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <label className={labelStyle}>Sub City</label>
+                  <div className="flex min-w-0 gap-1.5">
+                    <select
+                      value={formData.sub_city}
+                      onChange={e => setFormData({ ...formData, sub_city: e.target.value })}
+                      className={`${winSelect} min-w-0 flex-1`}
+                      disabled={!formData.receiver_loc || subCitiesLoading || savingSubCity}
+                    >
+                      <option value="">
+                        {!formData.receiver_loc ? 'Select a city first' : subCitiesLoading ? 'Loading...' : '-- Select Sub City --'}
                       </option>
-                    ))}
-                  </select>
+                      {formData.sub_city && !subCities.some(city => city.sub_city === formData.sub_city) && (
+                        <option value={formData.sub_city}>{formData.sub_city}</option>
+                      )}
+                      {subCities.map(city => (
+                        <option key={city.id ?? `${city.city}-${city.sub_city}`} value={city.sub_city}>{city.sub_city}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingSubCity(current => !current)
+                        setNewSubCityName('')
+                        clearSubCityError()
+                      }}
+                      disabled={!formData.receiver_loc || savingSubCity}
+                      aria-label={isAddingSubCity ? 'Cancel adding sub city' : 'Add sub city'}
+                      className="shrink-0 rounded-lg border border-emerald-200 bg-emerald-50 px-2 text-[11px] font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isAddingSubCity ? 'Cancel' : '+ Sub City'}
+                    </button>
+                  </div>
+                  {isAddingSubCity && (
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        type="text"
+                        value={newSubCityName}
+                        onChange={e => {
+                          setNewSubCityName(e.target.value)
+                          clearSubCityError()
+                        }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            void handleAddSubCity()
+                          }
+                        }}
+                        className={winInput}
+                        disabled={savingSubCity}
+                        placeholder="New Sub City name"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void handleAddSubCity()}
+                        disabled={!newSubCityName.trim() || savingSubCity}
+                        className="shrink-0 rounded bg-emerald-600 px-3 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {savingSubCity ? 'Saving...' : 'Save'}
+                      </button>
+                    </div>
+                  )}
+                  {formData.receiver_loc && subCityError && <p role="alert" className="mt-1 text-xs text-rose-600">{subCityError}</p>}
                 </div>
               </div>
             </div>
@@ -548,31 +841,48 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
               />
             </div>
 
-            {/* Voucher Image */}
-            <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-xs">
-              <label className={labelStyle}>Voucher Image</label>
-              {formData.image_url && (
-                <div className="mb-2 relative rounded border border-gray-200 bg-gray-50 flex items-center justify-center p-2 group">
-                  <img src={formData.image_url} alt="Current Voucher" className="max-h-24 object-contain" />
-                  <button 
-                    type="button" 
-                    onClick={() => setFormData(prev => ({ ...prev, image_url: '' }))}
-                    className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 text-xs transition-colors shadow-md"
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
-              <ImageUploader 
-                key={resetKey}
-                onUploadSuccess={(url) => setFormData(prev => ({ ...prev, image_url: url }))} 
-              />
-            </div>
-
           </div>
 
           {/* RIGHT COLUMN */}
-          <div className="lg:col-span-4 space-y-4">
+          <div className="lg:col-span-4 space-y-4 lg:sticky lg:top-0 lg:self-start">
+            {/* Voucher Image */}
+            <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-xs">
+              <label className={labelStyle}>Voucher Image</label>
+              {formData.image_url ? (
+                <div className="mb-3 overflow-hidden rounded-lg border border-gray-200 bg-gray-900">
+                  <button
+                    type="button"
+                    onClick={() => setIsImagePreviewOpen(true)}
+                    className="flex h-64 w-full cursor-zoom-in items-center justify-center p-2 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-orange-400"
+                    aria-label="Enlarge voucher image"
+                  >
+                    <img src={formData.image_url} alt="Current voucher" className="max-h-full max-w-full object-contain" />
+                  </button>
+                  <div className="flex items-center justify-between bg-white px-3 py-2">
+                    <span className="text-xs text-gray-500">Click image to enlarge</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({ ...prev, image_url: '' }))
+                        setIsImagePreviewOpen(false)
+                      }}
+                      className="rounded px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                    >
+                      Remove image
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="mb-3 flex h-24 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-400">
+                  No voucher image
+                </p>
+              )}
+              <ImageUploader
+                key={resetKey}
+                onUploadSuccess={(url) => setFormData(prev => ({ ...prev, image_url: url }))}
+              />
+            </div>
+
             {/* Financial Accounts */}
             <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-xs">
               <h3 className="font-bold text-gray-800 text-xs mb-3 uppercase flex items-center gap-1.5">💰 Financial Accounts</h3>
@@ -799,6 +1109,30 @@ export default function EditOrderModal({ isOpen, onClose, orderData, onSaveSucce
             {loading ? "Saving Changes..." : "Save Changes"}
           </button>
         </div>
+
+        {isImagePreviewOpen && formData.image_url && (
+          <div
+            className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 p-4"
+            onClick={() => setIsImagePreviewOpen(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Voucher image preview"
+          >
+            <button
+              type="button"
+              onClick={() => setIsImagePreviewOpen(false)}
+              className="absolute right-4 top-4 rounded-full bg-white/15 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/25"
+            >
+              Close
+            </button>
+            <img
+              src={formData.image_url}
+              alt="Voucher enlarged"
+              onClick={e => e.stopPropagation()}
+              className="max-h-[88vh] max-w-[95vw] object-contain"
+            />
+          </div>
+        )}
 
       </div>
     </div>

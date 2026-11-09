@@ -11,6 +11,7 @@ export interface ParcelOrder {
   sender_loc?: string;
   receiver_name?: string;
   receiver_loc?: string;
+  sub_city?: string;
   receiver_phone?: string;
   receiver_address?: string;
   transit_to?: string;
@@ -126,6 +127,12 @@ export const ParcelDetailModal: React.FC<ParcelDetailModalProps> = ({
                   {order.receiver_name || '-'} <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded ml-1">({order.receiver_loc || '-'})</span>
                 </div>
               </div>
+              {order.sub_city && (
+                <div className="space-y-1">
+                  <span className="text-gray-400 text-xs block">Sub City</span>
+                  <div className="text-gray-900 font-semibold text-sm break-words">{order.sub_city}</div>
+                </div>
+              )}
 
               {order.receiver_phone && (
                 <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 flex justify-between items-center gap-4 mt-1">
