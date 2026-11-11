@@ -531,7 +531,7 @@ export default function SendersDashboard() {
     const titleRow = worksheet.addRow([
       `All In One Express ငွေရှင်းစာရင်း - ${selectedSender?.name || ""}`,
     ]);
-    worksheet.mergeCells("A1:J1"); // Column 10 ခုဖြစ်၍ J1 ထိ Merge ထားပါသည်
+    worksheet.mergeCells("A1:L1");
     titleRow.getCell(1).font = fontTitle;
     titleRow.getCell(1).fill = {
       type: "pattern",
@@ -563,19 +563,20 @@ export default function SendersDashboard() {
         return dateA.localeCompare(dateB);
       });
 
-      // Table Header (Column 10 ခု - Row Number + Way Data)
+      // Table Header (12 columns - row number plus order details)
       const headRow = worksheet.addRow([
         "No.",
         "Way ID",
         "Date",
         "Receiver Name",
         "Phone",
+        "Address",
         "LOC",
         "Sub City",
-        "Address",
         "COD (Ks)",
         "Deli Fee",
         "Total",
+        "Status",
       ]);
       headRow.eachCell((cell) => {
         cell.font = fontHeader;
@@ -596,12 +597,13 @@ export default function SendersDashboard() {
           o.received_date ? String(o.received_date).split("T")[0] : "",
           o.receiver_name || "",
           o.receiver_phone || "",
+          o.receiver_address || "",
           o.receiver_loc || "",
           o.sub_city || "",
-          o.receiver_address || "",
           Number(o.cod_amount) || 0,
           Number(o.deli_fee) || 0,
           Number(o.total_amount) || 0,
+          o.status || "",
         ]);
 
         row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
@@ -616,10 +618,10 @@ export default function SendersDashboard() {
             };
           }
 
-          if (colNumber >= 8) {
+          if (colNumber >= 9 && colNumber <= 11) {
             cell.numFmt = "#,##0";
             cell.alignment = { horizontal: "right", vertical: "middle" };
-          } else if (colNumber === 1 || colNumber === 3 || colNumber === 5) {
+          } else if ([1, 3, 5, 7, 12].includes(colNumber)) {
             cell.alignment = { horizontal: "center", vertical: "middle" };
           } else {
             cell.alignment = { horizontal: "left", vertical: "middle" };
@@ -641,7 +643,9 @@ export default function SendersDashboard() {
         "",
         "",
         "",
+        "",
         totalCod,
+        "",
         "",
         "",
       ]);
@@ -655,7 +659,7 @@ export default function SendersDashboard() {
           fgColor: { argb: colors.totalBg },
         };
 
-        if (colNumber >= 8) {
+        if (colNumber >= 9 && colNumber <= 11) {
           cell.numFmt = "#,##0";
           cell.alignment = { horizontal: "right", vertical: "middle" };
         } else if (colNumber === 1) {
@@ -675,8 +679,8 @@ export default function SendersDashboard() {
       row.height = 20;
     });
 
-    // ─── Column Widths (10 ခု) သတ်မှတ်ခြင်း ───
-    const columnWidths = [6, 16, 14, 18, 15, 5, 26, 15, 14, 15];
+    // ─── Column Widths (12 ခု) သတ်မှတ်ခြင်း ───
+    const columnWidths = [6, 16, 14, 22, 16, 30, 12, 22, 14, 14, 14, 18];
 
     columnWidths.forEach((width, index) => {
       worksheet.getColumn(index + 1).width = width;
