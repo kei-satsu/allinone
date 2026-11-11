@@ -31,6 +31,9 @@ export default function PendingEntry() {
   const router = useRouter()
   const senderInputRef = useRef<HTMLInputElement>(null)
   const receiverNameRef = useRef<HTMLInputElement>(null)
+  const receiverCitySelectRef = useRef<HTMLSelectElement>(null)
+  const subCitySelectRef = useRef<HTMLSelectElement>(null)
+  const codAmountRef = useRef<HTMLInputElement>(null)
   const submitConfirmationButtonRef = useRef<HTMLButtonElement>(null)
   const cancelSubmitConfirmationButtonRef = useRef<HTMLButtonElement>(null)
 
@@ -1524,12 +1527,20 @@ if (updatedPending.length > 0) {
     <label className={`${labelStyle} mb-1.5 block`}>City</label>
     <div className="flex min-w-0 gap-1.5">
       <select
+        ref={receiverCitySelectRef}
         value={formData.receiver_loc}
         onChange={e => {
           setFormData({...formData, receiver_loc: e.target.value, sub_city: ''});
           setIsAddingSubCity(false);
           setNewSubCityName('');
           setSubCityError('');
+        }}
+        onKeyDown={(e) => {
+          if (e.key !== 'Tab' || e.shiftKey || isAddingCity) return;
+          if (subCitySelectRef.current && !subCitySelectRef.current.disabled) {
+            e.preventDefault();
+            subCitySelectRef.current.focus();
+          }
         }}
         className={`${winSelect} min-w-0 flex-1`}
         disabled={!selectedItem || savingSubCity || savingCity}
@@ -1609,8 +1620,19 @@ if (updatedPending.length > 0) {
     <label className={`${labelStyle} mb-1.5 block`}>Sub City</label>
     <div className="flex min-w-0 gap-1.5">
       <select
+        ref={subCitySelectRef}
         value={formData.sub_city}
         onChange={e => setFormData({...formData, sub_city: e.target.value})}
+        onKeyDown={(e) => {
+          if (e.key !== 'Tab') return;
+          if (e.shiftKey && !isAddingCity && receiverCitySelectRef.current && !receiverCitySelectRef.current.disabled) {
+            e.preventDefault();
+            receiverCitySelectRef.current.focus();
+          } else if (!e.shiftKey && !isAddingSubCity && codAmountRef.current && !codAmountRef.current.disabled) {
+            e.preventDefault();
+            codAmountRef.current.focus();
+          }
+        }}
         className={`${winSelect} min-w-0 flex-1`}
         disabled={!selectedItem || !formData.receiver_loc || subCitiesLoading}
       >
@@ -1690,7 +1712,7 @@ if (updatedPending.length > 0) {
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
               <label className={labelStyle}>COD Amount</label>
-              <input type="number" value={formData.cod_amount || ''} onChange={e => {
+              <input ref={codAmountRef} type="number" value={formData.cod_amount || ''} onChange={e => {
                 const val = Number(e.target.value);
                 if (formData.fee_type === 'Bill') setOriginalCod(val + Number(formData.deli_fee));
                 else setOriginalCod(val);
