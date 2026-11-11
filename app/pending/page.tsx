@@ -249,12 +249,13 @@ const [newCityId, setNewCityId] = useState('');
 const [newCityName, setNewCityName] = useState('');
 const [savingCity, setSavingCity] = useState(false);
 const [cityError, setCityError] = useState('');
-const [subCities, setSubCities] = useState<SubCity[]>([]);
-const [subCitiesLoading, setSubCitiesLoading] = useState(false);
+const [allSubCities, setAllSubCities] = useState<SubCity[]>([]);
+const [subCitiesLoading, setSubCitiesLoading] = useState(true);
 const [subCityError, setSubCityError] = useState('');
 const [isAddingSubCity, setIsAddingSubCity] = useState(false);
 const [newSubCityName, setNewSubCityName] = useState('');
 const [savingSubCity, setSavingSubCity] = useState(false);
+const subCities = allSubCities.filter((item) => item.city === formData.receiver_loc);
 
 // မိမိ ရောက်နေသော / သုံးနေသော Current Branch ID (ဥပမာ 'YGN')
 
@@ -318,31 +319,20 @@ const handleAddCity = async () => {
 };
 
 useEffect(() => {
-  const city = formData.receiver_loc;
-  if (!city) {
-    setSubCities([]);
-    setSubCitiesLoading(false);
-    setSubCityError('');
-    return;
-  }
-
   let isCurrent = true;
-  setSubCitiesLoading(true);
-  setSubCityError('');
 
-  const loadSubCities = async () => {
+  const loadAllSubCities = async () => {
     try {
       const { data, error } = await apiClient
         .from<SubCity>('sub_cities')
         .select('*')
-        .eq('city', city)
         .order('sub_city', { ascending: true });
 
       if (error) throw error;
-      if (isCurrent) setSubCities(Array.isArray(data) ? data : data ? [data] : []);
+      if (isCurrent) setAllSubCities(Array.isArray(data) ? data : data ? [data] : []);
     } catch (error) {
       if (isCurrent) {
-        setSubCities([]);
+        setAllSubCities([]);
         setSubCityError(error instanceof Error ? error.message : 'Sub City စာရင်းကို ရယူ၍မရပါ။');
       }
     } finally {
@@ -350,9 +340,9 @@ useEffect(() => {
     }
   };
 
-  void loadSubCities();
+  void loadAllSubCities();
   return () => { isCurrent = false };
-}, [formData.receiver_loc]);
+}, []);
 
 const handleAddSubCity = async () => {
   const city = formData.receiver_loc;
@@ -376,7 +366,7 @@ const handleAddSubCity = async () => {
       .insert({ city, sub_city: subCity });
     if (error) throw error;
 
-    setSubCities((current) => [...current, { city, sub_city: subCity }].sort(
+    setAllSubCities((current) => [...current, { city, sub_city: subCity }].sort(
       (left, right) => left.sub_city.localeCompare(right.sub_city),
     ));
     setFormData((current) => current.receiver_loc === city
