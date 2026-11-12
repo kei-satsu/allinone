@@ -849,7 +849,7 @@ const logNote = [
   // Base Order Payload ပြင်ဆင်ခြင်း
   const baseOrderPayload: any = {
     ...formData,
-    data_status: 'Processed',
+    data_status: 'Done',
     history: updatedHistory, // 👈 ✨ [အသစ်ထည့်ရန်] history ကို Payload ထဲ ထည့်ပေးလိုက်ပါ
     pickup_rider_id: formData.pickup_rider_id || null,
     status: selectedItem.status,
