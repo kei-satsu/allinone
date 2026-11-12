@@ -103,6 +103,13 @@ const appendLog = (currentHistory: any[], action: string, note: string) => {
   };
   return [...(currentHistory || []), newLogEntry];
 };
+
+const getDataStatusBadgeClass = (dataStatus: unknown) => {
+  const normalizedStatus = String(dataStatus || '').toLowerCase()
+  if (normalizedStatus === 'pending') return 'border-orange-200 bg-orange-100 text-orange-800'
+  if (normalizedStatus === 'processed') return 'border-emerald-200 bg-emerald-100 text-emerald-800'
+  return 'border-slate-200 bg-slate-100 text-slate-700'
+}
    
 
   const [formData, setFormData] = useState({
@@ -500,7 +507,7 @@ const handleAddSubCity = async () => {
     .select('*')
     .eq('branch', branch)
     .eq('is_deleted', false)
-    .or('receiver_name.is.null,receiver_name.eq.""') 
+    .in('data_status', ['pending', 'Processed'])
     .order('created_at', { ascending: true })
 
   if (!error && data) {
@@ -842,7 +849,7 @@ const logNote = [
   // Base Order Payload ပြင်ဆင်ခြင်း
   const baseOrderPayload: any = {
     ...formData,
-    data_status: 'Done',
+    data_status: 'Processed',
     history: updatedHistory, // 👈 ✨ [အသစ်ထည့်ရန်] history ကို Payload ထဲ ထည့်ပေးလိုက်ပါ
     pickup_rider_id: formData.pickup_rider_id || null,
     status: selectedItem.status,
@@ -1028,7 +1035,7 @@ if (updatedPending.length > 0) {
         </div>
         <div className="flex shrink-0 items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5">
           <span className="h-2 w-2 rounded-full bg-orange-500" />
-          <span className="font-mono text-xs font-bold text-orange-800">{pendingItems.length} <span className="hidden sm:inline">PENDING</span></span>
+          <span className="font-mono text-xs font-bold text-orange-800">{pendingItems.length} <span className="hidden sm:inline">ITEMS</span></span>
         </div>
       </header>
 
@@ -1096,6 +1103,9 @@ if (updatedPending.length > 0) {
             title="Has Note" 
           />
         )}
+        <span className={`absolute left-1 top-1 rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase shadow-sm ${getDataStatusBadgeClass(item.data_status)}`}>
+          {item.data_status || 'Unknown'}
+        </span>
         <div className="absolute inset-x-0 bottom-0 bg-black/70 text-[10px] text-gray-300 px-1 py-0.5 truncate text-center font-mono group-hover:text-white">
           No. {idx + 1}
         </div>
@@ -1313,8 +1323,8 @@ if (updatedPending.length > 0) {
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-gray-500 p-6 text-center">
               <svg className="w-12 h-12 mb-3 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
-              <h3 className="text-lg font-bold text-white mb-1">အကုန် ပြီးသွားပါပြီ 🎉</h3>
-              <p className="text-xs">Data ဖြည့်ရန် Pending စာရင်း မရှိတော့ပါ။</p>
+              <h3 className="text-lg font-bold text-white mb-1">ပြသရန် စာရင်းမရှိပါ</h3>
+              <p className="text-xs">ပြသရန် သက်ဆိုင်ရာ Data Status စာရင်း မရှိပါ။</p>
             </div>
           )}
         </div>
@@ -1349,6 +1359,14 @@ if (updatedPending.length > 0) {
 
     {/* Section 1: Core Logistics Info */}
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-3 rounded-xl border border-gray-200/80 shadow-sm">
+      {selectedItem && (
+        <div className="sm:col-span-3 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+          <span className="text-xs font-bold uppercase tracking-wide text-slate-600">Data Status</span>
+          <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-extrabold uppercase tracking-wide ${getDataStatusBadgeClass(selectedItem.data_status)}`}>
+            {selectedItem.data_status || 'Unknown'}
+          </span>
+        </div>
+      )}
       <div>
         <label className={labelStyle}>Item ID</label>
         <input type="text" readOnly value={selectedItem?.item_id || selectedItem?.id || '[ Select Item ]'} className="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 text-gray-500 font-mono font-bold rounded-lg text-sm cursor-not-allowed select-all" />

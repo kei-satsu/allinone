@@ -14,6 +14,7 @@ import { softDeleteOrder } from '@/lib/softDeleteOrder'
 
 const COLUMN_DEFS = [
   { key: 'row_number', label: 'No.', defaultVisible: true },
+  { key: 'data_status', label: 'Data Status', defaultVisible: true },
   { key: 'image_url', label: 'Photo', defaultVisible: true }, 
   { key: 'item_id', label: 'Item ID', defaultVisible: true },
   { key: 'received_date', label: 'Received Date', defaultVisible: true },
