@@ -678,18 +678,18 @@ const handleSelectItem = (item: any, shouldFocusInput = true, branchOverride?: s
   setOriginalCod(item.cod_amount || 0)
   setZoomScale(1); setRotation(0); setPosition({ x: 0, y: 0 })
 
-  setSelectedSenderId(item.sender_id ? String(item.sender_id) : '')
-  setSearchQuery(item.sender_name || '')
+  setSelectedSenderId(item.sender_id ? String(item.sender_id) : (!item.sender_name && persistSenderId ? persistSenderId : ''))
+  setSearchQuery(item.sender_name || persistSenderName || '')
 
   
   
   setFormData(prev => ({
     received_date: item.received_date || today,
     // item မှာ data ရှိရင် အဲ့ဒါကိုပဲယူ၊ မရှိမှသာ persist လုပ်ထားတာကို ယူ
-    sender_id: item.sender_id || (item.receiver_name ? null : persistSenderId) || null,
-    sender_name: item.sender_name || (item.receiver_name ? '' : persistSenderName) || '',
-    sender_phone: item.sender_phone || (item.receiver_name ? '' : persistSenderPhone) || '',
-    sender_loc: item.sender_loc || (item.receiver_name ? activeBranch : persistSenderLoc) || activeBranch,
+    sender_id: item.sender_id || (!item.sender_name ? persistSenderId : null) || null,
+    sender_name: item.sender_name || persistSenderName || '',
+    sender_phone: item.sender_phone || persistSenderPhone || '',
+    sender_loc: item.sender_loc || persistSenderLoc || activeBranch,
     // ကျန်တဲ့ field တွေကတော့ item က လာတဲ့အတိုင်းပဲ ထားပါ
     receiver_name: item.receiver_name || '',
     receiver_phone: item.receiver_phone || '',
