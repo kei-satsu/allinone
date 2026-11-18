@@ -1,6 +1,7 @@
 "use client"
 
 import React, { forwardRef, useEffect, useRef, useState } from 'react'
+import Image from 'next/image'
 import MultiSelectFilter from '@/components/MultiSelectFilter'
 
 export interface ColumnDef {
@@ -449,6 +450,34 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
                     </button>
                   </div>
                 </div>
+
+                {mobileCompact && columnDefs.some(col => col.key === 'image_url' && isColumnVisible(col)) && (
+                  <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+                    <span className="text-[10px] font-bold uppercase text-slate-500">Photo</span>
+                    {typeof o.image_url === 'string' && o.image_url ? (
+                      <button
+                        type="button"
+                        aria-label={`View photo for ${o.item_id || 'order'}`}
+                        onClick={(e) => { e.stopPropagation(); onPreviewImage(o.image_url); }}
+                        className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded border border-slate-200 bg-slate-50"
+                      >
+                        <Image
+                          src={o.image_url}
+                          alt={`Photo for ${o.item_id || 'order'}`}
+                          width={56}
+                          height={56}
+                          unoptimized
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                        />
+                      </button>
+                    ) : (
+                      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded border border-dashed border-slate-300 bg-slate-50 text-center text-[9px] text-slate-400">
+                        No photo
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 {mobileCompact ? (
                   <div className="grid grid-cols-2 gap-x-3 gap-y-2 border-y border-slate-200 py-2 text-xs">

@@ -37,6 +37,7 @@ type OrderContextMenu = { x: number; y: number; order: StockOrder }
 
 const COLUMN_DEFS: ColumnDef[] = [
   { key: 'row_number', label: 'No.', defaultVisible: true },
+  { key: 'image_url', label: 'Photo', defaultVisible: true },
   { key: 'item_id', label: 'Item ID', defaultVisible: true },
   { key: 'received_date', label: 'Received Date', defaultVisible: true },
   { key: 'status', label: 'Status', defaultVisible: true },
@@ -240,7 +241,7 @@ export default function StockCheckPage() {
         || (activeStatusFilter === 'Checked' ? checkedToday : !checkedToday && order.status === activeStatusFilter)
       const searchableValues = [order.item_id, order.barcode, order.sender_name, order.receiver_name, order.receiver_phone]
       const matchesSearch = !query || searchableValues.some((value) => String(value || '').toLocaleLowerCase().includes(query))
-      const matchesColumns = COLUMN_DEFS.filter((column) => column.key !== 'row_number' && visibleCols[column.key]).every((column) => {
+      const matchesColumns = COLUMN_DEFS.filter((column) => !['row_number', 'image_url'].includes(column.key) && visibleCols[column.key]).every((column) => {
         const filterValue = columnFilters[column.key]
         const cellValue = String(order[column.key] ?? '').toLocaleLowerCase()
         if (Array.isArray(filterValue)) return filterValue.length === 0 || filterValue.some((value) => cellValue === value.toLocaleLowerCase())
@@ -386,7 +387,7 @@ export default function StockCheckPage() {
             </span>
           </summary>
           <div className="grid grid-cols-2 gap-2 border-t border-slate-200 p-3">
-            {COLUMN_DEFS.filter((column) => column.key !== 'row_number' && visibleCols[column.key]).map((column) => (
+            {COLUMN_DEFS.filter((column) => !['row_number', 'image_url'].includes(column.key) && visibleCols[column.key]).map((column) => (
               <label key={column.key} className="min-w-0 text-[10px] font-semibold text-slate-500">
                 <span className="mb-1 block truncate">{column.label}</span>
                 <input value={typeof columnFilters[column.key] === 'string' ? columnFilters[column.key] as string : ''} onChange={(event) => handleColumnFilterChange(column.key, event.target.value)} placeholder={`Filter ${column.label}`} className="h-9 w-full border border-slate-300 px-2 text-xs font-normal text-slate-800 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-100" />
