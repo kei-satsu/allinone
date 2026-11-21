@@ -43,6 +43,7 @@ const COLUMN_DEFS = [
   { key: 'agent_fee', label: 'Agent Fee', defaultVisible: false },
   { key: 'remark', label: 'Remark', defaultVisible: false },
   { key: 'barcode', label: 'Barcode', defaultVisible: false },
+  { key: 'last_check', label: 'Last Check', defaultVisible: false },
  
 ]
 
