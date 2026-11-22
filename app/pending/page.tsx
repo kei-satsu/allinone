@@ -41,6 +41,7 @@ export default function PendingEntry() {
   
   const [pendingItems, setPendingItems] = useState<any[]>([])
   const [selectedItem, setSelectedItem] = useState<any>(null)
+  const selectedItemRef = useRef<any>(null)
   const [riders, setRiders] = useState<any[]>([])
   const [senders, setSenders] = useState<any[]>([])
   const [selectedSenderId, setSelectedSenderId] = useState<string>('')
@@ -512,12 +513,44 @@ const handleAddSubCity = async () => {
 
   if (!error && data) {
     setPendingItems(data)
-    if (data.length > 0 && !selectedItem) {
+    const currentSelected = selectedItemRef.current
+    if (currentSelected && !data.some((item: any) => String(item.id) === String(currentSelected.id))) {
+      if (data.length > 0) handleSelectItem(data[0], true, branch)
+      else {
+        selectedItemRef.current = null
+        setSelectedItem(null)
+      }
+    } else if (data.length > 0 && !currentSelected) {
       // 💡 3rd Parameter အနေနဲ့ branch ကို ထည့်ပေးလိုက်ပါ
-      handleSelectItem(data[0], true, branch) 
+      handleSelectItem(data[0], true, branch)
     }
   }
 }
+
+ useEffect(() => {
+     if (!userBranch) return
+
+     const refreshPendingItems = () => {
+       if (!navigator.onLine) return
+       if (document.visibilityState !== 'visible') return
+       fetchPendingItems(userBranch)
+     }
+
+     const intervalId = window.setInterval(refreshPendingItems, 15_000)
+     const handleFocus = () => refreshPendingItems()
+     const handleVisibilityChange = () => {
+       if (document.visibilityState === 'visible') refreshPendingItems()
+     }
+
+     window.addEventListener('focus', handleFocus)
+     document.addEventListener('visibilitychange', handleVisibilityChange)
+
+     return () => {
+       window.clearInterval(intervalId)
+       window.removeEventListener('focus', handleFocus)
+       document.removeEventListener('visibilitychange', handleVisibilityChange)
+     }
+ }, [userBranch])
 
 // 💡 (အသစ်ထည့်ရန်) ရွေးထားသော အော်ဒါပုံပြောင်းသွားပါက ထိုပုံငယ်လေးဆီသို့ Auto Scroll ဆွဲပေးခြင်း
   useEffect(() => {
@@ -675,6 +708,7 @@ const handleSelectItem = (item: any, shouldFocusInput = true, branchOverride?: s
   setNewSubCityName('')
   setSubCityError('')
   setSelectedItem(item)
+  selectedItemRef.current = item
   setOriginalCod(item.cod_amount || 0)
   setZoomScale(1); setRotation(0); setPosition({ x: 0, y: 0 })
 
@@ -924,6 +958,7 @@ if (updatedPending.length > 0) {
     handleSelectItem(updatedPending[updatedPending.length - 1]);
   }
 } else {
+  selectedItemRef.current = null
   setSelectedItem(null);
 }
 // ──────────────────────────────────────────────
@@ -974,6 +1009,7 @@ if (updatedPending.length > 0) {
     handleSelectItem(updatedPending[updatedPending.length - 1]);
   }
 } else {
+  selectedItemRef.current = null
   setSelectedItem(null);
 }
 // ──────────────────────────────────────────────
