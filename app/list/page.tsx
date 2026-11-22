@@ -152,7 +152,8 @@ export default function OrderList() {
   const [editingOrder, setEditingOrder] = useState<any>(null)
   const [userBranch, setUserBranch] = useState<string>('')
 
-  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [selectedStartDate, setSelectedStartDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [selectedEndDate, setSelectedEndDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [globalSearch, setGlobalSearch] = useState<string>('');
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; order: any } | null>(null)
@@ -245,12 +246,14 @@ useEffect(() => {
   const fetchData = async ({
     append = false,
     branchCode,
-    dateStr,
+    startDateStr,
+    endDateStr,
     searchStr,
   }: {
     append?: boolean;
     branchCode?: string;
-    dateStr?: string;
+    startDateStr?: string;
+    endDateStr?: string;
     searchStr?: string;
   } = {}) => {
     const activeBranch = branchCode || userBranch;
@@ -281,16 +284,17 @@ useEffect(() => {
       .range(start, end);
 
     const activeSearch = (searchStr ?? globalSearch).trim();
-    const activeDate = dateStr || selectedDate;
+    const activeStartDate = startDateStr ?? selectedStartDate;
+    const activeEndDate = endDateStr ?? selectedEndDate;
 
     if (activeSearch) {
       const escapedSearch = activeSearch.replace(/'/g, "''");
       query = query.or(
         `item_id.ilike.%${escapedSearch}%,receiver_phone.ilike.%${escapedSearch}%,receiver_name.ilike.%${escapedSearch}%,sender_name.ilike.%${escapedSearch}%`
       );
-    } else if (activeDate) {
-      query = query.eq('received_date', activeDate);
     }
+    if (activeStartDate) query = query.gte('received_date', activeStartDate);
+    if (activeEndDate) query = query.lte('received_date', activeEndDate);
 
     Object.entries(colFilters).forEach(([key, value]) => {
       if (!value || (Array.isArray(value) && value.length === 0)) return;
@@ -363,13 +367,14 @@ useEffect(() => {
     const timer = window.setTimeout(() => {
       fetchData({
         branchCode: userBranch,
-        dateStr: selectedDate,
+        startDateStr: selectedStartDate,
+        endDateStr: selectedEndDate,
         searchStr: globalSearch,
       });
     }, 400);
 
     return () => window.clearTimeout(timer);
-  }, [selectedDate, globalSearch, userBranch, colFiltersKey]);
+  }, [selectedStartDate, selectedEndDate, globalSearch, userBranch, colFiltersKey]);
 
   useEffect(() => {
     const handleCloseMenu = () => setContextMenu(null)
@@ -574,12 +579,26 @@ useEffect(() => {
             <h1 className="text-base font-semibold text-gray-900 tracking-wide flex items-center gap-2">
   <span className="uppercase">{userBranch === 'MDY' ? 'Mandalay' : userBranch === 'YGN' ? 'Yangon' : 'Main'} Office</span>
   
-  <input 
-    type="date" 
-    value={selectedDate}
-    onChange={(e) => setSelectedDate(e.target.value)}
-    className="ml-2 text-sm font-medium border border-gray-300 rounded-md px-2 py-1 text-gray-700 bg-white focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 shadow-sm cursor-pointer"
-  />
+  <div className="ml-2 flex items-center gap-1.5 text-xs font-medium text-gray-600">
+    <label htmlFor="orders-start-date">From</label>
+    <input
+      id="orders-start-date"
+      type="date"
+      value={selectedStartDate}
+      max={selectedEndDate || undefined}
+      onChange={(e) => setSelectedStartDate(e.target.value)}
+      className="text-sm font-medium border border-gray-300 rounded-md px-2 py-1 text-gray-700 bg-white focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 shadow-sm cursor-pointer"
+    />
+    <label htmlFor="orders-end-date">To</label>
+    <input
+      id="orders-end-date"
+      type="date"
+      value={selectedEndDate}
+      min={selectedStartDate || undefined}
+      onChange={(e) => setSelectedEndDate(e.target.value)}
+      className="text-sm font-medium border border-gray-300 rounded-md px-2 py-1 text-gray-700 bg-white focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 shadow-sm cursor-pointer"
+    />
+  </div>
 
   <button
   type="button"

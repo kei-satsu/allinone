@@ -85,6 +85,76 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const tableContentRef = useRef<HTMLTableElement>(null);
   const [tableWidth, setTableWidth] = useState(0);
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const columnWidthsRef = useRef<Record<string, number>>({});
+  const resizingColumnRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
+
+  useEffect(() => {
+    const savedWidths = localStorage.getItem('orders_table_column_widths');
+    if (!savedWidths) return;
+
+    try {
+      const parsed = JSON.parse(savedWidths);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
+      const validWidths = Object.fromEntries(
+        Object.entries(parsed).filter(
+          ([, width]) => typeof width === 'number' && Number.isFinite(width) && width >= 80 && width <= 500,
+        ),
+      ) as Record<string, number>;
+      columnWidthsRef.current = validWidths;
+      setColumnWidths(validWidths);
+    } catch (error) {
+      console.error('Error parsing saved order table column widths:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      const resizing = resizingColumnRef.current;
+      if (!resizing) return;
+
+      const width = Math.min(500, Math.max(80, resizing.startWidth + event.clientX - resizing.startX));
+      const nextWidths = { ...columnWidthsRef.current, [resizing.key]: width };
+      columnWidthsRef.current = nextWidths;
+      setColumnWidths(nextWidths);
+    };
+    const handlePointerUp = () => {
+      if (!resizingColumnRef.current) return;
+      resizingColumnRef.current = null;
+      localStorage.setItem('orders_table_column_widths', JSON.stringify(columnWidthsRef.current));
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, []);
+
+  const startColumnResize = (event: React.PointerEvent<HTMLButtonElement>, key: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const header = event.currentTarget.closest('th');
+    if (!header) return;
+    resizingColumnRef.current = {
+      key,
+      startX: event.clientX,
+      startWidth: columnWidthsRef.current[key] ?? header.getBoundingClientRect().width,
+    };
+  };
+
+  const adjustColumnWidth = (key: string, delta: number) => {
+    const header = tableContentRef.current?.querySelector(`th[data-column-key="${CSS.escape(key)}"]`);
+    const width = columnWidthsRef.current[key] ?? header?.getBoundingClientRect().width ?? 150;
+    const nextWidths = {
+      ...columnWidthsRef.current,
+      [key]: Math.min(500, Math.max(80, width + delta)),
+    };
+    columnWidthsRef.current = nextWidths;
+    setColumnWidths(nextWidths);
+    localStorage.setItem('orders_table_column_widths', JSON.stringify(nextWidths));
+  };
 
   useEffect(() => {
     const scrollElement = tableScrollRef.current;
@@ -241,7 +311,6 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
   return (
     // Parent မှ ရောက်လာသော ref ကို ဒီနေရာတွင် တပ်ဆင်ပေးပါ
     <div ref={ref} className={`relative flex min-h-0 flex-1 flex-col overflow-hidden bg-white ${fullBleed ? '' : 'sm:mx-5 sm:my-3 sm:rounded-xl sm:border sm:border-gray-400 sm:shadow-sm'}`}>
-      
       {/* 💻 Desktop Table View */}
       <div
         ref={tableScrollRef}
@@ -256,6 +325,13 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
         }`}
       >
         <table ref={tableContentRef} className="w-full border-collapse text-left whitespace-nowrap text-[13px] text-gray-800">
+          <colgroup>
+            <col style={{ width: 40 }} />
+            {columnDefs.map(col => isColumnVisible(col) && (
+              <col key={col.key} style={columnWidths[col.key] ? { width: columnWidths[col.key] } : undefined} />
+            ))}
+            {onCheckOrder && <col style={{ width: 96 }} />}
+          </colgroup>
           <thead className="sticky top-0 z-20 bg-white shadow-[0_2px_0_0_rgba(203,213,225,1)]">
             <tr className="border-b-2 border-orange-300 bg-orange-100 text-[12px] font-extrabold uppercase tracking-wider text-orange-900">
               <th className="w-10 border-r border-orange-300 px-1.5 py-2 text-center align-middle">
@@ -267,8 +343,24 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
                 />
               </th>
               {columnDefs.map(col => isColumnVisible(col) && (
-                <th key={col.key} className={`border-l border-orange-200 px-2 py-2 align-middle ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right' : ''} ${['image_url', 'row_number'].includes(col.key) ? 'text-center' : ''} ${col.key === 'row_number' ? 'w-12' : ''}`}>
-                  {col.label}
+                <th
+                  key={col.key}
+                  data-column-key={col.key}
+                  className={`relative border-l border-orange-200 px-2 py-2 align-middle ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right' : ''} ${['image_url', 'row_number'].includes(col.key) ? 'text-center' : ''} ${col.key === 'row_number' ? 'w-12' : ''}`}
+                >
+                  <span className="block overflow-hidden text-ellipsis whitespace-nowrap pr-2">{col.label}</span>
+                  <button
+                    type="button"
+                    aria-label={`Resize ${col.label} column`}
+                    title="Drag to resize; use arrow keys for fine adjustment"
+                    onPointerDown={(event) => startColumnResize(event, col.key)}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+                      event.preventDefault();
+                      adjustColumnWidth(col.key, event.key === 'ArrowRight' ? 10 : -10);
+                    }}
+                    className="absolute right-0 top-0 z-10 h-full w-2 touch-none cursor-col-resize bg-transparent hover:bg-orange-400/50 focus:bg-orange-400/50 focus:outline-none"
+                  />
                 </th>
               ))}
               {onCheckOrder && <th className="border-l border-orange-200 px-3 py-2 text-center align-middle">Check</th>}
@@ -346,9 +438,9 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
                     }}
                     onMouseEnter={() => onRowMouseEnter(o.id)}
                     onMouseUp={onStopDragging}
-                    className="cursor-default select-text border-b border-slate-300 transition-colors odd:bg-white even:bg-slate-50/40 hover:bg-orange-50/60"
+                    className="h-11 cursor-default select-text border-b border-slate-300 transition-colors odd:bg-white even:bg-slate-50/40 hover:bg-orange-50/60"
                   >
-                    <td className="w-10 border-r border-slate-300 px-2 py-3 text-center align-middle" onClick={(e) => e.stopPropagation()}>
+                    <td className="h-11 max-h-11 w-10 overflow-hidden border-r border-slate-300 px-2 py-1 text-center align-middle" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         className="w-4 h-4 text-orange-500 rounded border-gray-300 accent-orange-500 cursor-pointer"
@@ -358,11 +450,17 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
                       />
                     </td>
                     {columnDefs.map(col => isColumnVisible(col) && (
-                      <td key={`${o.id}-${col.key}`} className={`border-l border-slate-300 px-2 py-2 align-middle text-[13px] font-semibold text-slate-700 ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right tabular-nums' : ''} ${col.key === 'row_number' ? 'w-12 text-center tabular-nums' : ''} ${col.key === 'receiver_address' ? 'w-64 max-w-64 whitespace-normal break-words' : ''}`}>
-                        {col.key === 'row_number' ? rowIndex + 1 : renderCell(o, col.key)}
+                      <td key={`${o.id}-${col.key}`} className={`h-11 max-h-11 overflow-hidden border-l border-slate-300 px-2 py-1 align-middle text-[13px] font-semibold text-slate-700 ${['cod_amount', 'deli_fee', 'total_amount'].includes(col.key) ? 'text-right tabular-nums' : ''} ${col.key === 'row_number' ? 'w-12 text-center tabular-nums' : ''}`}>
+                        <div
+                          className="h-7 overflow-hidden text-ellipsis whitespace-nowrap leading-7"
+                          style={{ maxWidth: columnWidths[col.key] ?? 280 }}
+                          title={typeof o[col.key] === 'string' || typeof o[col.key] === 'number' ? String(o[col.key]) : undefined}
+                        >
+                          {col.key === 'row_number' ? rowIndex + 1 : renderCell(o, col.key)}
+                        </div>
                       </td>
                     ))}
-                    {onCheckOrder && <td className="border-l border-slate-300 px-2 py-2 text-center align-middle">
+                    {onCheckOrder && <td className="h-11 max-h-11 overflow-hidden border-l border-slate-300 px-2 py-1 text-center align-middle">
                       <button type="button" onClick={() => onCheckOrder(o)} disabled={checkingOrderIds?.has(o.id)} className={`min-h-9 min-w-20 border px-3 text-xs font-bold transition disabled:cursor-wait disabled:opacity-60 ${isOrderChecked?.(o) ? 'border-amber-600 text-amber-800 hover:bg-amber-600 hover:text-white' : 'border-emerald-700 text-emerald-800 hover:bg-emerald-700 hover:text-white'}`}>
                         {checkingOrderIds?.has(o.id) ? 'Saving...' : isOrderChecked?.(o) ? 'Uncheck' : 'Check'}
                       </button>

@@ -1,14 +1,22 @@
 // app/admin/users/page.tsx
-import { getCustomerAccounts, getRidersList, getUsersList } from '@/app/actions/admin'
+import {
+  getAgentAccounts,
+  getAgentCities,
+  getCustomerAccounts,
+  getRidersList,
+  getUsersList,
+} from '@/app/actions/admin'
 import UserTableClient from './UserTableClient'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AdminUsersPage() {
-  const [users, riders, customers] = await Promise.all([
+  const [users, riders, customers, agents, cities] = await Promise.all([
     getUsersList(),
     getRidersList(),
     getCustomerAccounts(),
+    getAgentAccounts(),
+    getAgentCities(),
   ])
 
   return (
@@ -26,6 +34,8 @@ export default async function AdminUsersPage() {
         initialUsers={users ?? []}
         initialRiders={riders}
         initialCustomers={customers}
+        initialAgents={agents}
+        cities={cities}
       />
     </div>
   )

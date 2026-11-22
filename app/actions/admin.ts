@@ -86,6 +86,118 @@ export async function getRidersList() {
   return data ?? []
 }
 
+export async function getAgentCities() {
+  await requireAdminAccess()
+
+  const { data, error } = await supabaseAdmin
+    .from('cities')
+    .select('*')
+    .order('name', { ascending: true })
+
+  if (error) throw new Error(error.message)
+  return (data ?? []).map(city => ({
+    id: String(city['C.ID']),
+    name: String(city.name),
+  }))
+}
+
+export async function getAgentAccounts() {
+  await requireAdminAccess()
+
+  const { data: agents, error: agentsError } = await supabaseAdmin
+    .from('agents')
+    .select('user_id, city')
+    .order('city', { ascending: true })
+
+  if (agentsError) throw new Error(agentsError.message)
+
+  const usersById = new Map<string, string>()
+  const pageSize = 1000
+  for (let page = 1; ; page += 1) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: pageSize })
+    if (error) throw new Error(error.message)
+    for (const user of data.users) {
+      usersById.set(user.id, user.email || '')
+    }
+    if (data.users.length < pageSize) break
+  }
+
+  return (agents ?? []).map(agent => ({
+    userId: String(agent.user_id),
+    email: usersById.get(String(agent.user_id)) || '',
+    cityId: String(agent.city),
+  }))
+}
+
+export async function createAgentAccount(input: {
+  email: string
+  password: string
+  cityId: string
+}): Promise<
+  | { success: false; message: string }
+  | { success: true; message: string; agent: { userId: string; email: string; cityId: string } }
+> {
+  await requireAdminAccess()
+
+  if (
+    !input ||
+    typeof input !== 'object' ||
+    typeof input.email !== 'string' ||
+    typeof input.password !== 'string' ||
+    typeof input.cityId !== 'string'
+  ) {
+    return { success: false, message: 'Agent အကောင့်အချက်အလက်များ မမှန်ကန်ပါ။' }
+  }
+
+  const email = input.email.trim().toLowerCase()
+  const password = input.password
+  const cityId = input.cityId.trim()
+  if (!email || !email.includes('@') || password.length < 6 || !cityId) {
+    return { success: false, message: 'Email၊ အနည်းဆုံး ၆ လုံးရှိသော Password နှင့် မြို့ကို ဖြည့်ပါ။' }
+  }
+
+  const { data: cities, error: cityError } = await supabaseAdmin
+    .from('cities')
+    .select('*')
+    .eq('C.ID', cityId)
+    .limit(1)
+
+  if (cityError) throw new Error(cityError.message)
+  const city = cities?.[0]
+  if (!city) return { success: false, message: 'ရွေးချယ်ထားသော မြို့ကို မတွေ့ပါ။' }
+
+  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    app_metadata: { role: 'agent' },
+  })
+
+  if (authError) return { success: false, message: authError.message }
+  if (!authData.user) throw new Error('Agent Auth account was not returned after creation.')
+
+  const { error: agentError } = await supabaseAdmin
+    .from('agents')
+    .insert({ user_id: authData.user.id, city: city['C.ID'] })
+
+  if (agentError) {
+    const { error: cleanupError } = await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
+    if (cleanupError) {
+      throw new Error(
+        `Agent ချိတ်ဆက်မှု မအောင်မြင်ပါ (${agentError.message})။ Auth account ကို ဖျက်ရှင်းရာတွင်လည်း မအောင်မြင်ပါ (${cleanupError.message})။`,
+      )
+    }
+    return { success: false, message: `Agent ချိတ်ဆက်မှု မအောင်မြင်ပါ: ${agentError.message}` }
+  }
+
+  revalidatePath('/admin/users')
+  return {
+    success: true,
+    message: 'Agent account ကို မြို့နှင့်အတူ အောင်မြင်စွာ ဖန်တီးပြီးပါပြီ။',
+    agent: { userId: authData.user.id, email, cityId: String(city['C.ID']) },
+  }
+}
+
 export async function getCustomerAccounts() {
   await requireAdminAccess()
 

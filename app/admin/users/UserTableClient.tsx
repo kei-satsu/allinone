@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import {
+  createAgentAccount,
   createCustomerAccount,
   createNewUser,
   deleteCustomerAccount,
@@ -11,6 +12,17 @@ import {
   updateCustomerAccount,
   updateUserProfile,
 } from "@/app/actions/admin"
+
+interface AgentCity {
+  id: string
+  name: string
+}
+
+interface AgentAccount {
+  userId: string
+  email: string
+  cityId: string
+}
 
 interface RiderOption {
   id: string
@@ -43,17 +55,28 @@ export default function UserTableClient({
   initialUsers,
   initialRiders,
   initialCustomers,
+  initialAgents,
+  cities,
 }: {
   initialUsers: UserProfile[]
   initialRiders: RiderOption[]
   initialCustomers: CustomerAccount[]
+  initialAgents: AgentAccount[]
+  cities: AgentCity[]
 }) {
   const [users, setUsers] = useState<UserProfile[]>(initialUsers)
   const [customers, setCustomers] = useState<CustomerAccount[]>(initialCustomers)
-  const [activeTab, setActiveTab] = useState<"employees" | "customers">("employees")
+  const [agents, setAgents] = useState<AgentAccount[]>(initialAgents)
+  const [activeTab, setActiveTab] = useState<"employees" | "customers" | "agents">("employees")
   const [loading, setLoading] = useState(false)
   const [resettingEmail, setResettingEmail] = useState<string | null>(null)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+
+  const [showAgentModal, setShowAgentModal] = useState(false)
+  const [agentEmail, setAgentEmail] = useState("")
+  const [agentPassword, setAgentPassword] = useState("")
+  const [agentCityId, setAgentCityId] = useState("")
+  const [creatingAgent, setCreatingAgent] = useState(false)
 
   // Create Form State
   const [showModal, setShowModal] = useState(false)
@@ -296,6 +319,41 @@ export default function UserTableClient({
     }
   }
 
+  const handleCreateAgent = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setCreatingAgent(true)
+    setMessage(null)
+
+    try {
+      const result = await createAgentAccount({
+        email: agentEmail,
+        password: agentPassword,
+        cityId: agentCityId,
+      })
+
+      if (result.success) {
+        setAgents(current => [
+          result.agent,
+          ...current.filter(agent => agent.userId !== result.agent.userId),
+        ])
+        setMessage({ type: "success", text: result.message })
+        setAgentEmail("")
+        setAgentPassword("")
+        setAgentCityId("")
+        setShowAgentModal(false)
+      } else {
+        setMessage({ type: "error", text: result.message })
+      }
+    } catch (err: unknown) {
+      setMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "Agent account ဖန်တီးရာတွင် အမှားအယွင်းရှိပါသည်။",
+      })
+    } finally {
+      setCreatingAgent(false)
+    }
+  }
+
   const handleUpdateCustomer = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editingCustomer) return
@@ -425,6 +483,21 @@ export default function UserTableClient({
           }`}
         >
           Customers
+        </button>
+        <button
+          id="agents-tab"
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "agents"}
+          aria-controls="agents-panel"
+          onClick={() => setActiveTab("agents")}
+          className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors ${
+            activeTab === "agents"
+              ? "border-orange-500 text-orange-600"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          Agents ({agents.length})
         </button>
       </div>
 
@@ -639,6 +712,64 @@ export default function UserTableClient({
                           </button>
                         </div>
                       </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div
+        role="tabpanel"
+        id="agents-panel"
+        aria-labelledby="agents-tab"
+        hidden={activeTab !== "agents"}
+        className="space-y-6"
+      >
+        <div className="flex flex-col gap-4 rounded-3xl border border-slate-200/60 bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-bold text-slate-800">Agents ({agents.length})</h2>
+            <p className="mt-1 text-sm text-slate-500">Agent account များကို မြို့နှင့်အတူ စီမံခန့်ခွဲရန်။</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setMessage(null)
+              setShowAgentModal(true)
+            }}
+            className="shrink-0 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-orange-500/20 transition-all hover:from-orange-600 hover:to-amber-600"
+          >
+            Agent Account ဖွင့်မည်
+          </button>
+        </div>
+
+        <div className="overflow-hidden rounded-3xl border border-slate-200/60 bg-white shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-slate-100 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                <tr>
+                  <th className="px-6 py-4">Email</th>
+                  <th className="px-6 py-4">မြို့</th>
+                  <th className="px-6 py-4">User ID</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {agents.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="py-8 text-center text-slate-400">
+                      Agent အကောင့် မရှိသေးပါ။
+                    </td>
+                  </tr>
+                ) : (
+                  agents.map(agent => (
+                    <tr key={agent.userId} className="hover:bg-slate-50/60">
+                      <td className="px-6 py-4 text-slate-700">{agent.email || "-"}</td>
+                      <td className="px-6 py-4 text-slate-700">
+                        {cities.find(city => city.id === agent.cityId)?.name || agent.cityId}
+                      </td>
+                      <td className="px-6 py-4 font-mono text-xs text-slate-400">{agent.userId}</td>
                     </tr>
                   ))
                 )}
@@ -1016,6 +1147,94 @@ export default function UserTableClient({
                   className="flex-1 rounded-2xl bg-orange-500 py-2.5 text-xs font-bold text-white shadow-md shadow-orange-500/20 transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {updatingCustomer ? "သိမ်းဆည်းနေသည်..." : "သိမ်းဆည်းမည်"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "agents" && showAgentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md space-y-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-slate-800">Agent Account ဖွင့်ရန်</h3>
+                <p className="mt-1 text-sm text-slate-500">Email၊ Password နှင့် Agent တာဝန်ယူမည့်မြို့ကို ရွေးပါ။</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAgentModal(false)}
+                disabled={creatingAgent}
+                aria-label="ပိတ်ရန်"
+                className="rounded-xl px-3 py-1 text-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateAgent} className="space-y-4">
+              <div>
+                <label htmlFor="agent-email" className="mb-1 block text-xs font-bold text-slate-600">Email</label>
+                <input
+                  id="agent-email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  disabled={creatingAgent}
+                  value={agentEmail}
+                  onChange={event => setAgentEmail(event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 px-3.5 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                />
+              </div>
+              <div>
+                <label htmlFor="agent-password" className="mb-1 block text-xs font-bold text-slate-600">Password</label>
+                <input
+                  id="agent-password"
+                  type="password"
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                  disabled={creatingAgent}
+                  value={agentPassword}
+                  onChange={event => setAgentPassword(event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 px-3.5 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                />
+              </div>
+              <div>
+                <label htmlFor="agent-city" className="mb-1 block text-xs font-bold text-slate-600">မြို့</label>
+                <select
+                  id="agent-city"
+                  required
+                  disabled={creatingAgent || cities.length === 0}
+                  value={agentCityId}
+                  onChange={event => setAgentCityId(event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                >
+                  <option value="">မြို့ရွေးချယ်ပါ</option>
+                  {cities.map(city => (
+                    <option key={city.id} value={city.id}>{city.name}</option>
+                  ))}
+                </select>
+                {cities.length === 0 && (
+                  <p className="mt-1 text-xs text-rose-600">ရွေးချယ်ရန် မြို့စာရင်း မရှိပါ။</p>
+                )}
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAgentModal(false)}
+                  disabled={creatingAgent}
+                  className="flex-1 rounded-2xl border border-slate-200 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  မလုပ်တော့ပါ
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingAgent || cities.length === 0}
+                  className="flex-1 rounded-2xl bg-orange-500 py-2.5 text-xs font-bold text-white shadow-md shadow-orange-500/20 transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {creatingAgent ? "ဖန်တီးနေသည်..." : "အကောင့်ဖွင့်မည်"}
                 </button>
               </div>
             </form>
