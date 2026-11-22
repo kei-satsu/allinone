@@ -372,7 +372,6 @@ const start = append ? ordersRef.current.length : 0;
     const { data, error } = await apiClient
       .from('transit_cities')
       .select('*')
-      .order('name', { ascending: true })
 
     if (error) {
       console.error('Error fetching transit cities:', error)
@@ -381,10 +380,14 @@ const start = append ? ordersRef.current.length : 0;
     }
 
     const normalizedCities: TransitCity[] = (data ?? []).map((city: Record<string, unknown>) => ({
-      id: String(city.id ?? city['C.ID'] ?? ''),
-      name: String(city.name ?? ''),
+      id: String(city.id ?? city['C.ID'] ?? city.city_id ?? city.code ?? ''),
+      name: String(city.name ?? city.city_name ?? ''),
     }))
-    setTransitCities(normalizedCities.filter(city => city.id && city.name))
+    setTransitCities(
+      normalizedCities
+        .filter(city => city.id && city.name)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    )
   }
 
   useEffect(() => {

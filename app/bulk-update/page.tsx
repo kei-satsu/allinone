@@ -82,7 +82,6 @@ export default function BulkUpdatePage() {
     const { data, error } = await apiClient
       .from('transit_cities')
       .select('*')
-      .order('name', { ascending: true })
 
     if (error) {
       console.error('Error fetching transit cities:', error)
@@ -92,10 +91,14 @@ export default function BulkUpdatePage() {
 
     const normalizedCities: TransitCity[] = (data ?? [])
       .map((city: Record<string, unknown>) => ({
-        id: String(city.id ?? city['C.ID'] ?? ''),
-        name: String(city.name ?? ''),
+        id: String(city.id ?? city['C.ID'] ?? city.city_id ?? city.code ?? ''),
+        name: String(city.name ?? city.city_name ?? ''),
       }))
-    setTransitCities(normalizedCities.filter(city => city.id))
+    setTransitCities(
+      normalizedCities
+        .filter(city => city.id && city.name)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    )
   }
 
  async function fetchRecentOrders(branch: string) {
