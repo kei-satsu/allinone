@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import EditOrderModal from "@/components/EditOrderModal";
 import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
+import { printVoucher } from "@/utils/print";
+import { softDeleteOrder } from "@/lib/softDeleteOrder";
 
 // ── Column အားလုံးသတ်မှတ်ချက် ──
 const COLUMN_DEFS = [
@@ -70,6 +72,7 @@ export default function DailyReport() {
     y: number;
     order: any;
   } | null>(null);
+  const [viewingHistoryOrder, setViewingHistoryOrder] = useState<any | null>(null);
 
   // Column Toggle & Grid Filters
   const [visibleCols, setVisibleCols] = useState<Record<string, boolean>>(
@@ -153,6 +156,13 @@ export default function DailyReport() {
     "w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-gray-800 text-sm focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all appearance-none bg-no-repeat bg-[length:0.75rem_auto] bg-[right_1rem_center] cursor-pointer shadow-sm";
   const labelStyle =
     "block text-gray-600 font-semibold mb-1 uppercase text-[11px] tracking-wide";
+
+  const hasRemark = (order: { note?: unknown; remark?: unknown } | null) => {
+    const remark = order?.note ?? order?.remark;
+    if (remark === null || remark === undefined) return false;
+    const value = String(remark).trim();
+    return value !== "" && value !== "-" && value.toLowerCase() !== "null";
+  };
 
   // ဘယ်နေရာပဲနှိပ်နှိပ် Context Menu ကို ပြန်ပိတ်ပေးမည့် Event
   useEffect(() => {
@@ -394,6 +404,41 @@ export default function DailyReport() {
     } else {
       setSelectedIds([]);
     }
+  };
+
+  const handleOrderContextMenu = (
+    e: React.MouseEvent | React.TouchEvent,
+    order: any,
+  ) => {
+    e.preventDefault();
+
+    if (window.innerWidth < 640) {
+      setContextMenu({ x: 0, y: 0, order });
+      return;
+    }
+
+    const menuWidth = 160;
+    const menuHeight = 160;
+    let x = "clientX" in e ? e.clientX : 0;
+    let y = "clientY" in e ? e.clientY : 0;
+
+    x = Math.max(10, Math.min(x, window.innerWidth - menuWidth - 10));
+    y = Math.max(10, Math.min(y, window.innerHeight - menuHeight - 10));
+
+    setContextMenu({ x, y, order });
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    if (
+      !confirm(
+        "ဒီမှတ်တမ်းကို အမှိုက်ပုံး (Recently Deleted) ထဲသို့ ထည့်ရန် သေချာပါသလား?",
+      )
+    )
+      return;
+
+    const { error } = await softDeleteOrder(orderId);
+    if (error) alert(error.message);
+    else fetchData(userBranch, selectedDate);
   };
 
   // 💡 (ကုဒ်သစ်) တစ်ကွက်ချင်းစီ Checkbox နှိပ်ပုံ
@@ -2248,15 +2293,14 @@ export default function DailyReport() {
                   <tr
                     key={o.id}
                     data-id={String(o.id)}
-                    className={`hover:bg-gray-50/80 transition-colors cursor-context-menu ${selectedIds.includes(o.id) ? "bg-orange-50/30" : ""}`}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      setContextMenu({
-                        x: e.clientX,
-                        y: e.clientY,
-                        order: o,
-                      });
-                    }}
+                    className={`transition-colors cursor-context-menu ${
+                      selectedIds.includes(o.id)
+                        ? "bg-orange-50/30 hover:bg-orange-50/60"
+                        : hasRemark(o)
+                          ? "bg-amber-50/70 hover:bg-amber-100/60"
+                          : "hover:bg-gray-50/80"
+                    }`}
+                    onContextMenu={(e) => handleOrderContextMenu(e, o)}
                     onClick={(e) => {
                       const tgt = e.target as HTMLElement;
                       if (tgt.closest && tgt.closest("button, a, input"))
@@ -2393,7 +2437,14 @@ export default function DailyReport() {
             filteredOrders.map((o) => (
               <div
                 key={o.id}
-                className={`p-2.5 bg-white flex flex-col gap-2 transition-colors ${selectedIds.includes(o.id) ? "bg-orange-50/60 ring-1 ring-inset ring-orange-200" : ""}`}
+                onContextMenu={(e) => handleOrderContextMenu(e, o)}
+                className={`p-2.5 flex flex-col gap-2 transition-colors ${
+                  selectedIds.includes(o.id)
+                    ? "bg-orange-50/60 ring-1 ring-inset ring-orange-200"
+                    : hasRemark(o)
+                      ? "bg-amber-50/70"
+                      : "bg-white"
+                }`}
               >
                 <div className="flex justify-between items-start gap-1.5">
                   <div className="min-w-0 flex items-center gap-1.5">
@@ -2477,6 +2528,28 @@ export default function DailyReport() {
                       className="min-h-8 px-2.5 bg-orange-50 border border-orange-200 text-orange-600 rounded-md font-semibold text-[10px] active:bg-orange-100"
                     >
                       Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) =>
+                        handleOrderContextMenu(e as React.MouseEvent, o)
+                      }
+                      className="p-1.5 bg-gray-50 border border-gray-200 rounded-md text-gray-500 active:bg-gray-200 transition-colors"
+                      aria-label="အခြားလုပ်ဆောင်ချက်များ"
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2.5}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"
+                        />
+                      </svg>
                     </button>
                   </div>
                 </div>
@@ -2686,6 +2759,64 @@ export default function DailyReport() {
           fetchData(); // Update အောင်မြင်သွားရင် Report စာရင်းထဲမှာ Data ချက်ချင်း Refresh ဖြစ်သွားအောင် ပြန်ခေါ်ပေးခြင်း
         }}
       />
+      {viewingHistoryOrder && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-gray-900/60 backdrop-blur-[3px] p-0 sm:items-center sm:p-4 animate-in fade-in duration-200"
+          onClick={() => setViewingHistoryOrder(null)}
+        >
+          <div
+            className="relative flex h-[80vh] w-full flex-col overflow-hidden rounded-t-2xl border border-gray-100 bg-white shadow-2xl sm:h-auto sm:max-h-[80vh] sm:max-w-lg sm:rounded-xl animate-in slide-in-from-bottom sm:zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex shrink-0 items-center justify-between border-b border-gray-200 bg-gray-50 px-5 py-4">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="flex items-center gap-1.5 text-sm font-extrabold uppercase tracking-wider text-gray-900">
+                    📜 Activity Logs
+                  </h3>
+                  <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-700">
+                    {viewingHistoryOrder.history?.length || 0} Events
+                  </span>
+                </div>
+                <p className="mt-1 flex items-center gap-1 text-xs text-gray-500">
+                  Tracking ID:
+                  <span className="rounded border border-orange-100 bg-orange-50 px-1.5 py-0.5 font-mono font-bold text-orange-600">
+                    {viewingHistoryOrder.item_id}
+                  </span>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingHistoryOrder(null)}
+                className="ml-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-200/60 text-gray-400 hover:bg-gray-200 hover:text-gray-700"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto bg-slate-50/50 p-5">
+              {!viewingHistoryOrder.history ||
+              viewingHistoryOrder.history.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-2 py-16 text-gray-400">
+                  Record history မရှိသေးပါ
+                </div>
+              ) : (
+                viewingHistoryOrder.history.map((log: any, index: number) => (
+                  <div key={index} className="border-b border-gray-100 py-3 text-xs">
+                    <div className="font-bold text-gray-800">{log.action}</div>
+                    <div className="text-gray-500">{log.note || "-"}</div>
+                    <div className="mt-1 text-[10px] text-gray-400">
+                      {log.operator || "-"} ·{" "}
+                      {log.timestamp
+                        ? new Date(log.timestamp).toLocaleString()
+                        : "-"}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {/* ── Add Cash / Handover Modal ── */}
       {handoverModal.open && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -3188,24 +3319,118 @@ export default function DailyReport() {
       )}
       {/* ── Custom Right-Click Context Menu ── */}
       {contextMenu && (
-        <div
-          className="fixed bg-white border border-gray-200 rounded-lg shadow-xl py-1.5 z-[100] w-40 text-xs font-semibold text-gray-700 border-l-4 border-l-orange-500"
-          style={{ top: contextMenu.y, left: contextMenu.x }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 mb-1">
-            Options
-          </div>
-          <button
-            onClick={() => {
-              setEditingOrder(contextMenu.order);
-              setContextMenu(null);
-            }}
-            className="w-full text-left px-3 py-2 hover:bg-orange-50 hover:text-orange-600 flex items-center gap-2 transition-colors"
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/40 sm:hidden"
+            onClick={() => setContextMenu(null)}
+          />
+          <div
+            className="fixed inset-x-0 bottom-0 z-60 w-full rounded-t-2xl border border-gray-200 bg-white py-2 pb-6 shadow-2xl animate-in slide-in-from-bottom duration-200 sm:inset-x-auto sm:bottom-auto sm:w-48 sm:rounded-lg sm:py-1 sm:pb-1 sm:animate-in sm:fade-in sm:zoom-in-95"
+            style={
+              typeof window !== "undefined" && window.innerWidth >= 640
+                ? { top: contextMenu.y, left: contextMenu.x }
+                : undefined
+            }
+            onClick={(e) => e.stopPropagation()}
           >
-            ✏️ Edit Order
-          </button>
-        </div>
+            <div className="mx-auto my-1.5 h-1 w-12 rounded-full bg-gray-300 sm:hidden" />
+            <div className="border-b border-gray-100 px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 sm:px-3 sm:py-1.5">
+              ID: {contextMenu.order.item_id || contextMenu.order.id}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingOrder(contextMenu.order);
+                setContextMenu(null);
+              }}
+              className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 active:bg-gray-100 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs"
+            >
+              <svg
+                className="h-4 w-4 text-orange-500 sm:h-3.5 sm:w-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                />
+              </svg>
+              Edit Record
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setViewingHistoryOrder(contextMenu.order);
+                setContextMenu(null);
+              }}
+              className="flex w-full items-center gap-3 border-t border-gray-100 px-4 py-3 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 active:bg-gray-100 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs"
+            >
+              <svg
+                className="h-4 w-4 text-blue-500 sm:h-3.5 sm:w-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              View History Log
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                handleDeleteOrder(contextMenu.order.id);
+                setContextMenu(null);
+              }}
+              className="flex w-full items-center gap-3 border-t border-gray-100 px-4 py-3 text-left text-sm font-medium text-red-600 hover:bg-red-50 active:bg-red-100 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs"
+            >
+              <svg
+                className="h-4 w-4 text-red-500 sm:h-3.5 sm:w-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                />
+              </svg>
+              Delete Record
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                printVoucher(contextMenu.order);
+                setContextMenu(null);
+              }}
+              className="flex w-full items-center gap-3 border-t border-gray-100 px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 active:bg-slate-100 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs"
+            >
+              <svg
+                className="h-4 w-4 text-slate-500 sm:h-3.5 sm:w-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 1.252a1.125 1.125 0 0 1-1.107 1.328H7.218a1.125 1.125 0 0 1-1.107-1.328L6.34 18m11.318 0a1.148 1.148 0 0 0-.184-.532 2.25 2.25 0 0 0-2.286-.874L15 16.5m-8.66 1.5a1.148 1.148 0 0 1 .184-.532 2.25 2.25 0 0 1 2.286-.874L9 16.5m0 0v-4.688a1.125 1.125 0 0 1 1.125-1.125h3.75a1.125 1.125 0 0 1 1.125 1.125V16.5M9 16.5h6M6.75 6.75h10.5a2.25 2.25 0 0 1 2.25 2.25v3.75a2.25 2.25 0 0 1-2.25-2.25V9a2.25 2.25 0 0 1 2.25-2.25Z"
+                />
+              </svg>
+              Print Voucher
+            </button>
+          </div>
+        </>
       )}
       {/* ── Cash Handover Context Menu ── */}
       {handoverContextMenu && (

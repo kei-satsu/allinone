@@ -1,10 +1,12 @@
 "use client"
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, type CSSProperties } from 'react'
 import { apiClient } from '@/lib/databaseApi'
 import { useRouter } from 'next/navigation'
 import EditOrderModal from '@/components/EditOrderModal'
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
+import { printVoucher } from '@/utils/print'
+import { softDeleteOrder } from '@/lib/softDeleteOrder'
 
 // ── Column အားလုံးသတ်မှတ်ချက် ──
 const COLUMN_DEFS = [
@@ -34,6 +36,8 @@ const COLUMN_DEFS = [
   { key: 'remark', label: 'Remark', defaultVisible: false },
 
 ]
+const SUMMARY_PANEL_MIN_HEIGHT = 220
+const SUMMARY_PANEL_MAX_HEIGHT = 650
 
 export default function DailyReport() {
   const router = useRouter()
@@ -54,9 +58,17 @@ export default function DailyReport() {
   const [showMobileFilters, setShowMobileFilters] = useState(false)
   const [expandedMobileCards, setExpandedMobileCards] = useState<Record<string, boolean>>({})
   const [includeTransitToYGN, setIncludeTransitToYGN] = useState(true)
+  const [summaryPanelHeight, setSummaryPanelHeight] = useState(390)
+  const summaryResizeRef = useRef<{
+    pointerId: number
+    startY: number
+    startHeight: number
+  } | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   
   // ── Right-Click Context Menu အတွက် State ──
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; order: any } | null>(null);
+  const [viewingHistoryOrder, setViewingHistoryOrder] = useState<any | null>(null)
 
   // Column Toggle & Grid Filters
   const [visibleCols, setVisibleCols] = useState<Record<string, boolean>>(() => {
@@ -92,6 +104,13 @@ export default function DailyReport() {
   const winSelect = "w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-gray-800 text-sm focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 transition-all appearance-none bg-no-repeat bg-[length:0.75rem_auto] bg-[right_1rem_center] cursor-pointer shadow-sm"
   const labelStyle = "block text-gray-600 font-semibold mb-1 uppercase text-[11px] tracking-wide"
 
+  const hasRemark = (order: { note?: unknown; remark?: unknown } | null) => {
+    const remark = order?.remark ?? order?.note
+    if (remark === null || remark === undefined) return false
+    const value = String(remark).trim()
+    return value !== '' && value !== '-' && value.toLowerCase() !== 'null'
+  }
+
   // ဘယ်နေရာပဲနှိပ်နှိပ် Context Menu ကို ပြန်ပိတ်ပေးမည့် Event
   useEffect(() => {
     const handleCloseMenu = () => {
@@ -101,6 +120,48 @@ export default function DailyReport() {
     window.addEventListener('click', handleCloseMenu)
     return () => window.removeEventListener('click', handleCloseMenu)
   }, [])
+
+  const handleOrderContextMenu = (e: any, order: any) => {
+    if (e.preventDefault) e.preventDefault()
+
+    if (window.innerWidth < 640) {
+      setContextMenu({ x: 0, y: 0, order })
+      return
+    }
+
+    const menuWidth = 160
+    const menuHeight = 160
+    let x = e.clientX
+    let y = e.clientY
+
+    if (x + menuWidth > window.innerWidth) {
+      x = window.innerWidth - menuWidth - 10
+    }
+    if (y + menuHeight > window.innerHeight) {
+      y = window.innerHeight - menuHeight - 10
+    }
+
+    setContextMenu({ x, y, order })
+  }
+
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!confirm('ဒီမှတ်တမ်းကို အမှိုက်ပုံး (Recently Deleted) ထဲသို့ ထည့်ရန် သေချာပါသလား?')) return
+    const { error } = await softDeleteOrder(orderId)
+    if (error) alert(error.message)
+    else fetchData()
+  }
+
+  const handleSelectRow = (id: string, checked: boolean) => {
+    setSelectedIds((current) =>
+      checked
+        ? current.includes(id) ? current : [...current, id]
+        : current.filter((selectedId) => selectedId !== id),
+    )
+  }
+
+  const handleSelectAll = (checked: boolean) => {
+    setSelectedIds(checked ? filteredOrders.map((order) => order.id) : [])
+  }
 
   useEffect(() => {
     if (!previewImage) {
@@ -699,6 +760,22 @@ if (key === 'agent_fee') {
 
   // ၅။ ✨ သင်အလိုရှိသော ပုံသေနည်းအတိုင်း ဒေတာ ၃ ခုကို ပေါင်းပြီး tableTotalAmount ကို သတ်မှတ်သည်
   const tableTotalAmount = grandTotalToPayCalculated + oppositePaidTotal + officePaidTotal;
+  const selectedOrders = filteredOrders.filter((order) =>
+    selectedIds.includes(order.id),
+  )
+  const totalSelectedCount = selectedOrders.length
+  const totalCod = selectedOrders.reduce(
+    (sum, order) => sum + (Number(order.cod_amount) || 0),
+    0,
+  )
+  const totalDeliFee = selectedOrders.reduce(
+    (sum, order) => sum + (Number(order.deli_fee) || 0),
+    0,
+  )
+  const grandTotal = selectedOrders.reduce(
+    (sum, order) => sum + (Number(order.total_amount) || 0),
+    0,
+  )
 
   return (
     <div className="w-full h-full flex flex-col bg-[#f3f3f3] font-[system-ui] overflow-hidden select-none">
@@ -890,7 +967,12 @@ if (key === 'agent_fee') {
            
         
         {/* ── Cards Layout Wrapper (Responsive managed with state) ── */}
-      <div className={`${showMobileSummary ? 'grid' : 'hidden sm:grid'} mx-4 mt-3 grid-cols-1 lg:grid-cols-2 gap-4 shrink-0 transition-all`}>
+      <div
+        style={{
+          '--transit-summary-height': `${summaryPanelHeight}px`,
+        } as CSSProperties}
+        className={`${showMobileSummary ? 'grid max-h-[calc(100dvh-9rem)] overflow-y-auto overscroll-contain pb-[calc(env(safe-area-inset-bottom)+4rem)]' : 'hidden sm:grid'} sm:max-h-none sm:overflow-visible sm:pb-0 mx-3 sm:mx-4 mt-3 grid-cols-1 lg:grid-cols-2 gap-[6px] shrink-0 transition-all lg:h-[var(--transit-summary-height)] lg:min-h-0 lg:overflow-hidden`}
+      >
 
         {/* ========================================================= */}
         {/* ဘယ်ဘက် Column: ကတ် (၁) - Rider Ngwe ရှင်းမှုမှတ်တမ်း Card */}
@@ -1168,14 +1250,75 @@ const rows = allCities.map(city => {
 
       </div>
 
+            <div
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="Resize summary and order panels"
+              aria-valuemin={SUMMARY_PANEL_MIN_HEIGHT}
+              aria-valuemax={SUMMARY_PANEL_MAX_HEIGHT}
+              aria-valuenow={summaryPanelHeight}
+              tabIndex={0}
+              title="Drag to resize panels; use arrow keys for fine adjustment"
+              onPointerDown={(event) => {
+                event.preventDefault()
+                summaryResizeRef.current = {
+                  pointerId: event.pointerId,
+                  startY: event.clientY,
+                  startHeight: summaryPanelHeight,
+                }
+                event.currentTarget.setPointerCapture(event.pointerId)
+              }}
+              onPointerMove={(event) => {
+                const drag = summaryResizeRef.current
+                if (!drag || drag.pointerId !== event.pointerId) return
+                setSummaryPanelHeight(
+                  Math.max(
+                    SUMMARY_PANEL_MIN_HEIGHT,
+                    Math.min(
+                      SUMMARY_PANEL_MAX_HEIGHT,
+                      drag.startHeight + event.clientY - drag.startY,
+                    ),
+                  ),
+                )
+              }}
+              onPointerUp={() => { summaryResizeRef.current = null }}
+              onPointerCancel={() => { summaryResizeRef.current = null }}
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                  event.preventDefault()
+                  const delta = event.key === 'ArrowUp' ? -20 : 20
+                  setSummaryPanelHeight((height) =>
+                    Math.max(SUMMARY_PANEL_MIN_HEIGHT, Math.min(SUMMARY_PANEL_MAX_HEIGHT, height + delta)),
+                  )
+                } else if (event.key === 'Home') {
+                  event.preventDefault()
+                  setSummaryPanelHeight(SUMMARY_PANEL_MIN_HEIGHT)
+                } else if (event.key === 'End') {
+                  event.preventDefault()
+                  setSummaryPanelHeight(SUMMARY_PANEL_MAX_HEIGHT)
+                }
+              }}
+              className="group relative hidden h-1 shrink-0 cursor-row-resize touch-none items-center justify-center outline-none lg:flex"
+            >
+              <span className="h-px w-12 rounded-full bg-gray-300 transition-colors group-hover:bg-blue-500 group-focus-visible:bg-blue-500" />
+            </div>
+
       {/* ── Workspace Table / List Area (Flex item optimized) ── */}
-      <div className="flex-1 overflow-auto bg-white sm:mx-4 sm:my-3 sm:rounded-lg sm:border sm:border-gray-200 sm:shadow-sm">
+            <div className="flex-1 min-h-0 flex-col overflow-auto bg-white sm:mx-4 sm:mb-3 sm:rounded-lg sm:border sm:border-gray-200 sm:shadow-sm">
         
         {/* Desktop View Table */}
         <div className="hidden sm:block">
           <table className="w-full text-left whitespace-nowrap text-[12px]">
             <thead className="sticky top-0 z-20 bg-white shadow-[0_1px_0_0_rgba(229,231,235,1)]">
               <tr className="text-gray-400 border-b border-gray-200 bg-gray-50/70">
+                <th className="px-4 py-3 w-10 text-center bg-gray-50/70">
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-300 text-orange-500 focus:ring-orange-500 cursor-pointer w-3.5 h-3.5"
+                    checked={filteredOrders.length > 0 && selectedIds.length === filteredOrders.length}
+                    onChange={(e) => handleSelectAll(e.target.checked)}
+                  />
+                </th>
                 {COLUMN_DEFS.map(col => visibleCols[col.key] && (
                   <th key={col.key} className="px-4 py-3 font-semibold uppercase tracking-wider text-[11px] text-gray-500">
                     {col.label}
@@ -1185,6 +1328,7 @@ const rows = allCities.map(city => {
               
               {/* Filter Layout */}
               <tr>
+                <td className="px-4 py-1.5 bg-gray-50/30"></td>
                 {COLUMN_DEFS.map(col => {
                   if (!visibleCols[col.key]) return null;
 
@@ -1264,16 +1408,26 @@ const rows = allCities.map(city => {
               ) : filteredOrders.map(o => (
                 <tr 
                   key={o.id} 
-                  className="hover:bg-gray-50/80 transition-colors cursor-context-menu"
-                  onContextMenu={(e) => {
-                    e.preventDefault(); 
-                    setContextMenu({
-                      x: e.clientX,
-                      y: e.clientY,
-                      order: o
-                    });
+                  className={`transition-colors cursor-context-menu ${
+                    hasRemark(o)
+                      ? 'bg-amber-50/70 hover:bg-amber-100/60'
+                      : 'hover:bg-gray-50/80'
+                  }`}
+                  onContextMenu={(e) => handleOrderContextMenu(e, o)}
+                  onClick={(e) => {
+                    const target = e.target as HTMLElement
+                    if (target.closest && target.closest('button, a, input')) return
+                    handleSelectRow(o.id, !selectedIds.includes(o.id))
                   }}
                 >
+                  <td className="px-4 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300 text-orange-500 focus:ring-orange-500 cursor-pointer w-3.5 h-3.5"
+                      checked={selectedIds.includes(o.id)}
+                      onChange={(e) => handleSelectRow(o.id, e.target.checked)}
+                    />
+                  </td>
                   {COLUMN_DEFS.map(col => visibleCols[col.key] && (
                     <td key={col.key} className="px-4 py-2.5 font-medium">
                       {renderCell(o, col.key)}
@@ -1283,6 +1437,30 @@ const rows = allCities.map(city => {
               ))}
             </tbody>
           </table>
+          {selectedIds.length > 0 && (
+            <div className="sticky bottom-0 left-0 right-0 z-30 flex flex-wrap items-center justify-start gap-5 border-t-2 border-orange-500 bg-white px-4 py-2 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] animate-fade-in sm:rounded-b-lg">
+              <div className="flex items-center gap-2 border-r border-gray-200 py-0.5 pr-4">
+                <span className="rounded bg-orange-500 px-2 py-0.5 text-[10px] font-black tracking-wide text-white">
+                  {totalSelectedCount} ထုပ်
+                </span>
+                <span className="text-[11px] font-bold text-gray-500">ရွေးချယ်ထားသည်</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-5 text-[11px]">
+                <div className="flex flex-col items-start">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">Total COD</span>
+                  <span className="text-[12px] font-extrabold text-gray-800">{totalCod.toLocaleString()} Ks</span>
+                </div>
+                <div className="flex flex-col items-start border-l border-gray-100 pl-4">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">Total Deli Fee</span>
+                  <span className="text-[12px] font-extrabold text-gray-800">{totalDeliFee.toLocaleString()} Ks</span>
+                </div>
+                <div className="flex flex-col items-start rounded-md border border-orange-100 bg-orange-50/80 px-3 py-0.5">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-orange-600">Net Total Amount</span>
+                  <span className="text-[12px] font-black text-orange-600">{grandTotal.toLocaleString()} Ks</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Mobile View Responsive Cards */}
@@ -1292,9 +1470,21 @@ const rows = allCities.map(city => {
           ) : filteredOrders.length === 0 ? (
             <p className="text-center py-8 text-xs text-gray-400 font-medium">ယနေ့ရက်စွဲအတွက် ပါဆယ်မှတ်တမ်း မရှိသေးပါ။</p>
           ) : filteredOrders.map(o => (
-            <div key={o.id} className="p-4 bg-white flex flex-col gap-2">
+            <div
+              key={o.id}
+              onContextMenu={(e) => handleOrderContextMenu(e, o)}
+              className={`p-4 flex flex-col gap-2 ${
+                hasRemark(o) ? 'bg-amber-50/70' : 'bg-white'
+              }`}
+            >
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="h-3.5 w-3.5 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                    checked={selectedIds.includes(o.id)}
+                    onChange={(e) => handleSelectRow(o.id, e.target.checked)}
+                  />
                   <span className="font-mono font-bold text-gray-900 text-sm">{o.item_id}</span>
                  {o.image_url ? (
   /* ပုံရှိလျှင် */
@@ -1325,6 +1515,16 @@ const rows = allCities.map(city => {
                     className="p-1 px-2.5 bg-orange-50 border border-orange-200 text-orange-600 rounded font-semibold text-[11px]"
                   >
                     Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => handleOrderContextMenu(e, o)}
+                    className="p-1.5 bg-gray-50 border border-gray-200 rounded-md text-gray-500 active:bg-gray-200 transition-colors"
+                    aria-label="အခြားလုပ်ဆောင်ချက်များ"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                    </svg>
                   </button>
                 </div>
               </div>
@@ -1362,6 +1562,24 @@ const rows = allCities.map(city => {
               )}
             </div>
           ))}
+          {selectedIds.length > 0 && (
+            <div className="sticky bottom-0 z-30 border-t-2 border-orange-500 bg-white px-3 py-2 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] sm:hidden">
+              <div className="grid grid-cols-3 gap-2 text-[10px]">
+                <div className="rounded bg-orange-50 px-2 py-1.5">
+                  <span className="block text-[8px] font-bold uppercase text-orange-600">Selected</span>
+                  <span className="font-black text-gray-800">{totalSelectedCount} ထုပ်</span>
+                </div>
+                <div className="rounded bg-gray-50 px-2 py-1.5">
+                  <span className="block text-[8px] font-bold uppercase text-gray-400">COD</span>
+                  <span className="font-black text-gray-800">{totalCod.toLocaleString()} Ks</span>
+                </div>
+                <div className="rounded border border-orange-100 bg-orange-50/80 px-2 py-1.5">
+                  <span className="block text-[8px] font-bold uppercase text-orange-600">Net Total</span>
+                  <span className="font-black text-orange-600">{grandTotal.toLocaleString()} Ks</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
       </div>
@@ -1375,6 +1593,41 @@ const rows = allCities.map(city => {
     fetchData(); // Update အောင်မြင်သွားရင် Report စာရင်းထဲမှာ Data ချက်ချင်း Refresh ဖြစ်သွားအောင် ပြန်ခေါ်ပေးခြင်း
   }} 
 />
+
+{viewingHistoryOrder && (
+  <div
+    className="fixed inset-0 z-50 flex items-end justify-center bg-gray-900/60 backdrop-blur-[3px] p-0 sm:items-center sm:p-4"
+    onClick={() => setViewingHistoryOrder(null)}
+  >
+    <div
+      className="relative flex h-[80vh] w-full flex-col overflow-hidden rounded-t-2xl border border-gray-100 bg-white shadow-2xl sm:h-auto sm:max-h-[80vh] sm:max-w-lg sm:rounded-xl"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="flex shrink-0 items-center justify-between border-b border-gray-200 bg-gray-50 px-5 py-4">
+        <div>
+          <h3 className="text-sm font-extrabold uppercase tracking-wider text-gray-900">📜 Activity Logs</h3>
+          <p className="mt-1 text-xs text-gray-500">
+            Tracking ID: <span className="rounded border border-orange-100 bg-orange-50 px-1.5 py-0.5 font-mono font-bold text-orange-600">{viewingHistoryOrder.item_id}</span>
+          </p>
+        </div>
+        <button type="button" onClick={() => setViewingHistoryOrder(null)} className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-200/60 text-gray-500">×</button>
+      </div>
+      <div className="flex-1 overflow-y-auto bg-slate-50/50 p-5">
+        {!viewingHistoryOrder.history || viewingHistoryOrder.history.length === 0 ? (
+          <div className="py-16 text-center text-sm text-gray-400">Record history မရှိသေးပါ</div>
+        ) : viewingHistoryOrder.history.map((log: any, index: number) => (
+          <div key={index} className="border-b border-gray-100 py-3 text-xs">
+            <div className="font-bold text-gray-800">{log.action}</div>
+            <div className="text-gray-500">{log.note || '-'}</div>
+            <div className="mt-1 text-[10px] text-gray-400">
+              {log.operator || '-'} · {log.timestamp ? new Date(log.timestamp).toLocaleString() : '-'}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+)}
 
       {/* ── Add Cash / Handover Modal ── */}
       {handoverModal.open && (
@@ -1650,24 +1903,60 @@ const rows = allCities.map(city => {
 
       {/* ── Custom Right-Click Context Menu ── */}
       {contextMenu && (
-        <div 
-          className="fixed bg-white border border-gray-200 rounded-lg shadow-xl py-1.5 z-[100] w-40 text-xs font-semibold text-gray-700 border-l-4 border-l-orange-500"
-          style={{ top: contextMenu.y, left: contextMenu.x }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 mb-1">
-            Options
-          </div>
-          <button 
-            onClick={() => {
-              setEditingOrder(contextMenu.order);
-              setContextMenu(null);
-            }}
-            className="w-full text-left px-3 py-2 hover:bg-orange-50 hover:text-orange-600 flex items-center gap-2 transition-colors"
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/40 sm:hidden"
+            onClick={() => setContextMenu(null)}
+          />
+          <div
+            className="fixed inset-x-0 bottom-0 z-60 w-full rounded-t-2xl border border-gray-200 bg-white py-2 pb-6 shadow-2xl animate-in slide-in-from-bottom duration-200 sm:inset-x-auto sm:bottom-auto sm:w-48 sm:rounded-lg sm:py-1 sm:pb-1 sm:animate-in sm:fade-in sm:zoom-in-95"
+            style={typeof window !== 'undefined' && window.innerWidth >= 640
+              ? { top: contextMenu.y, left: contextMenu.x }
+              : undefined}
+            onClick={(e) => e.stopPropagation()}
           >
-            ✏️ Edit Order
-          </button>
-        </div>
+            <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto my-1.5 sm:hidden" />
+            <div className="px-4 py-2 sm:px-3 sm:py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">
+              ID: {contextMenu.order.item_id}
+            </div>
+            <button
+              onClick={() => { setEditingOrder(contextMenu.order); setContextMenu(null) }}
+              className="w-full text-left px-4 py-3 sm:px-3 sm:py-2 text-sm sm:text-xs text-gray-700 hover:bg-gray-50 active:bg-gray-100 font-medium flex items-center gap-3 sm:gap-2"
+            >
+              <svg className="w-4 h-4 text-orange-500 sm:w-3.5 sm:h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              Edit Record
+            </button>
+            <button
+              onClick={() => { setViewingHistoryOrder(contextMenu.order); setContextMenu(null) }}
+              className="w-full text-left px-4 py-3 sm:px-3 sm:py-2 text-sm sm:text-xs text-gray-700 hover:bg-gray-50 active:bg-gray-100 font-medium flex items-center gap-3 sm:gap-2 border-t border-gray-100"
+            >
+              <svg className="w-4 h-4 text-blue-500 sm:w-3.5 sm:h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              View History Log
+            </button>
+            <button
+              onClick={() => { handleDeleteOrder(contextMenu.order.id); setContextMenu(null) }}
+              className="w-full text-left px-4 py-3 sm:px-3 sm:py-2 text-sm sm:text-xs text-red-600 hover:bg-red-50 active:bg-red-100 font-medium flex items-center gap-3 sm:gap-2 border-t border-gray-100"
+            >
+              <svg className="w-4 h-4 text-red-500 sm:w-3.5 sm:h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Delete Record
+            </button>
+            <button
+              onClick={() => { printVoucher(contextMenu.order); setContextMenu(null) }}
+              className="w-full text-left px-4 py-3 sm:px-3 sm:py-2 text-sm sm:text-xs text-slate-700 hover:bg-slate-50 active:bg-slate-100 font-medium flex items-center gap-3 sm:gap-2"
+            >
+              <svg className="w-4 h-4 text-slate-500 sm:w-3.5 sm:h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m11.318 0a1.148 1.148 0 0 0-.184-.532 2.25 2.25 0 0 0-2.286-.874L15 16.5m-8.66 1.5a1.148 1.148 0 0 1 .184-.532 2.25 2.25 0 0 1 2.286-.874L9 16.5m0 0v-4.688a1.125 1.125 0 0 1 1.125-1.125h3.75a1.125 1.125 0 0 1 1.125 1.125V16.5M9 16.5h6M6.75 6.75h10.5a2.25 2.25 0 0 1 2.25 2.25v3.75a2.25 2.25 0 0 1-2.25-2.25V9a2.25 2.25 0 0 1-2.25-2.25Z" />
+              </svg>
+              Print Voucher
+            </button>
+          </div>
+        </>
       )}
 
       {/* ── Cash Handover Context Menu ── */}
