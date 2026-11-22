@@ -11,25 +11,6 @@ import { useOrderSelection } from '@/hooks/useOrderSelection'
 import SelectionSummaryBar from '@/components/SelectionSummaryBar'
 import OrderTable from '@/components/OrderTable'
 
-// 🌟 Manual ထည့်သွင်းထားသော မြို့များ စာရင်း
-const MANUAL_CITIES = [
-  { id: 'YGN', name: 'ရန်ကုန်' },
-  { id: 'MDY', name: 'မန္တလေး' },
-  { id: 'NPT', name: 'နေပြည်တော်' },
-  { id: 'TGI', name: 'တောင်ကြီး' },
-  { id: 'POL1', name: 'ပြင်ဦးလွင် SPY' },
-  { id: 'POL2', name: 'ပြင်ဦးလွင် စိုပြေ' },
-  { id: 'MGY', name: 'မကွေး' },
-  { id: 'MYW', name: 'မုံရွာ' },
-  { id: 'TDU', name: 'တံတားဦး' },
-  { id: 'KYS', name: 'ကျောက်ဆည်' },
-  { id: 'PTN', name: 'ပုသိမ်' },
-  { id: 'SGG', name: 'စစ်ကိုင်း' },
-  { id: 'SBO', name: 'ရွှေဘို' },
-  { id: 'POL-OF', name: 'ပြင်ဦးလွင် Office' },
-  // ➕ မိမိထည့်ချင်သော မြို့များကို ဒီထဲမှာ ဆက်ထည့်နိုင်ပါတယ်
-]
-
 const COLUMN_DEFS = [
   { key: 'row_number', label: 'No.', defaultVisible: true },
   { key: 'image_url', label: 'Photo', defaultVisible: false }, 
@@ -73,6 +54,11 @@ type DeliverableOrder = {
   item_id?: string
   deliver_date?: string | null
   agent_fee?: number | string | null
+}
+
+type TransitCity = {
+  id: string
+  name: string
 }
 
 const getTransitAgeDays = (transitDate: unknown) => {
@@ -123,6 +109,7 @@ const [hasMore, setHasMore] = useState(false)
       handleRowMouseEnter,
     } = useOrderSelection(orders);
   const [riders, setRiders] = useState<any[]>([])
+  const [transitCities, setTransitCities] = useState<TransitCity[]>([])
   const [loading, setLoading] = useState(true)
   const [editingOrder, setEditingOrder] = useState<any>(null)
   const [userBranch, setUserBranch] = useState<string>('')
@@ -381,6 +368,25 @@ const start = append ? ordersRef.current.length : 0;
     if (data) setRiders(data)
   }
 
+  const fetchTransitCities = async () => {
+    const { data, error } = await apiClient
+      .from('transit_cities')
+      .select('*')
+      .order('name', { ascending: true })
+
+    if (error) {
+      console.error('Error fetching transit cities:', error)
+      setTransitCities([])
+      return
+    }
+
+    const normalizedCities: TransitCity[] = (data ?? []).map((city: Record<string, unknown>) => ({
+      id: String(city.id ?? city['C.ID'] ?? ''),
+      name: String(city.name ?? ''),
+    }))
+    setTransitCities(normalizedCities.filter(city => city.id && city.name))
+  }
+
   useEffect(() => {
     const storedBranch = localStorage.getItem('user_branch')
     if (!storedBranch) {
@@ -389,6 +395,7 @@ const start = append ? ordersRef.current.length : 0;
       setUserBranch(storedBranch)
      
       fetchRiders(storedBranch)
+      fetchTransitCities()
     }
   }, [router])
 
@@ -603,7 +610,7 @@ const start = append ? ordersRef.current.length : 0;
 
     
     <option value="">Transit City ရွေးချယ်ပါ</option>
-    {MANUAL_CITIES.map((city) => (
+    {transitCities.map((city) => (
       <option key={city.id} value={city.id}>
         {city.name}
       </option>
@@ -758,13 +765,16 @@ const start = append ? ordersRef.current.length : 0;
 {/* 🌟 [အသစ်ထည့်ရန်] Mobile Transit To Filter Input */}
     <div>
       <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Transit To</label>
-      <input
-        type="text"
-        placeholder="Transit To..."
+      <select
         className="w-full text-xs p-1.5 bg-white border border-gray-200 rounded-md focus:outline-none focus:border-orange-500 text-gray-700"
         value={colFilters['transit_to'] || ''}
         onChange={e => handleFilterChange('transit_to', e.target.value)}
-      />
+      >
+        <option value="">Transit City ရွေးချယ်ပါ</option>
+        {transitCities.map(city => (
+          <option key={city.id} value={city.id}>{city.name}</option>
+        ))}
+      </select>
     </div>
 
       <div>

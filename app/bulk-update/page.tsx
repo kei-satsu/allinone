@@ -5,24 +5,10 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Scanner } from '@yudiel/react-qr-scanner' // 📸 Camera Scanner Package
 
-// 🌟 Manual ထည့်သွင်းထားသော မြို့များ စာရင်း
-const MANUAL_CITIES = [
-  { id: 'YGN', name: 'ရန်ကုန်' },
-  { id: 'MDY', name: 'မန္တလေး' },
-  { id: 'NPT', name: 'နေပြည်တော်' },
-  { id: 'TGI', name: 'တောင်ကြီး' },
-  { id: 'POL1', name: 'ပြင်ဦးလွင် SPY' },
-  { id: 'POL2', name: 'ပြင်ဦးလွင် စိုပြေ' },
-  { id: 'MGY', name: 'မကွေး' },
-  { id: 'MYW', name: 'မုံရွာ' },
-  { id: 'TDU', name: 'တံတားဦး' },
-  { id: 'KYS', name: 'ကျောက်ဆည်' },
-  { id: 'PTN', name: 'ပုသိမ်' },
-  { id: 'SGG', name: 'စစ်ကိုင်း' },
-  { id: 'SBO', name: 'ရွှေဘို' },
-  { id: 'POL-OF', name: 'ပြင်ဦးလွင် Office' },
-  // ➕ မိမိထည့်ချင်သော မြို့များကို ဒီထဲမှာ ဆက်ထည့်နိုင်ပါတယ်
-]
+interface TransitCity {
+  id: string
+  name: string
+}
 
 export default function BulkUpdatePage() {
   const router = useRouter()
@@ -32,7 +18,7 @@ export default function BulkUpdatePage() {
   // App States
   const [orders, setOrders] = useState<any[]>([])
   const [riders, setRiders] = useState<any[]>([])
-  const [cities, setCities] = useState<any[]>([])
+  const [transitCities, setTransitCities] = useState<TransitCity[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>([]) 
   
   // 🌟 ဖြေရှင်းချက်: Search ချိန်းသွားသော်လည်း ရွေးထားသည့် ပါဆယ်ဒေတာများ မပျောက်စေရန် Full Object သိမ်းမည့် နေရာ
@@ -81,7 +67,7 @@ export default function BulkUpdatePage() {
     }
     setUserBranch(storedBranch)
     fetchRiders(storedBranch)
-    fetchCities()
+    fetchTransitCities()
     fetchRecentOrders(storedBranch)
     
     qrInputRef.current?.focus()
@@ -92,9 +78,24 @@ export default function BulkUpdatePage() {
     if (data) setRiders(data)
   }
 
-  async function fetchCities() {
-    const { data } = await apiClient.from('cities').select('*')
-    if (data) setCities(data)
+  async function fetchTransitCities() {
+    const { data, error } = await apiClient
+      .from('transit_cities')
+      .select('*')
+      .order('name', { ascending: true })
+
+    if (error) {
+      console.error('Error fetching transit cities:', error)
+      setTransitCities([])
+      return
+    }
+
+    const normalizedCities: TransitCity[] = (data ?? [])
+      .map((city: Record<string, unknown>) => ({
+        id: String(city.id ?? city['C.ID'] ?? ''),
+        name: String(city.name ?? ''),
+      }))
+    setTransitCities(normalizedCities.filter(city => city.id))
   }
 
  async function fetchRecentOrders(branch: string) {
@@ -280,7 +281,7 @@ const resolveBulkStatus = (selectedStatus: string, selectedCityId: string) => {
       
       let targetEntityName = 'ဖြုတ်လိုက်သည်';
       if (isInTransit) {
-        const selectedCity = cities.find(c => String(c["C.ID"]) === String(bulkRiderId));
+        const selectedCity = transitCities.find(city => city.id === bulkRiderId);
         targetEntityName = selectedCity ? selectedCity.name : 'သတ်မှတ်မထားသော မြို့';
       } else {
         const selectedRider = riders.find(r => r.id === bulkRiderId);
@@ -592,8 +593,8 @@ const resolveBulkStatus = (selectedStatus: string, selectedCityId: string) => {
                  {bulkStatus === 'In-Transit' ? (
   <>
     <option value="">City မရွေးချယ်ရသေးပါ...</option>
-    {MANUAL_CITIES.map(c => (
-      <option key={c.id} value={c.id}>{c.name}</option>
+    {transitCities.map(city => (
+      <option key={city.id} value={city.id}>{city.name}</option>
     ))}
   </>
 ) : (

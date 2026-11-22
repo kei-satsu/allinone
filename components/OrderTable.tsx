@@ -88,6 +88,27 @@ const OrderTable = forwardRef<HTMLDivElement, OrderTableProps>(({
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const columnWidthsRef = useRef<Record<string, number>>({});
   const resizingColumnRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
+  const autoLoadLockedRef = useRef(false);
+
+  useEffect(() => {
+    if (!loadingMore) {
+      autoLoadLockedRef.current = false;
+    }
+  }, [loadingMore]);
+
+  const triggerAutoLoad = () => {
+    if (!hasMore || loading || loadingMore || autoLoadLockedRef.current) return;
+    autoLoadLockedRef.current = true;
+    onLoadMore();
+  };
+
+  const handleAutoLoadScroll = (element: HTMLElement) => {
+    const distanceFromBottom =
+      element.scrollHeight - element.scrollTop - element.clientHeight;
+    if (distanceFromBottom <= 160) {
+      triggerAutoLoad();
+    }
+  };
 
   useEffect(() => {
     const savedWidths = localStorage.getItem('orders_table_column_widths');
@@ -317,6 +338,7 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
         onScroll={(e) => {
           syncTableScroll(e.currentTarget.scrollLeft)
           onTableScroll?.(e.currentTarget.scrollTop)
+          handleAutoLoadScroll(e.currentTarget)
         }}
         className={`hidden min-h-0 min-w-[800px] flex-1 overflow-x-auto overflow-y-auto sm:block lg:min-w-0 ${
           hideScrollbars
@@ -499,7 +521,10 @@ const HoverImagePreview = ({ url, onClick }: { url: string; onClick: (e: React.M
 
       {/* 📱 Mobile Optimized Card List */}
       <div
-        onScroll={(e) => onTableScroll?.(e.currentTarget.scrollTop)}
+        onScroll={(e) => {
+          onTableScroll?.(e.currentTarget.scrollTop)
+          handleAutoLoadScroll(e.currentTarget)
+        }}
         className={`sm:hidden min-h-0 flex flex-1 flex-col divide-y divide-gray-100 overflow-y-auto bg-gray-50 pb-20 ${
           hideScrollbars ? '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden' : ''
         }`}
